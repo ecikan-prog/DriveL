@@ -1,0 +1,27 @@
+{
+  "cli": {
+    "version": ">= 20.0.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal"
+    },
+    "production": {
+      "autoIncrement": false
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "e.cikan@icloud.com",
+        "ascAppId": "6782220073",
+        "appleTeamId": "K74FJVM4T6"
+      }
+    }
+  }
+}
