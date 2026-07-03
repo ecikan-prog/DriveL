@@ -20,7 +20,7 @@ workflows:
       cocoapods: default
     cache:
       cache_paths:
-        - $CM_BUILD_DIR/node_modules
+        - $CM_BUILD_DIR/DriveLegal/node_modules
         - $HOME/.pnpm-store
     triggering:
       events:
@@ -31,21 +31,24 @@ workflows:
     scripts:
       - name: Install dependencies
         script: |
+          cd DriveLegal
           corepack enable
           pnpm install --no-frozen-lockfile
 
       - name: Expo prebuild (iOS)
         script: |
+          cd DriveLegal
           npx expo prebuild --platform ios --clean
 
       - name: Fix NODE_BINARY path for bundling
         script: |
+          cd DriveLegal
           echo "export NODE_BINARY=$(which node)" > ios/.xcode.env
           cat ios/.xcode.env
 
       - name: Install CocoaPods
         script: |
-          cd ios && pod install
+          cd DriveLegal/ios && pod install
 
       - name: Set up code signing
         script: |
@@ -55,6 +58,7 @@ workflows:
 
       - name: Debug - manually run RN bundle
         script: |
+          cd DriveLegal
           set -x
           export NODE_BINARY=node
           node --version
@@ -62,10 +66,11 @@ workflows:
 
       - name: Build ipa
         script: |
+          cd DriveLegal
           xcode-project build-ipa --workspace "ios/DriveLegal.xcworkspace" --scheme "$XCODE_SCHEME" --archive-xcargs="ENABLE_USER_SCRIPT_SANDBOXING=NO" --verbose
 
     artifacts:
-      - build/ios/ipa/*.ipa
+      - DriveLegal/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
 
     publishing:
@@ -87,7 +92,7 @@ workflows:
       node: 20.19.4
     cache:
       cache_paths:
-        - $CM_BUILD_DIR/node_modules
+        - $CM_BUILD_DIR/DriveLegal/node_modules
         - $HOME/.pnpm-store
     triggering:
       events:
@@ -98,26 +103,29 @@ workflows:
     scripts:
       - name: Install dependencies
         script: |
+          cd DriveLegal
           corepack enable
           pnpm install --frozen-lockfile || pnpm install
 
       - name: Expo prebuild (Android)
         script: |
+          cd DriveLegal
           npx expo prebuild --platform android --clean
 
       - name: Set up local.properties
         script: |
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/android/local.properties"
+          cd DriveLegal
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
 
       - name: Build release bundle
         script: |
-          cd android
+          cd DriveLegal/android
           ./gradlew bundleRelease
 
     artifacts:
-      - android/app/build/outputs/**/*.aab
-      - android/app/build/outputs/**/*.apk
-      - android/app/build/outputs/**/mapping.txt
+      - DriveLegal/android/app/build/outputs/**/*.aab
+      - DriveLegal/android/app/build/outputs/**/*.apk
+      - DriveLegal/android/app/build/outputs/**/mapping.txt
 
     publishing:
       google_play:
