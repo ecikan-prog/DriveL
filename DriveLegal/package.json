@@ -79,6 +79,7 @@
     "zod": "^4.2.1"
   },
   "devDependencies": {
+    "babel-preset-expo": "^13.0.0",
     "@react-native-community/cli": "^20.0.0",
     "@react-native-community/cli-platform-ios": "^20.0.0",
     "@react-native/metro-config": "^0.81.5",
