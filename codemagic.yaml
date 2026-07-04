@@ -1,4 +1,4 @@
- workflows:
+workflows:
   ios-workflow:
     name: DriveLegal iOS
     max_build_duration: 60
@@ -34,6 +34,11 @@
           cd DriveLegal
           corepack enable
           pnpm install --no-frozen-lockfile
+
+      - name: Fix Expo SDK package versions
+        script: |
+          cd DriveLegal
+          npx expo install --fix
 
       - name: Expo prebuild (iOS)
         script: |
