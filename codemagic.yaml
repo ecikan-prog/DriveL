@@ -33,9 +33,14 @@
         script: |
           cd DriveLegal
           corepack enable
-          pnpm install --no-frozen-lockfile
+          pnpm install --no-frozen-lockfile      
+        - name: Fix Expo SDK package versions
+        script: |
+          cd DriveLegal
+          npx expo install --fix
 
-      - name: Expo prebuild (iOS)
+
+  -    - name: Expo prebuild (iOS)
         script: |
           cd DriveLegal
           npx expo prebuild --platform ios --clean
