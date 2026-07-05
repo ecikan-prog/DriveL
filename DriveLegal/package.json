@@ -1,20 +1,11 @@
 {
   "scripts": {
-    "dev:server": "cross-env NODE_ENV=development tsx watch server/index.ts",
-    "dev:metro": "cross-env EXPO_USE_METRO_WORKSPACE_ROOT=1 npx expo start --web --port 8081",
+    "dev": "tsx server/index.ts",
+    
+    "build": "esbuild server/index.ts --bundle --platform=node --target=node18 --outfile=dist/index.js --format=esm --packages=external",
+    
+    "start": "node dist/index.js",
 
-    "build": "tsc",
-
-    "start": "node dist/server/index.js",
-
-    "check": "tsc --noEmit",
-    "lint": "expo lint",
-    "format": "prettier --write .",
-    "test": "vitest run",
-
-    "db:push": "drizzle-kit generate && drizzle-kit migrate"
-  },
-  "engines": {
-    "node": "18.x"
+    "check": "tsc --noEmit"
   }
 }
