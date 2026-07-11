@@ -12,10 +12,11 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 
-import { portalRouter } from "../portal";
-import { excelProtectedRouter } from "../excel-protected";
-import { exportRouter } from "../export-routes";
-import { adminRouter } from "../admin";
+import { appRouter } from "../routers";        →  import { appRouter } from "./routers";
+import { portalRouter } from "../portal";      →  import { portalRouter } from "./portal";
+import { excelProtectedRouter } from "../excel-protected";  →  import { excelProtectedRouter } from "./excel-protected";
+import { exportRouter } from "../export-routes";  →  import { exportRouter } from "./export-routes";
+import { adminRouter } from "../admin";        →  import { adminRouter } from "./admin";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
