@@ -14,9 +14,10 @@
     "mysql2": "^3.11.5",
     "nodemailer": "^6.9.16",
     "dotenv": "^16.4.7",
-    "@trpc/server": "^11.0.0",
-    "@trpc/client": "^11.0.0",
-    "@trpc/react-query": "^11.0.0",
+    "@trpc/server": "^10.45.2",
+    "@trpc/client": "^10.45.2",
+    "@trpc/react-query": "^10.45.2",
+
     "superjson": "^2.2.2",
     "xlsx-populate": "^1.21.0"
   },
