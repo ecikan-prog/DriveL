@@ -1,7 +1,7 @@
 import { initTRPC } from "@trpc/server";
 import { z } from "zod";
 import crypto from "crypto";
-import { query } from "./db";
+import { query } from "./db"; 
 
 const t = initTRPC.create();
 
