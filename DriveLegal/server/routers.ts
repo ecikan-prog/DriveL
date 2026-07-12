@@ -1,5 +1,9 @@
-import { router } from "./trpc";
+import { initTRPC } from "@trpc/server";
 
-export const appRouter = router({});
+const t = initTRPC.create();
+
+console.log("ROUTERS FILE LOADED");
+
+export const appRouter = t.router({});
 
 export type AppRouter = typeof appRouter;
