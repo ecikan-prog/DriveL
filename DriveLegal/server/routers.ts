@@ -1,4 +1,4 @@
-import { router } from "@trpc/server";
+import { router } from "./trpc";
 import { adminRouter } from "./admin";
 import { portalRouter } from "./portal";
 import { excelProtectedRouter } from "./excel-protected";
