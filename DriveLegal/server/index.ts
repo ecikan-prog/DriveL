@@ -43,13 +43,13 @@ adminRouter(app);
 excelProtectedRouter(app);
 exportRouter(app);
 
-app.use(
-  "/api/trpc",
-  createExpressMiddleware({
-    router: appRouter,
-    createContext,
-  })
-);
+// app.use(
+//   "/api/trpc",
+//   createExpressMiddleware({
+//     router: appRouter,
+//     createContext,
+//   })
+// );
 
 const storagePath = path.join(process.cwd(), "storage");
 app.use("/storage", express.static(storagePath));
