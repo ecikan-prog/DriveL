@@ -13,35 +13,31 @@ workflows:
         - ios_credentials
         - drivelegal_env
       vars:
-        XCODE_SCHEME: "DriveLegal"
-        BUNDLE_ID: "app.drivelegal.mobile"
+        XCODE_SCHEME: DriveLegal
+        BUNDLE_ID: app.drivelegal.mobile
       node: 20.19.4
       xcode: latest
       cocoapods: default
     cache:
       cache_paths:
         - $CM_BUILD_DIR/DriveLegal/node_modules
-    triggering:
-      events:
-        - push
-      branch_patterns:
-        - pattern: main
-          include: true
     scripts:
       - name: Install dependencies
         script: |
           cd DriveLegal
+          export YARN_IGNORE_PATH=1
+          touch yarn.lock
           corepack enable
           yarn install
       - name: Fix Expo SDK package versions
         script: |
           cd DriveLegal
           npx expo install --fix
-      - name: Expo prebuild (iOS)
+      - name: Expo prebuild
         script: |
           cd DriveLegal
           npx expo prebuild --platform ios --clean
-      - name: Fix NODE_BINARY path for bundling
+      - name: Configure NODE_BINARY
         script: |
           cd DriveLegal
           echo "export NODE_BINARY=$(which node)" > ios/.xcode.env
@@ -49,7 +45,7 @@ workflows:
         script: |
           cd DriveLegal/ios
           pod install
-      - name: Set up code signing
+      - name: Configure signing
         script: |
           keychain initialize
           keychain add-certificates
@@ -82,27 +78,23 @@ workflows:
     cache:
       cache_paths:
         - $CM_BUILD_DIR/DriveLegal/node_modules
-    triggering:
-      events:
-        - push
-      branch_patterns:
-        - pattern: main
-          include: true
     scripts:
       - name: Install dependencies
         script: |
           cd DriveLegal
+          export YARN_IGNORE_PATH=1
+          touch yarn.lock
           corepack enable
           yarn install
-      - name: Expo prebuild (Android)
+      - name: Expo prebuild
         script: |
           cd DriveLegal
           npx expo prebuild --platform android --clean
-      - name: Set up local.properties
+      - name: Configure Android SDK
         script: |
           cd DriveLegal
           echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
-      - name: Build release bundle
+      - name: Build Android Bundle
         script: |
           cd DriveLegal/android
           ./gradlew bundleRelease
