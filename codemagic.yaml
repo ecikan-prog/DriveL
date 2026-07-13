@@ -29,25 +29,13 @@ workflows:
         - pattern: main
           include: true
     scripts:
-      - name: DEBUG - inspect environment
+      - name: Install dependencies
         script: |
-          echo "=== pwd ==="
-          pwd
-          echo "=== /Users/builder/package.json ==="
-          cat /Users/builder/package.json 2>/dev/null || echo "FILE NOT FOUND"
-          echo "=== ls -la /Users/builder/ ==="
-          ls -la /Users/builder/
-          echo "=== ls -la current dir ==="
-          ls -la
-
-        - name: Install dependencies
-          script: |
           cd DriveLegal
           export COREPACK_ENABLE_STRICT=0
           rm -f /usr/local/bin/pnpm
           npm install -g pnpm@9.12.0
           pnpm install --no-frozen-lockfile
-
 
       - name: Fix Expo SDK package versions
         script: |
@@ -123,6 +111,8 @@ workflows:
       - name: Install dependencies
         script: |
           cd DriveLegal
+          export COREPACK_ENABLE_STRICT=0
+          rm -f /usr/local/bin/pnpm
           npm install -g pnpm@9.12.0
           pnpm install --frozen-lockfile || pnpm install
 
