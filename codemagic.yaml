@@ -3,63 +3,68 @@ workflows:
     name: DriveLegal iOS
     max_build_duration: 60
     instance_type: mac_mini_m2
-    working_directory: DriveLegal
-
     integrations:
-      app_store_connect: DriveLegal
-
+      app_store_connect: DriveLegal   # matches the App Store Connect API key added in Codemagic > Team settings > Integrations > Developer Portal
     environment:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: app.drivelegal.mobile
-
       groups:
-        - ios_credentials
-        - drivelegal_env
-
+        - ios_credentials   # set in Codemagic UI: App Store Connect API key + signing cert
+        - drivelegal_env    # set in Codemagic UI: EXPO_PUBLIC_API_URL, DATABASE_URL, etc.
       vars:
         XCODE_SCHEME: "DriveLegal"
         BUNDLE_ID: "app.drivelegal.mobile"
-
       node: 20.19.4
       xcode: latest
       cocoapods: default
-
     cache:
       cache_paths:
-        - node_modules
+        - $CM_BUILD_DIR/DriveLegal/node_modules
         - $HOME/.pnpm-store
-
     triggering:
       events:
         - push
       branch_patterns:
         - pattern: main
           include: true
-
     scripts:
+      - name: DEBUG - inspect environment
+        script: |
+          echo "=== pwd ==="
+          pwd
+          echo "=== /Users/builder/package.json ==="
+          cat /Users/builder/package.json 2>/dev/null || echo "FILE NOT FOUND"
+          echo "=== ls -la /Users/builder/ ==="
+          ls -la /Users/builder/
+          echo "=== ls -la current dir ==="
+          ls -la
+
       - name: Install dependencies
         script: |
-          corepack enable
+          cd DriveLegal
+          npm install -g pnpm@9.12.0
           pnpm install --no-frozen-lockfile
 
       - name: Fix Expo SDK package versions
         script: |
+          cd DriveLegal
           npx expo install --fix
 
       - name: Expo prebuild (iOS)
         script: |
+          cd DriveLegal
           npx expo prebuild --platform ios --clean
 
       - name: Fix NODE_BINARY path for bundling
         script: |
+          cd DriveLegal
           echo "export NODE_BINARY=$(which node)" > ios/.xcode.env
           cat ios/.xcode.env
 
       - name: Install CocoaPods
         script: |
-          cd ios
-          pod install
+          cd DriveLegal/ios && pod install
 
       - name: Set up code signing
         script: |
@@ -69,34 +74,25 @@ workflows:
 
       - name: Debug - manually run RN bundle
         script: |
+          cd DriveLegal
           set -x
           export NODE_BINARY=node
           node --version
-          npx expo export:embed \
-            --entry-file node_modules/expo-router/entry.js \
-            --platform ios \
-            --dev false \
-            --bundle-output /tmp/debug.jsbundle \
-            --assets-dest /tmp/debug-assets \
-            --reset-cache
+          npx expo export:embed --entry-file node_modules/expo-router/entry.js --platform ios --dev false --bundle-output /tmp/debug.jsbundle --assets-dest /tmp/debug-assets --reset-cache
 
       - name: Build ipa
         script: |
-          xcode-project build-ipa \
-            --workspace "ios/DriveLegal.xcworkspace" \
-            --scheme "$XCODE_SCHEME" \
-            --archive-xcargs="ENABLE_USER_SCRIPT_SANDBOXING=NO" \
-            --verbose
+          cd DriveLegal
+          xcode-project build-ipa --workspace "ios/DriveLegal.xcworkspace" --scheme "$XCODE_SCHEME" --archive-xcargs="ENABLE_USER_SCRIPT_SANDBOXING=NO" --verbose
 
     artifacts:
-      - build/ios/ipa/*.ipa
+      - DriveLegal/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
 
     publishing:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
-
       email:
         recipients:
           - e.cikan@icloud.com
@@ -105,57 +101,52 @@ workflows:
     name: DriveLegal Android
     max_build_duration: 60
     instance_type: linux_x2
-    working_directory: DriveLegal
-
     environment:
       groups:
-        - android_credentials
-        - drivelegal_env
-
+        - android_credentials  # set in Codemagic UI: keystore + key alias details
+        - drivelegal_env       # set in Codemagic UI: EXPO_PUBLIC_API_URL, DATABASE_URL, etc.
       node: 20.19.4
-
     cache:
       cache_paths:
-        - node_modules
+        - $CM_BUILD_DIR/DriveLegal/node_modules
         - $HOME/.pnpm-store
-
     triggering:
       events:
         - push
-
       branch_patterns:
         - pattern: main
           include: true
-
     scripts:
       - name: Install dependencies
         script: |
-          corepack enable
+          cd DriveLegal
+          npm install -g pnpm@9.12.0
           pnpm install --frozen-lockfile || pnpm install
 
       - name: Expo prebuild (Android)
         script: |
+          cd DriveLegal
           npx expo prebuild --platform android --clean
 
       - name: Set up local.properties
         script: |
+          cd DriveLegal
           echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
 
       - name: Build release bundle
         script: |
-          cd android
+          cd DriveLegal/android
           ./gradlew bundleRelease
 
     artifacts:
-      - android/app/build/outputs/**/*.aab
-      - android/app/build/outputs/**/*.apk
-      - android/app/build/outputs/**/mapping.txt
+      - DriveLegal/android/app/build/outputs/**/*.aab
+      - DriveLegal/android/app/build/outputs/**/*.apk
+      - DriveLegal/android/app/build/outputs/**/mapping.txt
 
     publishing:
       google_play:
         credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
         track: internal
-
       email:
         recipients:
           - e.cikan@icloud.com
