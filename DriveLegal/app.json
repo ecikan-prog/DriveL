@@ -17,13 +17,14 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.drivelegal.mobile",
-      "buildNumber": "2",
+      "buildNumber": "10",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "Drive Legal needs your location to record GPS coordinates in your logbook entries as required by NZTA regulations."
       }
     },
     "android": {
+      "versionCode": 10,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
