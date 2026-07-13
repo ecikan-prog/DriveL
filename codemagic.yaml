@@ -22,13 +22,12 @@ workflows:
       cache_paths:
         - $CM_BUILD_DIR/DriveLegal/node_modules
     scripts:
-      - name: Install dependencies
-        script: |
-          cd DriveLegal
-          export YARN_IGNORE_PATH=1
-          touch yarn.lock
-          corepack enable
-          yarn install
+    - name: Install dependencies
+      script: |
+       cd DriveLegal
+       export YARN_IGNORE_PATH=1
+       corepack enable
+       yarn install --no-immutable
       - name: Fix Expo SDK package versions
         script: |
           cd DriveLegal
