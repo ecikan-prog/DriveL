@@ -42,7 +42,13 @@ workflows:
           export CI=1
           npx expo install --fix
           npx expo install expo-router expo-audio expo-video expo-splash-screen expo-build-properties expo-location react-dom expo-asset expo-constants expo-linking react-native-safe-area-context react-native-screens react-native-reanimated react-native-worklets
-          
+        
+     - name: Test iOS JavaScript bundle
+       script: |
+         cd DriveLegal
+         export CI=1
+          npx expo export --platform ios --clear --output-dir dist-ios-test
+         
       - name: Check Expo
         script: |
           cd DriveLegal
