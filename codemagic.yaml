@@ -59,7 +59,8 @@ workflows:
             react-native-safe-area-context \
             react-native-screens \
             react-native-reanimated \
-            react-native-worklets
+            react-native-worklets \
+            react-native-css-interop
 
       - name: Check Expo project
         script: |
