@@ -61,6 +61,7 @@ workflows:
             react-native-reanimated \
             react-native-worklets \
             react-native-css-interop
+            react-native-svg
 
       - name: Check Expo project
         script: |
