@@ -75,12 +75,14 @@ workflows:
           keychain add-certificates
           xcode-project use-profiles
 
-      - name: Build IPA
-        script: |
-          cd DriveLegal
-          xcode-project build-ipa \
-            --workspace "ios/DriveLegal.xcworkspace" \
-            --scheme "$XCODE_SCHEME"
+        - name: Build IPA
+   script: |
+      cd DriveLegal
+      export NODE_BINARY=$(which node)
+      echo "Using Node: $NODE_BINARY"
+      xcode-project build-ipa \
+        --workspace "ios/DriveLegal.xcworkspace" \
+        --scheme "$XCODE_SCHEME"
 
     artifacts:
       - DriveLegal/build/ios/ipa/*.ipa
