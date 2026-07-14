@@ -37,37 +37,11 @@ workflows:
           pnpm install --no-frozen-lockfile
           pnpm exec expo --version
 
-      - name: Align Expo SDK packages
-        script: |
-          set -e
-          cd DriveLegal
-          export CI=1
-
-          pnpm exec expo install --fix
-
-          pnpm exec expo install \
-            expo-router \
-            expo-audio \
-            expo-video \
-            expo-splash-screen \
-            expo-build-properties \
-            expo-location \
-            expo-asset \
-            expo-constants \
-            expo-linking \
-            react-dom \
-            react-native-safe-area-context \
-            react-native-screens \
-            react-native-reanimated \
-            react-native-worklets \
-            react-native-css-interop
-            react-native-svg
-
       - name: Check Expo project
         script: |
           set -e
           cd DriveLegal
-          npx expo-doctor@latest
+          npx expo-doctor
 
       - name: Test iOS JavaScript bundle
         script: |
@@ -169,35 +143,11 @@ workflows:
           pnpm install --no-frozen-lockfile
           pnpm exec expo --version
 
-      - name: Align Expo SDK packages
-        script: |
-          set -e
-          cd DriveLegal
-          export CI=1
-
-          pnpm exec expo install --fix
-
-          pnpm exec expo install \
-            expo-router \
-            expo-audio \
-            expo-video \
-            expo-splash-screen \
-            expo-build-properties \
-            expo-location \
-            expo-asset \
-            expo-constants \
-            expo-linking \
-            react-dom \
-            react-native-safe-area-context \
-            react-native-screens \
-            react-native-reanimated \
-            react-native-worklets
-
       - name: Check Expo project
         script: |
           set -e
           cd DriveLegal
-          npx expo-doctor@latest
+          npx expo-doctor
 
       - name: Test Android JavaScript bundle
         script: |
