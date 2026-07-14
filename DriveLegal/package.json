@@ -24,6 +24,7 @@
     "express": "^4.19.2",
     "mysql2": "^3.11.0",
     "superjson": "^2.2.1",
+    "xlsx-populate": "^1.21.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
