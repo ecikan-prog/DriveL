@@ -41,7 +41,8 @@ workflows:
           cd DriveLegal
           export CI=1
           npx expo install --fix
-
+          npx expo install expo-audio
+          
       - name: Check Expo
         script: |
           cd DriveLegal
