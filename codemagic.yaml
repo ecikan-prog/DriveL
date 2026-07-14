@@ -39,12 +39,19 @@ workflows:
       - name: Fix Expo SDK packages
         script: |
           cd DriveLegal
-          npx expo install --fix --non-interactive
+          export CI=1
+          npx expo install --fix
+
+      - name: Verify Expo setup
+        script: |
+          cd DriveLegal
+          npx expo doctor
 
       - name: Expo prebuild
         script: |
           cd DriveLegal
-          npx expo prebuild --platform ios --clean --non-interactive
+          export CI=1
+          npx expo prebuild --platform ios --clean
 
       - name: Configure NODE_BINARY
         script: |
@@ -82,6 +89,7 @@ workflows:
         recipients:
           - e.cikan@icloud.com
 
+
   android-workflow:
     name: DriveLegal Android
     max_build_duration: 60
@@ -109,12 +117,19 @@ workflows:
       - name: Fix Expo SDK packages
         script: |
           cd DriveLegal
-          npx expo install --fix --non-interactive
+          export CI=1
+          npx expo install --fix
+
+      - name: Verify Expo setup
+        script: |
+          cd DriveLegal
+          npx expo doctor
 
       - name: Expo prebuild
         script: |
           cd DriveLegal
-          npx expo prebuild --platform android --clean --non-interactive
+          export CI=1
+          npx expo prebuild --platform android --clean
 
       - name: Configure Android SDK
         script: |
