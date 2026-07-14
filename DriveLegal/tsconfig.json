@@ -10,14 +10,34 @@
     "strict": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "jsx": "react-jsx",
 
-    "resolveJsonModule": true
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"]
+    }
   },
   "include": [
-    "server",
-    "routers",
-    "portal",
-    "admin",
-    "export-routes"
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "config/**/*.ts",
+    "config/**/*.tsx",
+    "hooks/**/*.ts",
+    "hooks/**/*.tsx",
+    "lib/**/*.ts",
+    "lib/**/*.tsx",
+
+    "server/**/*.ts",
+    "routers/**/*.ts",
+    "portal/**/*.ts",
+    "admin/**/*.ts",
+    "export-routes/**/*.ts",
+
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts",
+    "nativewind-env.d.ts"
   ]
 }
