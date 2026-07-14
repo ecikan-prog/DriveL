@@ -2,11 +2,11 @@
   "name": "app-template",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
+  "type": "commonjs"
   "packageManager": "pnpm@9.12.0",
   "scripts": {
     "dev": "tsx server/index.ts",
-    "build": "esbuild server/index.ts --bundle --platform=node --target=node18 --outfile=dist/index.js --format=esm",
+   "build": "esbuild server/index.ts --bundle --platform=node --target=node18 --outfile=dist/index.js --format=cjs"
     "start": "node dist/index.js",
     "check": "tsc --noEmit",
     "lint": "eslint .",
