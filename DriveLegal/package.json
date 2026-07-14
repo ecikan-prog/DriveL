@@ -7,7 +7,7 @@
     "dev": "concurrently -k \"pnpm dev:server\" \"pnpm dev:metro\"",
     "dev:server": "cross-env NODE_ENV=development tsx watch server/_core/index.ts",
     "dev:metro": "cross-env EXPO_USE_METRO_WORKSPACE_ROOT=1 npx expo start --web --port ${EXPO_PORT:-8081}",
-    "build": "esbuild server/_core/index.ts --bundle --platform=node --target=node18 --outfile=dist/index.js --format=esm --packages=external",
+    "build": "esbuild server/_core/index.ts --bundle --platform=node --target=node18 --outfile=dist/index.js --format=esm",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc --noEmit",
     "lint": "expo lint",
