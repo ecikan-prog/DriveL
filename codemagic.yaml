@@ -26,60 +26,101 @@ workflows:
 
     cache:
       cache_paths:
-        - $CM_BUILD_DIR/DriveLegal/node_modules
         - $HOME/.pnpm-store
 
-    - name: Install dependencies
-  script: |
-    cd DriveLegal
-    corepack enable
-    pnpm install --no-frozen-lockfile
-    pnpm exec expo --version
+    scripts:
+      - name: Install dependencies
+        script: |
+          set -e
+          cd DriveLegal
+          corepack enable
+          pnpm install --no-frozen-lockfile
+          pnpm exec expo --version
 
-- name: Fix Expo SDK packages
-  script: |
-    cd DriveLegal
-    export CI=1
-    pnpm exec expo install --fix
-    pnpm exec expo install expo-router expo-audio expo-video expo-splash-screen expo-build-properties expo-location react-dom expo-asset expo-constants expo-linking react-native-safe-area-context react-native-screens react-native-reanimated react-native-worklets
+      - name: Align Expo SDK packages
+        script: |
+          set -e
+          cd DriveLegal
+          export CI=1
 
-- name: Check Expo
-  script: |
-    cd DriveLegal
-    pnpm exec expo-doctor
+          pnpm exec expo install --fix
+
+          pnpm exec expo install \
+            expo-router \
+            expo-audio \
+            expo-video \
+            expo-splash-screen \
+            expo-build-properties \
+            expo-location \
+            expo-asset \
+            expo-constants \
+            expo-linking \
+            react-dom \
+            react-native-safe-area-context \
+            react-native-screens \
+            react-native-reanimated \
+            react-native-worklets
+
+      - name: Check Expo project
+        script: |
+          set -e
+          cd DriveLegal
+          npx expo-doctor@latest
 
       - name: Test iOS JavaScript bundle
         script: |
+          set -e
           cd DriveLegal
           export CI=1
-          pnpm exec expo export --platform ios --clear --output-dir dist-ios-test
+          pnpm exec expo export \
+            --platform ios \
+            --clear \
+            --output-dir dist-ios-test
 
-      - name: Expo prebuild iOS
+      - name: Generate iOS project
         script: |
+          set -e
           cd DriveLegal
           export CI=1
-          npx expo prebuild --platform ios --clean
-      - name: Configure NODE_BINARY
+          pnpm exec expo prebuild \
+            --platform ios \
+            --clean
+
+      - name: Configure Node for Xcode
         script: |
+          set -e
           cd DriveLegal
-          echo "export NODE_BINARY=$(which node)" > ios/.xcode.env
+
+          NODE_PATH="$(command -v node)"
+
+          echo "export NODE_BINARY=$NODE_PATH" > ios/.xcode.env
+          echo "export NODE_BINARY=$NODE_PATH" > ios/.xcode.env.local
+
+          echo "Configured Node binary:"
+          cat ios/.xcode.env
+          cat ios/.xcode.env.local
 
       - name: Install CocoaPods
         script: |
+          set -e
           cd DriveLegal/ios
-          pod install
+          pod install --repo-update
 
-           - name: Configure signing
+      - name: Configure iOS signing
         script: |
+          set -e
           keychain initialize
           keychain add-certificates
           xcode-project use-profiles
 
       - name: Build IPA
         script: |
+          set -e
           cd DriveLegal
+
           export NODE_BINARY="$(command -v node)"
           echo "Using Node: $NODE_BINARY"
+
           xcode-project build-ipa \
             --workspace "ios/DriveLegal.xcworkspace" \
             --scheme "$XCODE_SCHEME"
@@ -87,6 +128,7 @@ workflows:
     artifacts:
       - DriveLegal/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
+      - DriveLegal/ios/build/**/*.xcarchive
 
     publishing:
       app_store_connect:
@@ -112,46 +154,85 @@ workflows:
 
     cache:
       cache_paths:
-        - $CM_BUILD_DIR/DriveLegal/node_modules
         - $HOME/.pnpm-store
+        - $HOME/.gradle/caches
+        - $HOME/.gradle/wrapper
 
     scripts:
       - name: Install dependencies
         script: |
+          set -e
           cd DriveLegal
           corepack enable
           pnpm install --no-frozen-lockfile
+          pnpm exec expo --version
 
-      - name: Fix Expo SDK packages
+      - name: Align Expo SDK packages
         script: |
+          set -e
           cd DriveLegal
           export CI=1
-          npx expo install --fix
 
-      - name: Check Expo
+          pnpm exec expo install --fix
+
+          pnpm exec expo install \
+            expo-router \
+            expo-audio \
+            expo-video \
+            expo-splash-screen \
+            expo-build-properties \
+            expo-location \
+            expo-asset \
+            expo-constants \
+            expo-linking \
+            react-dom \
+            react-native-safe-area-context \
+            react-native-screens \
+            react-native-reanimated \
+            react-native-worklets
+
+      - name: Check Expo project
         script: |
+          set -e
           cd DriveLegal
-          npx expo doctor
+          npx expo-doctor@latest
 
-      - name: Expo prebuild Android
+      - name: Test Android JavaScript bundle
         script: |
+          set -e
           cd DriveLegal
           export CI=1
-          npx expo prebuild --platform android --clean
+          pnpm exec expo export \
+            --platform android \
+            --clear \
+            --output-dir dist-android-test
+
+      - name: Generate Android project
+        script: |
+          set -e
+          cd DriveLegal
+          export CI=1
+          pnpm exec expo prebuild \
+            --platform android \
+            --clean
 
       - name: Configure Android SDK
         script: |
+          set -e
           cd DriveLegal
           echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
 
-      - name: Build Android Bundle
+      - name: Build Android bundle
         script: |
+          set -e
           cd DriveLegal/android
+          chmod +x gradlew
           ./gradlew bundleRelease
 
     artifacts:
       - DriveLegal/android/app/build/outputs/**/*.aab
       - DriveLegal/android/app/build/outputs/**/*.apk
+      - DriveLegal/android/app/build/reports/**
 
     publishing:
       google_play:
