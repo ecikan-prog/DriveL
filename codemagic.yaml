@@ -3,108 +3,138 @@ workflows:
     name: DriveLegal iOS
     max_build_duration: 60
     instance_type: mac_mini_m2
+
     integrations:
       app_store_connect: DriveLegal
+
     environment:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: app.drivelegal.mobile
+
       groups:
         - ios_credentials
         - drivelegal_env
+
       vars:
         XCODE_SCHEME: DriveLegal
         BUNDLE_ID: app.drivelegal.mobile
+
       node: 20.19.4
       xcode: latest
       cocoapods: default
+
     cache:
       cache_paths:
         - $CM_BUILD_DIR/DriveLegal/node_modules
+        - $HOME/.pnpm-store
+
     scripts:
       - name: Install dependencies
         script: |
           cd DriveLegal
-          export YARN_IGNORE_PATH=1
-          touch yarn.lock
           corepack enable
-          yarn install --no-immutable
-      - name: Fix Expo SDK package versions
+          pnpm install --no-frozen-lockfile
+
+      - name: Fix Expo SDK packages
         script: |
           cd DriveLegal
-          npx expo install --fix
+          npx expo install --fix --non-interactive
+
       - name: Expo prebuild
         script: |
           cd DriveLegal
-          npx expo prebuild --platform ios --clean
+          npx expo prebuild --platform ios --clean --non-interactive
+
       - name: Configure NODE_BINARY
         script: |
           cd DriveLegal
           echo "export NODE_BINARY=$(which node)" > ios/.xcode.env
+
       - name: Install CocoaPods
         script: |
           cd DriveLegal/ios
           pod install
+
       - name: Configure signing
         script: |
           keychain initialize
           keychain add-certificates
           xcode-project use-profiles
+
       - name: Build IPA
         script: |
           cd DriveLegal
           xcode-project build-ipa \
             --workspace "ios/DriveLegal.xcworkspace" \
             --scheme "$XCODE_SCHEME"
+
     artifacts:
       - DriveLegal/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
+
     publishing:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
+
       email:
         recipients:
           - e.cikan@icloud.com
+
   android-workflow:
     name: DriveLegal Android
     max_build_duration: 60
     instance_type: linux_x2
+
     environment:
       groups:
         - android_credentials
         - drivelegal_env
+
       node: 20.19.4
+
     cache:
       cache_paths:
         - $CM_BUILD_DIR/DriveLegal/node_modules
+        - $HOME/.pnpm-store
+
     scripts:
       - name: Install dependencies
         script: |
           cd DriveLegal
-          export YARN_IGNORE_PATH=1
-          touch yarn.lock
           corepack enable
-          yarn install --no-immutable
+          pnpm install --no-frozen-lockfile
+
+      - name: Fix Expo SDK packages
+        script: |
+          cd DriveLegal
+          npx expo install --fix --non-interactive
+
       - name: Expo prebuild
         script: |
           cd DriveLegal
-          npx expo prebuild --platform android --clean
+          npx expo prebuild --platform android --clean --non-interactive
+
       - name: Configure Android SDK
         script: |
           cd DriveLegal
           echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+
       - name: Build Android Bundle
         script: |
           cd DriveLegal/android
           ./gradlew bundleRelease
+
     artifacts:
       - DriveLegal/android/app/build/outputs/**/*.aab
       - DriveLegal/android/app/build/outputs/**/*.apk
+
     publishing:
       google_play:
         credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
         track: internal
+
       email:
         recipients:
           - e.cikan@icloud.com
