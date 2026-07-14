@@ -43,6 +43,7 @@ workflows:
           npx expo install --fix
           npx expo install expo-audio
           npx expo install expo-video
+          npx expo install expo-splash-screen
           
       - name: Check Expo
         script: |
