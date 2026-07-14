@@ -36,30 +36,29 @@ workflows:
           corepack enable
           pnpm install --no-frozen-lockfile
 
-      - name: Fix Expo SDK packages
+            - name: Fix Expo SDK packages
         script: |
           cd DriveLegal
           export CI=1
           npx expo install --fix
           npx expo install expo-router expo-audio expo-video expo-splash-screen expo-build-properties expo-location react-dom expo-asset expo-constants expo-linking react-native-safe-area-context react-native-screens react-native-reanimated react-native-worklets
-        
-     - name: Test iOS JavaScript bundle
-       script: |
-         cd DriveLegal
-         export CI=1
-          npx expo export --platform ios --clear --output-dir dist-ios-test
-         
+
       - name: Check Expo
         script: |
           cd DriveLegal
           npx expo-doctor@latest
+
+      - name: Test iOS JavaScript bundle
+        script: |
+          cd DriveLegal
+          export CI=1
+          npx expo export --platform ios --clear --output-dir dist-ios-test
 
       - name: Expo prebuild iOS
         script: |
           cd DriveLegal
           export CI=1
           npx expo prebuild --platform ios --clean
-
       - name: Configure NODE_BINARY
         script: |
           cd DriveLegal
