@@ -42,6 +42,7 @@ workflows:
           export CI=1
           npx expo install --fix
           npx expo install expo-audio
+          npx expo install expo-video
           
       - name: Check Expo
         script: |
