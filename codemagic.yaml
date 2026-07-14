@@ -45,7 +45,7 @@ workflows:
       - name: Check Expo
         script: |
           cd DriveLegal
-          npx expo doctor
+          npx expo-doctor@latest
 
       - name: Expo prebuild iOS
         script: |
