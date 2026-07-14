@@ -40,8 +40,8 @@ workflows:
         script: |
           cd DriveLegal
           export CI=1
-          npx expo install --fi
-          npx expo install expo-audio expo-video expo-splash-screen expo-build-properties
+          npx expo install --fix
+          npx expo install expo-audio expo-video expo-splash-screen expo-build-properties expo-location
           
       - name: Check Expo
         script: |
