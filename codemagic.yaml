@@ -42,12 +42,12 @@ workflows:
           export CI=1
           npx expo install --fix
 
-      - name: Verify Expo setup
+      - name: Check Expo
         script: |
           cd DriveLegal
           npx expo doctor
 
-      - name: Expo prebuild
+      - name: Expo prebuild iOS
         script: |
           cd DriveLegal
           export CI=1
@@ -120,12 +120,12 @@ workflows:
           export CI=1
           npx expo install --fix
 
-      - name: Verify Expo setup
+      - name: Check Expo
         script: |
           cd DriveLegal
           npx expo doctor
 
-      - name: Expo prebuild
+      - name: Expo prebuild Android
         script: |
           cd DriveLegal
           export CI=1
