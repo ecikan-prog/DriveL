@@ -384,7 +384,32 @@ export default function DashboardScreen() {
   const todayWorkPercent = (todayWorkHours / todayWorkLimit) * 100;
   const fortnightlyPercent = (fortnightlyHours / fortnightlyLimit) * 100;
 
-  if (!user) return null;
+  if (authLoading) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: "#003366",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Text
+        style={{
+          color: "#FFFFFF",
+          fontSize: 16,
+          fontWeight: "600",
+        }}
+      >
+        Loading Drive Legal...
+      </Text>
+    </View>
+  );
+}
+
+if (!user) {
+  return <Redirect href="/login" />;
+}
 
   // ── Off-duty rest break state ────────────────────────────────────────────
   // Determine whether the driver is in a mandatory rest period between shifts.
