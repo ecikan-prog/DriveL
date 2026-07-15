@@ -19,7 +19,7 @@ const SYNC_STATUS_KEY = "dl_sync_status";
 // also works correctly. On native iOS/Android, always use the
 // hardcoded production URL (env vars are NOT available at EAS build
 // time via Manus Publish, so we must not rely on them).
-const LIVE_BACKEND = "https://guidedlogbook-6i7vyx5h.manus.space";
+const LIVE_BACKEND = "https://drivel-production.up.railway.app";
 const API_BASE =
   Platform.OS === "web" && typeof window !== "undefined" && window.location
     ? `${window.location.origin}/api/trpc`
