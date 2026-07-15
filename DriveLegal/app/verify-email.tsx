@@ -40,13 +40,34 @@ export default function VerifyEmailScreen() {
   }
 
   async function handleResend() {
-    if (!params.email) return;
-    setResendLoading(true);
-    setResendSuccess(false);
-    await resendVerificationEmail(params.email);
-    setResendLoading(false);
+  if (!params.email || resendLoading) return;
+
+  setResendLoading(true);
+  setResendSuccess(false);
+  setErrorMessage("");
+
+  try {
+    const result = await resendVerificationEmail(
+      params.email.trim().toLowerCase()
+    );
+
+    if (!result.success) {
+      setErrorMessage(
+        result.message ||
+          "The verification email could not be sent. Please try again."
+      );
+      return;
+    }
+
     setResendSuccess(true);
+  } catch {
+    setErrorMessage(
+      "Unable to connect to Drive Legal. Please check your internet connection."
+    );
+  } finally {
+    setResendLoading(false);
   }
+}
 
   function handleGoToLogin() {
     router.replace("/login" as any);
