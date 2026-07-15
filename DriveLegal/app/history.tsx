@@ -208,7 +208,7 @@ export default function HistoryScreen() {
         URL.revokeObjectURL(url);
       } else {
         // Native iOS: POST to server, get download URL, open in Safari
-        const { getApiBaseUrl } = await import("../server/oauth");
+  
         const { Linking } = await import("react-native");
         const apiBase = getApiBaseUrl();
         const resp = await fetch(`${apiBase}/api/export/csv`, {
