@@ -1,188 +1,570 @@
 /**
  * Verify Email Screen — shown after registration and when unverified users try to log in.
- * Handles two flows:
- * 1. After registration: shows "check your email" message with resend button
- * 2. From email link: processes the verification token and shows success/error
+ *
+ * Handles:
+ * 1. Registration flow: check email + resend
+ * 2. Verification-link flow: verify token + show success/error
  */
+
 import { useEffect, useState } from "react";
-import { Text, View, TouchableOpacity, ActivityIndicator, Platform } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { ScreenContainer } from "@/components/screen-container";
-import { resendVerificationEmail, verifyEmailToken } from "@/lib/cloud-sync";
+import {
+  ActivityIndicator,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useLocalSearchParams, useRouter } from "expo-router";
+
+import { ScreenContainer } from "@/components/screen-container";
+import {
+  resendVerificationEmail,
+  verifyEmailToken,
+} from "@/lib/cloud-sync";
+
+type VerificationStatus =
+  | "pending"
+  | "verifying"
+  | "success"
+  | "error";
 
 export default function VerifyEmailScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ token?: string; email?: string }>();
-  const [status, setStatus] = useState<"pending" | "verifying" | "success" | "error">(
-    params.token ? "verifying" : "pending"
-  );
-  const [errorMessage, setErrorMessage] = useState("");
-  const [resendLoading, setResendLoading] = useState(false);
-  const [resendSuccess, setResendSuccess] = useState(false);
 
-  // If we have a token, verify it immediately
+  const params = useLocalSearchParams<{
+    token?: string | string[];
+    email?: string | string[];
+  }>();
+
+  const token = Array.isArray(params.token)
+    ? params.token[0]
+    : params.token;
+
+  const email = Array.isArray(params.email)
+    ? params.email[0]
+    : params.email;
+
+  const [status, setStatus] =
+    useState<VerificationStatus>(
+      token ? "verifying" : "pending"
+    );
+
+  const [errorMessage, setErrorMessage] =
+    useState("");
+
+  const [resendLoading, setResendLoading] =
+    useState(false);
+
+  const [resendSuccess, setResendSuccess] =
+    useState(false);
+
   useEffect(() => {
-    if (params.token) {
-      handleVerifyToken(params.token);
-    }
-  }, [params.token]);
+    if (!token) return;
 
-  async function handleVerifyToken(token: string) {
-    setStatus("verifying");
-    const result = await verifyEmailToken(token);
-    if (result.success) {
-      setStatus("success");
-    } else {
-      setStatus("error");
-      setErrorMessage(result.error || "Verification failed. The link may have expired.");
+    let cancelled = false;
+
+    async function verify() {
+      setStatus("verifying");
+      setErrorMessage("");
+
+      try {
+        const result = await verifyEmailToken(token);
+
+        if (cancelled) return;
+
+        if (result.success) {
+          setStatus("success");
+        } else {
+          setStatus("error");
+          setErrorMessage(
+            result.error ||
+              "Verification failed. The link may have expired."
+          );
+        }
+      } catch {
+        if (cancelled) return;
+
+        setStatus("error");
+        setErrorMessage(
+          "Unable to verify your email. Please check your connection and try again."
+        );
+      }
     }
-  }
+
+    verify();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   async function handleResend() {
-  if (!params.email || resendLoading) return;
+    if (!email || resendLoading) return;
 
-  setResendLoading(true);
-  setResendSuccess(false);
-  setErrorMessage("");
+    setResendLoading(true);
+    setResendSuccess(false);
+    setErrorMessage("");
 
-  try {
-    const result = await resendVerificationEmail(
-      params.email.trim().toLowerCase()
-    );
-
-    if (!result.success) {
-      setErrorMessage(
-        result.message ||
-          "The verification email could not be sent. Please try again."
+    try {
+      const result = await resendVerificationEmail(
+        email.trim().toLowerCase()
       );
-      return;
-    }
 
-    setResendSuccess(true);
-  } catch {
-    setErrorMessage(
-      "Unable to connect to Drive Legal. Please check your internet connection."
-    );
-  } finally {
-    setResendLoading(false);
+      if (!result.success) {
+        setErrorMessage(
+          result.message ||
+            "The verification email could not be sent. Please try again."
+        );
+        return;
+      }
+
+      setResendSuccess(true);
+    } catch {
+      setErrorMessage(
+        "Unable to connect to Drive Legal. Please check your internet connection and try again."
+      );
+    } finally {
+      setResendLoading(false);
+    }
   }
-}
 
   function handleGoToLogin() {
     router.replace("/login" as any);
   }
 
-  // Verifying state (processing token)
   if (status === "verifying") {
     return (
-      <ScreenContainer edges={["top", "bottom", "left", "right"]} className="p-6">
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#003366" />
-          <Text className="text-lg text-foreground mt-4 font-semibold">Verifying your email...</Text>
-          <Text className="text-sm text-muted mt-2 text-center">Please wait while we confirm your email address.</Text>
+      <ScreenContainer
+        edges={["top", "bottom", "left", "right"]}
+        containerClassName="bg-white"
+        safeAreaClassName="bg-white"
+      >
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            paddingHorizontal: 24,
+          }}
+        >
+          <ActivityIndicator
+            size="large"
+            color="#3156D3"
+          />
+
+          <Text
+            style={{
+              color: "#12386E",
+              fontSize: 22,
+              fontWeight: "800",
+              marginTop: 20,
+              textAlign: "center",
+            }}
+          >
+            Verifying your email
+          </Text>
+
+          <Text
+            style={{
+              color: "#71809F",
+              fontSize: 14,
+              lineHeight: 21,
+              marginTop: 8,
+              textAlign: "center",
+            }}
+          >
+            Please wait while Drive Legal confirms your
+            email address.
+          </Text>
         </View>
       </ScreenContainer>
     );
   }
 
-  // Success state (email verified)
   if (status === "success") {
     return (
-      <ScreenContainer edges={["top", "bottom", "left", "right"]} className="p-6">
-        <View className="flex-1 items-center justify-center">
-          <View className="w-20 h-20 rounded-full bg-success items-center justify-center mb-6" style={{ opacity: 0.15 }}>
-            <MaterialIcons name="check-circle" size={48} color="#22C55E" />
+      <ScreenContainer
+        edges={["top", "bottom", "left", "right"]}
+        containerClassName="bg-white"
+        safeAreaClassName="bg-white"
+      >
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            paddingHorizontal: 24,
+          }}
+        >
+          <View
+            style={{
+              width: 88,
+              height: 88,
+              borderRadius: 44,
+              backgroundColor: "#DCFCE7",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 24,
+            }}
+          >
+            <MaterialIcons
+              name="check-circle"
+              size={52}
+              color="#16A34A"
+            />
           </View>
-          <View className="w-20 h-20 rounded-full items-center justify-center mb-6" style={{ position: "absolute", top: "50%", marginTop: -120 }}>
-            <MaterialIcons name="check-circle" size={48} color="#22C55E" />
-          </View>
-          <Text className="text-2xl font-bold text-foreground mb-2">Email Verified!</Text>
-          <Text className="text-base text-muted text-center mb-8">
-            Your email has been successfully verified. You can now sign in to Drive Legal.
+
+          <Text
+            style={{
+              color: "#12386E",
+              fontSize: 28,
+              fontWeight: "800",
+              textAlign: "center",
+              marginBottom: 10,
+            }}
+          >
+            Email Verified
           </Text>
+
+          <Text
+            style={{
+              color: "#71809F",
+              fontSize: 15,
+              lineHeight: 22,
+              textAlign: "center",
+              marginBottom: 28,
+            }}
+          >
+            Your email has been successfully verified.
+            You can now sign in to Drive Legal.
+          </Text>
+
           <TouchableOpacity
             onPress={handleGoToLogin}
-            className="bg-primary px-8 py-4 rounded-xl active:opacity-80"
+            activeOpacity={0.85}
+            style={{
+              minWidth: 220,
+              minHeight: 56,
+              borderRadius: 15,
+              backgroundColor: "#3156D3",
+              alignItems: "center",
+              justifyContent: "center",
+              paddingHorizontal: 24,
+            }}
           >
-            <Text className="text-white font-bold text-base">Sign In</Text>
+            <Text
+              style={{
+                color: "#FFFFFF",
+                fontSize: 16,
+                fontWeight: "800",
+              }}
+            >
+              Sign In
+            </Text>
           </TouchableOpacity>
         </View>
       </ScreenContainer>
     );
   }
 
-  // Error state (token expired or invalid)
   if (status === "error") {
     return (
-      <ScreenContainer edges={["top", "bottom", "left", "right"]} className="p-6">
-        <View className="flex-1 items-center justify-center">
-          <MaterialIcons name="error-outline" size={48} color="#EF4444" />
-          <Text className="text-2xl font-bold text-foreground mt-4 mb-2">Verification Failed</Text>
-          <Text className="text-base text-muted text-center mb-6">{errorMessage}</Text>
-          {params.email && (
+      <ScreenContainer
+        edges={["top", "bottom", "left", "right"]}
+        containerClassName="bg-white"
+        safeAreaClassName="bg-white"
+      >
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            paddingHorizontal: 24,
+          }}
+        >
+          <View
+            style={{
+              width: 88,
+              height: 88,
+              borderRadius: 44,
+              backgroundColor: "#FEE2E2",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 24,
+            }}
+          >
+            <MaterialIcons
+              name="error-outline"
+              size={52}
+              color="#DC2626"
+            />
+          </View>
+
+          <Text
+            style={{
+              color: "#12386E",
+              fontSize: 28,
+              fontWeight: "800",
+              textAlign: "center",
+              marginBottom: 10,
+            }}
+          >
+            Verification Failed
+          </Text>
+
+          <Text
+            style={{
+              color: "#B91C1C",
+              fontSize: 14,
+              lineHeight: 21,
+              textAlign: "center",
+              marginBottom: 24,
+            }}
+          >
+            {errorMessage}
+          </Text>
+
+          {email ? (
             <TouchableOpacity
               onPress={handleResend}
               disabled={resendLoading}
-              className="bg-primary px-8 py-4 rounded-xl active:opacity-80 mb-4"
+              activeOpacity={0.85}
+              style={{
+                minWidth: 250,
+                minHeight: 56,
+                borderRadius: 15,
+                backgroundColor: "#3156D3",
+                alignItems: "center",
+                justifyContent: "center",
+                paddingHorizontal: 24,
+                marginBottom: 16,
+                opacity: resendLoading ? 0.7 : 1,
+              }}
             >
               {resendLoading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <Text className="text-white font-bold text-base">Resend Verification Email</Text>
+                <Text
+                  style={{
+                    color: "#FFFFFF",
+                    fontSize: 16,
+                    fontWeight: "800",
+                  }}
+                >
+                  Resend Verification Email
+                </Text>
               )}
             </TouchableOpacity>
-          )}
-          {resendSuccess && (
-            <Text className="text-sm text-success mb-4">Verification email sent! Check your inbox.</Text>
-          )}
-          <TouchableOpacity onPress={handleGoToLogin} className="mt-2">
-            <Text className="text-primary font-semibold text-base">Back to Sign In</Text>
+          ) : null}
+
+          {resendSuccess ? (
+            <Text
+              style={{
+                color: "#15803D",
+                fontSize: 13,
+                textAlign: "center",
+                marginBottom: 16,
+              }}
+            >
+              A new verification email has been sent.
+            </Text>
+          ) : null}
+
+          <TouchableOpacity
+            onPress={handleGoToLogin}
+            style={{ paddingVertical: 12 }}
+          >
+            <Text
+              style={{
+                color: "#3156D3",
+                fontSize: 15,
+                fontWeight: "700",
+              }}
+            >
+              Back to Sign In
+            </Text>
           </TouchableOpacity>
         </View>
       </ScreenContainer>
     );
   }
 
-  // Pending state (after registration — waiting for user to check email)
   return (
-    <ScreenContainer edges={["top", "bottom", "left", "right"]} className="p-6">
-      <View className="flex-1 items-center justify-center">
-        <View className="w-20 h-20 rounded-full items-center justify-center mb-6" style={{ backgroundColor: "rgba(89, 128, 233, 0.12)" }}>
-          <MaterialIcons name="mark-email-unread" size={40} color="#5980E9" />
+    <ScreenContainer
+      edges={["top", "bottom", "left", "right"]}
+      containerClassName="bg-white"
+      safeAreaClassName="bg-white"
+    >
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          paddingHorizontal: 24,
+        }}
+      >
+        <View
+          style={{
+            width: 88,
+            height: 88,
+            borderRadius: 44,
+            backgroundColor: "#EEF2FF",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: 24,
+          }}
+        >
+          <MaterialIcons
+            name="mark-email-unread"
+            size={48}
+            color="#3156D3"
+          />
         </View>
-        <Text className="text-2xl font-bold text-foreground mb-2 text-center">Verify Your Email</Text>
-        <Text className="text-base text-muted text-center mb-2">
-          We've sent a verification link to:
+
+        <Text
+          style={{
+            color: "#12386E",
+            fontSize: 28,
+            fontWeight: "800",
+            textAlign: "center",
+            marginBottom: 10,
+          }}
+        >
+          Verify Your Email
         </Text>
-        <Text className="text-base font-semibold text-foreground mb-6 text-center">
-          {params.email || "your email address"}
+
+        <Text
+          style={{
+            color: "#71809F",
+            fontSize: 15,
+            textAlign: "center",
+            marginBottom: 6,
+          }}
+        >
+          We sent a verification link to:
         </Text>
-        <Text className="text-sm text-muted text-center mb-8 px-4">
-          Please check your inbox (and spam folder) and click the verification link to activate your account. The link expires in 24 hours.
+
+        <Text
+          style={{
+            color: "#12386E",
+            fontSize: 16,
+            fontWeight: "800",
+            textAlign: "center",
+            marginBottom: 20,
+          }}
+        >
+          {email || "your email address"}
         </Text>
+
+        <Text
+          style={{
+            color: "#71809F",
+            fontSize: 14,
+            lineHeight: 21,
+            textAlign: "center",
+            marginBottom: 24,
+          }}
+        >
+          Check your inbox and spam folder, then tap the
+          verification link. The link expires after 24
+          hours.
+        </Text>
+
+        {errorMessage ? (
+          <View
+            style={{
+              width: "100%",
+              backgroundColor: "#FEF2F2",
+              borderColor: "#FECACA",
+              borderWidth: 1,
+              borderRadius: 14,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              marginBottom: 18,
+            }}
+          >
+            <Text
+              style={{
+                color: "#B91C1C",
+                fontSize: 13,
+                lineHeight: 19,
+                textAlign: "center",
+              }}
+            >
+              {errorMessage}
+            </Text>
+          </View>
+        ) : null}
 
         <TouchableOpacity
           onPress={handleResend}
-          disabled={resendLoading || resendSuccess}
-          className="bg-primary px-8 py-4 rounded-xl active:opacity-80 mb-4"
-          style={resendSuccess ? { opacity: 0.6 } : undefined}
+          disabled={
+            resendLoading ||
+            resendSuccess ||
+            !email
+          }
+          activeOpacity={0.85}
+          style={{
+            width: "100%",
+            minHeight: 56,
+            borderRadius: 15,
+            backgroundColor:
+              resendLoading ||
+              resendSuccess ||
+              !email
+                ? "#AEBCE3"
+                : "#3156D3",
+            alignItems: "center",
+            justifyContent: "center",
+            paddingHorizontal: 20,
+          }}
         >
           {resendLoading ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
+            <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text className="text-white font-bold text-base">
-              {resendSuccess ? "Email Sent!" : "Resend Verification Email"}
+            <Text
+              style={{
+                color: "#FFFFFF",
+                fontSize: 16,
+                fontWeight: "800",
+              }}
+            >
+              {resendSuccess
+                ? "Email Sent"
+                : "Resend Verification Email"}
             </Text>
           )}
         </TouchableOpacity>
 
-        {resendSuccess && (
-          <Text className="text-sm text-success mb-4">A new verification email has been sent.</Text>
-        )}
+        {resendSuccess ? (
+          <Text
+            style={{
+              color: "#15803D",
+              fontSize: 13,
+              textAlign: "center",
+              marginTop: 14,
+            }}
+          >
+            A new verification email has been sent.
+          </Text>
+        ) : null}
 
-        <TouchableOpacity onPress={handleGoToLogin} className="mt-4">
-          <Text className="text-primary font-semibold text-base">Back to Sign In</Text>
+        <TouchableOpacity
+          onPress={handleGoToLogin}
+          style={{
+            paddingVertical: 18,
+            marginTop: 6,
+          }}
+        >
+          <Text
+            style={{
+              color: "#3156D3",
+              fontSize: 15,
+              fontWeight: "700",
+            }}
+          >
+            Back to Sign In
+          </Text>
         </TouchableOpacity>
       </View>
     </ScreenContainer>
