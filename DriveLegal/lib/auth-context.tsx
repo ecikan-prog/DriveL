@@ -153,7 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // On web, use the current origin; on native, always use the live backend.
           const baseUrl = typeof window !== "undefined" && window.location
             ? window.location.origin
-            : "https://guidedlogbook-6i7vyx5h.manus.space";
+            : "https://drivel-production.up.railway.app";
           await registerDriverCloud({
             localUserId: result.user.id,
             email: params.email,
