@@ -22,10 +22,7 @@ import {
   getFortnightProgressPercent,
   LIMITS,
 } from "@/hooks/use-nzta-compliance";
-import {
-  activateKeepAwakeAsync,
-  deactivateKeepAwake,
-} from "expo-keep-awake";
+
 import { validateRestPeriod } from "@/lib/rest-validation";
 import Svg, { Circle } from "react-native-svg";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -269,22 +266,6 @@ export default function DashboardScreen() {
   } | null>(null);
   const [showMandatoryBreakAlert, setShowMandatoryBreakAlert] = useState(false);
 
-  // Keep screen awake during active shift
-  use
-useEffect(() => {
-  const tag = "active-shift";
-
-  if (isShiftActive) {
-    activateKeepAwakeAsync(tag).catch(() => {});
-  } else {
-    deactivateKeepAwake(tag).catch(() => {});
-  }
-
-  return () => {
-    deactivateKeepAwake(tag).catch(() => {});
-  };
-}, [isShiftActive]);
-  // Reset dismissed warnings when shift starts
   useEffect(() => {
     if (isShiftActive) {
       setDismissedWarnings(new Set());
