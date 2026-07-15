@@ -231,7 +231,7 @@ function WarningBanner({
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { user } = useAuthContext();
+  const { user, loading: authLoading } = useAuthContext();
   const {
     isShiftActive,
     isOnBreak,
