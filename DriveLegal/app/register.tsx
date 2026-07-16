@@ -219,6 +219,14 @@ function CheckboxRow({
     </TouchableOpacity>
   );
 }
+const LICENCE_CLASSES = [
+  "Class 1",
+  "Class 2",
+  "Class 3",
+  "Class 4",
+  "Class 5",
+  "Class 6",
+] as const;
 const VEHICLE_TYPES = [
   "Sedan",
   "Hatchback",
@@ -281,6 +289,7 @@ export default function RegisterScreen() {
 
   const [licenceNumber, setLicenceNumber] = useState("");
   const [licenceClass, setLicenceClass] = useState("");
+  const [licenceClassOpen, setLicenceClassOpen] = useState(false);
   const [licenceExpiry, setLicenceExpiry] = useState("");
 
   const [vehicleRegistration, setVehicleRegistration] = useState("");
@@ -623,15 +632,8 @@ export default function RegisterScreen() {
               icon="badge"
               autoCapitalize="characters"
             />
-
-            <FormField
-              label="Licence class"
-              value={licenceClass}
-              onChangeText={setLicenceClass}
-              placeholder="For example: 1, 2, 4 or 5"
-              icon="credit-card"
-              autoCapitalize="characters"
-            />
+            const LICENCE_CLASSES = [
+            
 
             <FormField
               label="Licence expiry date"
