@@ -8,6 +8,7 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: "#2563EB",
         tabBarInactiveTintColor: "#9BA8C0",
+        tabBarHideOnKeyboard: true,
         tabBarStyle: {
           height: 82,
           paddingTop: 8,
