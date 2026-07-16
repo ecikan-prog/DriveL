@@ -250,7 +250,7 @@ export async function registerDriverCloud(params: {
   vehicleType?: string;
   driverType?: DriverType;
   trialStartDate?: string;
-  baseUrl?: string;
+  baseUrl: string;
 }): Promise<{ success: boolean; error?: string }> {
   const result = await trpcCall("driverAuth.register", params);
   if (!result) return { success: false, error: "Network error. Account saved locally." };
