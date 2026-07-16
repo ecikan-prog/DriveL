@@ -191,47 +191,163 @@ app.get("/verify-email", async (req, res) => {
     );
 
     return res.status(200).send(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Email Verified — Drive Legal</title>
-        </head>
-        <body style="
-          margin:0;
-          min-height:100vh;
-          display:flex;
-          align-items:center;
-          justify-content:center;
-          background:#F0F4FF;
-          font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
-          padding:24px;
-        ">
-          <div style="
-            max-width:480px;
-            background:#FFFFFF;
-            border-radius:20px;
-            padding:40px 28px;
-            text-align:center;
-            box-shadow:0 10px 30px rgba(0,51,102,0.10);
-          ">
-            <div style="font-size:56px;margin-bottom:16px;">✅</div>
-            <h1 style="color:#12386E;margin:0 0 12px;">
-              Email Verified
-            </h1>
-            <p style="color:#71809F;line-height:1.6;margin:0;">
-              Your email address has been verified successfully.
-              You can now return to Drive Legal and sign in.
-            </p>
-          </div>
-        </body>
-      </html>
-    `);
-  } catch (error) {
-    console.error(
-      "[Email Verification] GET route failed:",
-      error
-    );
+  <!DOCTYPE html>
+  <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1"
+      />
+      <title>Email Verified — Drive Legal</title>
+
+      <style>
+        * {
+          box-sizing: border-box;
+        }
+
+        body {
+          margin: 0;
+          min-height: 100vh;
+          padding: 28px 20px;
+          background: #eef3ff;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+            Roboto, Helvetica, Arial, sans-serif;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #12386e;
+        }
+
+        .card {
+          width: 100%;
+          max-width: 520px;
+          background: #ffffff;
+          border-radius: 28px;
+          padding: 38px 26px;
+          text-align: center;
+          box-shadow: 0 16px 45px rgba(18, 56, 110, 0.12);
+        }
+
+        .app-icon {
+          width: 92px;
+          height: 92px;
+          margin: 0 auto 24px;
+          border-radius: 22px;
+          background: #3156d3;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 10px 24px rgba(49, 86, 211, 0.25);
+        }
+
+        .app-icon span {
+          color: #ffffff;
+          font-size: 52px;
+          font-weight: 900;
+          line-height: 1;
+        }
+
+        .success-icon {
+          width: 64px;
+          height: 64px;
+          margin: 0 auto 22px;
+          border-radius: 50%;
+          background: #22c55e;
+          color: #ffffff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 38px;
+          font-weight: 900;
+        }
+
+        h1 {
+          margin: 0 0 14px;
+          color: #12386e;
+          font-size: 34px;
+          line-height: 1.15;
+          font-weight: 900;
+        }
+
+        p {
+          margin: 0 auto;
+          max-width: 410px;
+          color: #71809f;
+          font-size: 18px;
+          line-height: 1.55;
+        }
+
+        .open-button {
+          display: block;
+          width: 100%;
+          margin-top: 30px;
+          padding: 17px 20px;
+          border-radius: 15px;
+          background: #3156d3;
+          color: #ffffff;
+          text-decoration: none;
+          font-size: 18px;
+          font-weight: 800;
+          box-shadow: 0 8px 20px rgba(49, 86, 211, 0.24);
+        }
+
+        .open-button:active {
+          opacity: 0.85;
+        }
+
+        .help {
+          margin-top: 18px;
+          color: #8793aa;
+          font-size: 13px;
+          line-height: 1.5;
+        }
+
+        .brand {
+          margin-top: 28px;
+          color: #12386e;
+          font-size: 14px;
+          font-weight: 900;
+          letter-spacing: 1.5px;
+        }
+
+        .brand span {
+          color: #22c55e;
+        }
+      </style>
+    </head>
+
+    <body>
+      <main class="card">
+        <div class="app-icon" aria-label="Drive Legal app icon">
+          <span>D</span>
+        </div>
+
+        <div class="success-icon">✓</div>
+
+        <h1>Email Verified</h1>
+
+        <p>
+          Your email address has been verified successfully.
+          Tap the button below to return to Drive Legal and sign in.
+        </p>
+
+        <a class="open-button" href="drivelegal://login">
+          Open Drive Legal App
+        </a>
+
+        <div class="help">
+          If the app does not open automatically, return to Drive Legal manually
+          and sign in with your verified email address.
+        </div>
+
+        <div class="brand">
+          DRIVE <span>LEGAL</span>
+        </div>
+      </main>
+    </body>
+  </html>
+`);
 
     return res.status(500).send(`
       <!DOCTYPE html>
