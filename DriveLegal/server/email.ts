@@ -1,138 +1,445 @@
 /**
- * Email sending utility using nodemailer with Brevo SMTP relay.
- * Sends branded verification and password reset emails for Drive Legal.
+ * Drive Legal transactional email service.
  *
- * SMTP config:
- *   Host:  smtp-relay.brevo.com
- *   Port:  587 (STARTTLS)
- *   Login: BREVO_SMTP_LOGIN env var (format: xxxxx@smtp-brevo.com)
- *   Pass:  BREVO_SMTP_KEY env var (xsmtpsib-... format)
+ * Uses the Brevo HTTPS API instead of SMTP.
+ * This avoids Railway SMTP connection timeouts.
+ *
+ * Required Railway variable:
+ * BREVO_API_KEY
  */
-
-import nodemailer from "nodemailer";
 
 const FROM_EMAIL = "support@drivelegal.app";
 const FROM_NAME = "Drive Legal";
+const BREVO_API_URL =
+  "https://api.brevo.com/v3/smtp/email";
 
-/** Create a fresh transporter each call so env vars are always read at runtime. */
-function createTransporter() {
-  const login = process.env.BREVO_SMTP_LOGIN;
-  const pass = process.env.BREVO_SMTP_KEY;
-  if (!login || !pass) {
-    throw new Error("[Email] BREVO_SMTP_LOGIN or BREVO_SMTP_KEY not configured");
+type BrevoResponse = {
+  messageId?: string;
+  code?: string;
+  message?: string;
+};
+
+type SendEmailParams = {
+  toEmail: string;
+  recipientName: string;
+  subject: string;
+  htmlContent: string;
+};
+
+function normaliseBaseUrl(baseUrl: string): string {
+  return baseUrl.trim().replace(/\/+$/, "");
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+async function sendBrevoEmail(
+  params: SendEmailParams
+): Promise<boolean> {
+  const apiKey = process.env.BREVO_API_KEY;
+
+  if (!apiKey) {
+    console.error(
+      "[Email] BREVO_API_KEY is not configured."
+    );
+    return false;
   }
-  return nodemailer.createTransport({
-    host: "smtp-relay.brevo.com",
-    port: 587,
-    secure: false, // STARTTLS
-    auth: { user: login, pass },
+
+  const controller = new AbortController();
+
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, 15_000);
+
+  try {
+    const response = await fetch(BREVO_API_URL, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "api-key": apiKey,
+      },
+      body: JSON.stringify({
+        sender: {
+          name: FROM_NAME,
+          email: FROM_EMAIL,
+        },
+        to: [
+          {
+            email: params.toEmail,
+            name:
+              params.recipientName ||
+              params.toEmail,
+          },
+        ],
+        subject: params.subject,
+        htmlContent: params.htmlContent,
+      }),
+      signal: controller.signal,
+    });
+
+    const responseText = await response.text();
+
+    let responseData: BrevoResponse = {};
+
+    if (responseText) {
+      try {
+        responseData =
+          JSON.parse(responseText);
+      } catch {
+        responseData = {
+          message: responseText,
+        };
+      }
+    }
+
+    if (!response.ok) {
+      console.error(
+        `[Email] Brevo API returned HTTP ${response.status}:`,
+        responseData
+      );
+
+      return false;
+    }
+
+    console.log(
+      `[Email] Email sent to ${params.toEmail}. MessageId: ${
+        responseData.messageId ?? "unknown"
+      }`
+    );
+
+    return true;
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.name === "AbortError"
+    ) {
+      console.error(
+        "[Email] Brevo API request timed out."
+      );
+    } else {
+      console.error(
+        "[Email] Brevo API request failed:",
+        error
+      );
+    }
+
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function buildEmailLayout(params: {
+  title: string;
+  greetingName: string;
+  introduction: string;
+  actionText: string;
+  actionUrl: string;
+  expiryText: string;
+  footerText: string;
+}): string {
+  const recipientName =
+    params.greetingName.trim();
+
+  const greeting = recipientName
+    ? `Hi ${escapeHtml(recipientName)},`
+    : "Hi,";
+
+  const safeActionUrl =
+    escapeHtml(params.actionUrl);
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  />
+  <title>${escapeHtml(params.title)} — Drive Legal</title>
+</head>
+
+<body
+  style="
+    margin:0;
+    padding:0;
+    background:#F0F4FF;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+  "
+>
+  <table
+    role="presentation"
+    width="100%"
+    cellpadding="0"
+    cellspacing="0"
+    style="background:#F0F4FF;padding:40px 20px;"
+  >
+    <tr>
+      <td align="center">
+        <table
+          role="presentation"
+          width="100%"
+          cellpadding="0"
+          cellspacing="0"
+          style="
+            max-width:520px;
+            background:#FFFFFF;
+            border-radius:16px;
+            overflow:hidden;
+            box-shadow:0 4px 24px rgba(0,51,102,0.08);
+          "
+        >
+          <tr>
+            <td
+              style="
+                background:#003366;
+                padding:28px 32px;
+                text-align:center;
+              "
+            >
+              <h1
+                style="
+                  margin:0;
+                  font-size:24px;
+                  font-weight:800;
+                  color:#FFFFFF;
+                  letter-spacing:2px;
+                "
+              >
+                DRIVE
+                <span style="color:#4ADE80;">
+                  LEGAL
+                </span>
+              </h1>
+
+              <p
+                style="
+                  margin:6px 0 0;
+                  font-size:12px;
+                  color:rgba(255,255,255,0.65);
+                  letter-spacing:1px;
+                  text-transform:uppercase;
+                "
+              >
+                DRIVER LOGBOOK
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:32px;">
+              <h2
+                style="
+                  margin:0 0 12px;
+                  font-size:21px;
+                  font-weight:700;
+                  color:#003366;
+                "
+              >
+                ${escapeHtml(params.title)}
+              </h2>
+
+              <p
+                style="
+                  margin:0 0 20px;
+                  font-size:14px;
+                  color:#4A5568;
+                  line-height:1.6;
+                "
+              >
+                ${greeting}
+              </p>
+
+              <p
+                style="
+                  margin:0 0 12px;
+                  font-size:14px;
+                  color:#4A5568;
+                  line-height:1.6;
+                "
+              >
+                ${escapeHtml(params.introduction)}
+              </p>
+
+              <p
+                style="
+                  margin:0 0 24px;
+                  font-size:14px;
+                  color:#4A5568;
+                  line-height:1.6;
+                "
+              >
+                ${escapeHtml(params.expiryText)}
+              </p>
+
+              <table
+                role="presentation"
+                cellpadding="0"
+                cellspacing="0"
+                style="margin:0 auto 24px;"
+              >
+                <tr>
+                  <td
+                    style="
+                      background:#3156D3;
+                      border-radius:10px;
+                    "
+                  >
+                    <a
+                      href="${safeActionUrl}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style="
+                        display:inline-block;
+                        padding:14px 32px;
+                        font-size:15px;
+                        font-weight:700;
+                        color:#FFFFFF;
+                        text-decoration:none;
+                        letter-spacing:0.3px;
+                      "
+                    >
+                      ${escapeHtml(params.actionText)}
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <p
+                style="
+                  margin:0 0 12px;
+                  font-size:13px;
+                  color:#6B7A99;
+                  line-height:1.5;
+                "
+              >
+                If the button does not work, copy and paste this link into your browser:
+              </p>
+
+              <p
+                style="
+                  margin:0 0 24px;
+                  font-size:12px;
+                  color:#3156D3;
+                  word-break:break-all;
+                  line-height:1.5;
+                "
+              >
+                ${safeActionUrl}
+              </p>
+
+              <hr
+                style="
+                  border:none;
+                  border-top:1px solid #E8EEF8;
+                  margin:24px 0;
+                "
+              />
+
+              <p
+                style="
+                  margin:0;
+                  font-size:12px;
+                  color:#9BA8C0;
+                  line-height:1.5;
+                "
+              >
+                ${escapeHtml(params.footerText)}
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td
+              style="
+                background:#F8FAFC;
+                padding:20px 32px;
+                text-align:center;
+                border-top:1px solid #E8EEF8;
+              "
+            >
+              <p
+                style="
+                  margin:0;
+                  font-size:11px;
+                  color:#9BA8C0;
+                  line-height:1.5;
+                "
+              >
+                &copy; ${new Date().getFullYear()} Drive Legal
+              </p>
+
+              <p
+                style="
+                  margin:4px 0 0;
+                  font-size:11px;
+                  color:#9BA8C0;
+                "
+              >
+                Electronic driver logbook designed around
+                New Zealand work-time requirements
+              </p>
+
+              <p
+                style="
+                  margin:4px 0 0;
+                  font-size:11px;
+                  color:#9BA8C0;
+                "
+              >
+                support@drivelegal.app
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+function buildVerificationEmailHtml(
+  verifyUrl: string,
+  recipientName: string
+): string {
+  return buildEmailLayout({
+    title: "Verify Your Email",
+    greetingName: recipientName,
+    introduction:
+      "Thanks for registering with Drive Legal. Please verify your email address to activate your account.",
+    expiryText:
+      "This verification link will expire after 24 hours.",
+    actionText: "Verify Email Address",
+    actionUrl: verifyUrl,
+    footerText:
+      "If you did not create a Drive Legal account, you can safely ignore this email.",
   });
 }
 
-function buildResetEmailHtml(resetUrl: string, recipientName: string): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reset Your Password — Drive Legal</title>
-</head>
-<body style="margin:0;padding:0;background:#F0F4FF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F0F4FF;padding:40px 20px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#FFFFFF;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,51,102,0.08);">
-          <tr>
-            <td style="background:#003366;padding:28px 32px;text-align:center;">
-              <h1 style="margin:0;font-size:24px;font-weight:800;color:#FFFFFF;letter-spacing:2px;">DRIVE <span style="color:#4ADE80;">LEGAL</span></h1>
-              <p style="margin:6px 0 0;font-size:12px;color:rgba(255,255,255,0.6);letter-spacing:1px;text-transform:uppercase;">DRIVER LOGBOOK</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:32px;">
-              <h2 style="margin:0 0 12px;font-size:20px;font-weight:700;color:#003366;">Reset Your Password</h2>
-              <p style="margin:0 0 20px;font-size:14px;color:#4A5568;line-height:1.6;">Hi${recipientName ? " " + recipientName : ""},</p>
-              <p style="margin:0 0 24px;font-size:14px;color:#4A5568;line-height:1.6;">
-                We received a request to reset your password. Click the button below to create a new password. This link will expire in <strong>1 hour</strong>.
-              </p>
-              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 24px;">
-                <tr>
-                  <td style="background:#5980E9;border-radius:10px;">
-                    <a href="${resetUrl}" target="_blank" style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:700;color:#FFFFFF;text-decoration:none;letter-spacing:0.5px;">Reset Password</a>
-                  </td>
-                </tr>
-              </table>
-              <p style="margin:0 0 16px;font-size:13px;color:#6B7A99;line-height:1.5;">If the button doesn't work, copy and paste this link into your browser:</p>
-              <p style="margin:0 0 24px;font-size:12px;color:#5980E9;word-break:break-all;line-height:1.4;">${resetUrl}</p>
-              <hr style="border:none;border-top:1px solid #E8EEF8;margin:24px 0;" />
-              <p style="margin:0;font-size:12px;color:#9BA8C0;line-height:1.5;">If you didn't request a password reset, you can safely ignore this email.</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="background:#F8FAFC;padding:20px 32px;text-align:center;border-top:1px solid #E8EEF8;">
-              <p style="margin:0;font-size:11px;color:#9BA8C0;">&copy; ${new Date().getFullYear()} Drive Legal — Electronic Logbook built to NZTA Work Time and Logbooks Rule requirements</p>
-              <p style="margin:4px 0 0;font-size:11px;color:#9BA8C0;">support@drivelegal.app</p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
-}
-
-function buildVerificationEmailHtml(verifyUrl: string, recipientName: string): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Verify Your Email — Drive Legal</title>
-</head>
-<body style="margin:0;padding:0;background:#F0F4FF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F0F4FF;padding:40px 20px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#FFFFFF;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,51,102,0.08);">
-          <tr>
-            <td style="background:#003366;padding:28px 32px;text-align:center;">
-              <h1 style="margin:0;font-size:24px;font-weight:800;color:#FFFFFF;letter-spacing:2px;">DRIVE <span style="color:#4ADE80;">LEGAL</span></h1>
-              <p style="margin:6px 0 0;font-size:12px;color:rgba(255,255,255,0.6);letter-spacing:1px;text-transform:uppercase;">DRIVER LOGBOOK</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:32px;">
-              <h2 style="margin:0 0 12px;font-size:20px;font-weight:700;color:#003366;">Verify Your Email</h2>
-              <p style="margin:0 0 20px;font-size:14px;color:#4A5568;line-height:1.6;">Hi${recipientName ? " " + recipientName : ""},</p>
-              <p style="margin:0 0 24px;font-size:14px;color:#4A5568;line-height:1.6;">
-                Thanks for registering with Drive Legal! Please verify your email address by clicking the button below. This link will expire in <strong>24 hours</strong>.
-              </p>
-              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 24px;">
-                <tr>
-                  <td style="background:#5980E9;border-radius:10px;">
-                    <a href="${verifyUrl}" target="_blank" style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:700;color:#FFFFFF;text-decoration:none;letter-spacing:0.5px;">Verify Email Address</a>
-                  </td>
-                </tr>
-              </table>
-              <p style="margin:0 0 16px;font-size:13px;color:#6B7A99;line-height:1.5;">If the button doesn't work, copy and paste this link into your browser:</p>
-              <p style="margin:0 0 24px;font-size:12px;color:#5980E9;word-break:break-all;line-height:1.4;">${verifyUrl}</p>
-              <hr style="border:none;border-top:1px solid #E8EEF8;margin:24px 0;" />
-              <p style="margin:0;font-size:12px;color:#9BA8C0;line-height:1.5;">If you didn't create an account with Drive Legal, you can safely ignore this email.</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="background:#F8FAFC;padding:20px 32px;text-align:center;border-top:1px solid #E8EEF8;">
-              <p style="margin:0;font-size:11px;color:#9BA8C0;">&copy; ${new Date().getFullYear()} Drive Legal — Electronic Logbook built to NZTA Work Time and Logbooks Rule requirements</p>
-              <p style="margin:4px 0 0;font-size:11px;color:#9BA8C0;">support@drivelegal.app</p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
+function buildResetEmailHtml(
+  resetUrl: string,
+  recipientName: string
+): string {
+  return buildEmailLayout({
+    title: "Reset Your Password",
+    greetingName: recipientName,
+    introduction:
+      "We received a request to reset your Drive Legal password.",
+    expiryText:
+      "This password-reset link will expire after 1 hour.",
+    actionText: "Reset Password",
+    actionUrl: resetUrl,
+    footerText:
+      "If you did not request a password reset, you can safely ignore this email.",
+  });
 }
 
 export async function sendVerificationEmail(
@@ -141,22 +448,23 @@ export async function sendVerificationEmail(
   verificationToken: string,
   baseUrl: string
 ): Promise<boolean> {
-  try {
-    const transporter = createTransporter();
-    const verifyUrl = `${baseUrl}/verify-email?token=${verificationToken}`;
-    const html = buildVerificationEmailHtml(verifyUrl, recipientName);
-    const info = await transporter.sendMail({
-      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
-      to: toEmail,
-      subject: "Verify Your Email — Drive Legal",
-      html,
-    });
-    console.log(`[Email] Verification email sent to ${toEmail}. MessageId: ${info.messageId}`);
-    return true;
-  } catch (error) {
-    console.error("[Email] Failed to send verification email via SMTP:", error);
-    return false;
-  }
+  const verifyUrl =
+    `${normaliseBaseUrl(baseUrl)}/verify-email?token=` +
+    encodeURIComponent(verificationToken);
+
+  const htmlContent =
+    buildVerificationEmailHtml(
+      verifyUrl,
+      recipientName
+    );
+
+  return sendBrevoEmail({
+    toEmail: toEmail.trim().toLowerCase(),
+    recipientName: recipientName.trim(),
+    subject:
+      "Verify Your Email — Drive Legal",
+    htmlContent,
+  });
 }
 
 export async function sendPasswordResetEmail(
@@ -166,21 +474,26 @@ export async function sendPasswordResetEmail(
   baseUrl: string,
   userType: "driver" | "operator"
 ): Promise<boolean> {
-  try {
-    const transporter = createTransporter();
-    const resetPath = userType === "operator" ? "/portal/reset-password" : "/reset-password";
-    const resetUrl = `${baseUrl}${resetPath}?token=${resetToken}`;
-    const html = buildResetEmailHtml(resetUrl, recipientName);
-    const info = await transporter.sendMail({
-      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
-      to: toEmail,
-      subject: "Reset Your Password — Drive Legal",
-      html,
-    });
-    console.log(`[Email] Password reset email sent to ${toEmail}. MessageId: ${info.messageId}`);
-    return true;
-  } catch (error) {
-    console.error("[Email] Failed to send reset email via SMTP:", error);
-    return false;
-  }
+  const resetPath =
+    userType === "operator"
+      ? "/portal/reset-password"
+      : "/reset-password";
+
+  const resetUrl =
+    `${normaliseBaseUrl(baseUrl)}${resetPath}?token=` +
+    encodeURIComponent(resetToken);
+
+  const htmlContent =
+    buildResetEmailHtml(
+      resetUrl,
+      recipientName
+    );
+
+  return sendBrevoEmail({
+    toEmail: toEmail.trim().toLowerCase(),
+    recipientName: recipientName.trim(),
+    subject:
+      "Reset Your Password — Drive Legal",
+    htmlContent,
+  });
 }
