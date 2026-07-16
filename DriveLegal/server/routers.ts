@@ -173,16 +173,21 @@ export const appRouter = t.router({
           );
 
           if (!emailSent) {
-            console.error(
-              `[DriverAuth] Registration succeeded but verification email failed for ${email}`
-            );
+  console.error(
+    `[DriverAuth] Registration succeeded but verification email failed for ${email}`
+  );
 
-            return {
-              success: false,
-              error:
-                "Your account was created, but the verification email could not be sent. Please use Resend Verification Email.",
-            };
-          }
+  // The account and verification token already exist.
+  // Send the user to the verification screen so they can retry.
+  return {
+    success: true,
+    verificationRequired: true,
+    email,
+    emailSent: false,
+    message:
+      "Your account was created, but the verification email could not be sent. Please tap Resend Verification Email.",
+  };
+}
 
           return {
             success: true,
