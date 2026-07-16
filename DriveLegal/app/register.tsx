@@ -219,6 +219,25 @@ function CheckboxRow({
     </TouchableOpacity>
   );
 }
+const VEHICLE_TYPES = [
+  "Sedan",
+  "Hatchback",
+  "Wagon",
+  "SUV",
+  "Van",
+  "Minibus",
+  "Bus",
+  "Truck",
+  "Truck & Trailer",
+  "Motorcycle",
+  "Other",
+] as const;
+
+const DRIVER_TYPES: Array<{
+  value: DriverType;
+  label: string;
+  description: string;
+}> = [
 
 const DRIVER_TYPES: Array<{
   value: DriverType;
@@ -266,6 +285,7 @@ export default function RegisterScreen() {
 
   const [vehicleRegistration, setVehicleRegistration] = useState("");
   const [vehicleType, setVehicleType] = useState("");
+  const [vehicleTypeOpen, setVehicleTypeOpen] = useState(false);
 
   const [driverType, setDriverType] =
     useState<DriverType>("small_passenger");
@@ -706,23 +726,145 @@ export default function RegisterScreen() {
             />
 
             <FormField
-              label="Vehicle registration"
-              value={vehicleRegistration}
-              onChangeText={setVehicleRegistration}
-              placeholder="For example: ABC123"
-              icon="directions-car"
-              autoCapitalize="characters"
-            />
+  label="Vehicle registration"
+  value={vehicleRegistration}
+  onChangeText={(value) =>
+    setVehicleRegistration(value.trimStart().toUpperCase())
+  }
+  placeholder="For example: ABC123"
+  icon="directions-car"
+  autoCapitalize="characters"
+/>
+  <View style={{ marginBottom: 18 }}>
+  <Text
+    style={{
+      color: "#12386E",
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 1,
+      marginBottom: 8,
+    }}
+  >
+    VEHICLE TYPE
+  </Text>
 
-            <FormField
-              label="Vehicle type"
-              value={vehicleType}
-              onChangeText={setVehicleType}
-              placeholder="For example: sedan, van, truck or bus"
-              icon="local-shipping"
-              autoCapitalize="words"
-            />
+  <TouchableOpacity
+    activeOpacity={0.75}
+    onPress={() =>
+      setVehicleTypeOpen((current) => !current)
+    }
+    style={{
+      minHeight: 58,
+      borderWidth: 1,
+      borderColor: vehicleTypeOpen
+        ? "#3156D3"
+        : "#CED9EF",
+      borderRadius: 15,
+      backgroundColor: "#F8FAFF",
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 15,
+    }}
+  >
+    <MaterialIcons
+      name="local-shipping"
+      size={21}
+      color="#8798B9"
+    />
 
+    <Text
+      style={{
+        flex: 1,
+        color: vehicleType
+          ? "#102A4C"
+          : "#9BA8C0",
+        fontSize: 16,
+        paddingHorizontal: 12,
+        paddingVertical: 14,
+      }}
+    >
+      {vehicleType || "Select vehicle type"}
+    </Text>
+
+    <MaterialIcons
+      name={
+        vehicleTypeOpen
+          ? "keyboard-arrow-up"
+          : "keyboard-arrow-down"
+      }
+      size={24}
+      color="#71809F"
+    />
+  </TouchableOpacity>
+
+  {vehicleTypeOpen ? (
+    <View
+      style={{
+        marginTop: 8,
+        borderWidth: 1,
+        borderColor: "#D5DEEF",
+        borderRadius: 15,
+        backgroundColor: "#FFFFFF",
+        overflow: "hidden",
+      }}
+    >
+      {VEHICLE_TYPES.map((item, index) => {
+        const selected = vehicleType === item;
+
+        return (
+          <TouchableOpacity
+            key={item}
+            activeOpacity={0.75}
+            onPress={() => {
+              setVehicleType(item);
+              setVehicleTypeOpen(false);
+
+              if (error) {
+                setError("");
+              }
+            }}
+            style={{
+              minHeight: 50,
+              flexDirection: "row",
+              alignItems: "center",
+              paddingHorizontal: 15,
+              borderBottomWidth:
+                index === VEHICLE_TYPES.length - 1
+                  ? 0
+                  : 1,
+              borderBottomColor: "#E8EEF8",
+              backgroundColor: selected
+                ? "#EEF2FF"
+                : "#FFFFFF",
+            }}
+          >
+            <Text
+              style={{
+                flex: 1,
+                color: "#12386E",
+                fontSize: 15,
+                fontWeight: selected
+                  ? "800"
+                  : "500",
+              }}
+            >
+              {item}
+            </Text>
+
+            {selected ? (
+              <MaterialIcons
+                name="check"
+                size={20}
+                color="#3156D3"
+              />
+            ) : null}
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  ) : null}
+</View>
+            
             <SectionHeader
               number={6}
               title="Declarations"
