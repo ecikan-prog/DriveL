@@ -265,7 +265,7 @@ export default function DashboardScreen() {
     breaks: number;
   } | null>(null);
   const [showMandatoryBreakAlert, setShowMandatoryBreakAlert] = useState(false);
-
+  const [startShiftError, setStartShiftError] = useState<string | null>(null);
   useEffect(() => {
     if (isShiftActive) {
       setDismissedWarnings(new Set());
