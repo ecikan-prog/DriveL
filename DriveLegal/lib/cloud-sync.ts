@@ -66,37 +66,96 @@ export function canonicalizeLog(log: DailyLog): string {
     })),
   });
 }
-
 /**
- * Call a tRPC endpoint via raw HTTP (avoids needing the full tRPC client
- * which may not be available in all contexts).
+ * Call a tRPC endpoint through Railway using the standard tRPC HTTP format.
  */
-async function trpcCall(path: string, input: any, method: "query" | "mutation" = "mutation"): Promise<any> {
+async function trpcCall(
+  path: string,
+  input: unknown,
+  method: "query" | "mutation" = "mutation"
+): Promise<any> {
   try {
+    let response: Response;
+
     if (method === "query") {
-      const encoded = encodeURIComponent(JSON.stringify({ json: input }));
-      const res = await fetch(`${API_BASE}/${path}?input=${encoded}`, {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      return data?.result?.data?.json ?? data?.result?.data ?? data;
+      const encodedInput = encodeURIComponent(
+        JSON.stringify(input)
+      );
+
+      response = await fetch(
+        `${API_BASE}/${path}?input=${encodedInput}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+        }
+      );
     } else {
-      const res = await fetch(`${API_BASE}/${path}`, {
+      response = await fetch(`${API_BASE}/${path}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ json: input }),
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(input),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      return data?.result?.data?.json ?? data?.result?.data ?? data;
     }
-  } catch (e) {
-    console.error(`[CloudSync] trpcCall ${path} failed:`, e);
-    return null;
+
+    const responseText = await response.text();
+
+    let data: any = null;
+
+    if (responseText) {
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        data = responseText;
+      }
+    }
+
+    if (!response.ok) {
+      const message =
+        data?.error?.json?.message ??
+        data?.error?.message ??
+        data?.message ??
+        `Drive Legal server returned HTTP ${response.status}.`;
+
+      console.error(
+        `[CloudSync] ${path} returned HTTP ${response.status}:`,
+        data
+      );
+
+      return {
+        success: false,
+        error: message,
+        message,
+        httpStatus: response.status,
+      };
+    }
+
+    return (
+      data?.result?.data?.json ??
+      data?.result?.data ??
+      data
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to connect to the Drive Legal server.";
+
+    console.error(
+      `[CloudSync] ${path} request failed:`,
+      error
+    );
+
+    return {
+      success: false,
+      error: message,
+      message,
+    };
   }
 }
 
