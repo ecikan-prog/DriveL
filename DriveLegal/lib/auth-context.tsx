@@ -106,16 +106,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Opportunistically push this account to cloud so future logins from
       // any device/browser work (handles accounts that registered offline)
       registerDriverCloud({
-        localUserId: localUser.id,
-        email: localUser.email,
-        passwordHash,
-        name: localUser.name,
-        licenceNumber: localUser.licenceNumber,
-        vehicleRegistration: localUser.vehicleRegistration,
-        vehicleType: localUser.vehicleType,
-        driverType: localUser.driverType,
-        trialStartDate: localUser.trialStartDate ?? new Date().toISOString(),
-      }).catch(() => {});
+  localUserId: localUser.id,
+  email: localUser.email.trim().toLowerCase(),
+  passwordHash,
+  name: localUser.name.trim(),
+  tslNumber: localUser.tslNumber ?? "",
+  operatorName: localUser.operatorName ?? "",
+  licenceNumber: localUser.licenceNumber ?? "",
+  licenceClass: localUser.licenceClass ?? "",
+  licenceExpiry: localUser.licenceExpiry ?? "",
+  vehicleRegistration:
+    localUser.vehicleRegistration?.trim().toUpperCase() ?? "",
+  vehicleType: localUser.vehicleType ?? "",
+  driverType: localUser.driverType ?? "small_passenger",
+  trialStartDate:
+    localUser.trialStartDate ?? new Date().toISOString(),
+  baseUrl: "https://drivel-production.up.railway.app",
+}).catch((error) => {
+  console.error(
+    "[Login] Background cloud registration failed:",
+    error
+  );
+});
       pullLogsFromCloud(localUser.id).catch(() => {});
       pushLogsToCloud(localUser.id).catch(() => {});
       return { success: true };
@@ -154,26 +166,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const baseUrl = typeof window !== "undefined" && window.location
             ? window.location.origin
             : "https://drivel-production.up.railway.app";
-          await registerDriverCloud({
-            localUserId: result.user.id,
-            email: params.email,
-            passwordHash,
-            name: params.name,
-            tslNumber: params.tslNumber,
-            operatorName: params.operatorName,
-            licenceNumber: params.licenceNumber,
-            licenceClass: params.licenceClass,
-            licenceExpiry: params.licenceExpiry,
-            vehicleRegistration: params.vehicleRegistration,
-            vehicleType: params.vehicleType,
-            driverType: params.driverType ?? "small_passenger",
-            trialStartDate: result.user.trialStartDate ?? new Date().toISOString(),
-            baseUrl,
-          });
-        } catch {
-          // Cloud registration failed (offline) — account is saved locally,
-          // will be synced next time the user is online
-        }
+          const cloudResult = await registerDriverCloud({
+  localUserId: result.user.id,
+  email: params.email.trim().toLowerCase(),
+  passwordHash,
+  name: params.name.trim(),
+  tslNumber: params.tslNumber.trim(),
+  operatorName: params.operatorName?.trim(),
+  licenceNumber: params.licenceNumber.trim(),
+  licenceClass: params.licenceClass?.trim(),
+  licenceExpiry: params.licenceExpiry?.trim(),
+  vehicleRegistration: params.vehicleRegistration.trim().toUpperCase(),
+  vehicleType: params.vehicleType.trim(),
+  driverType: params.driverType ?? "small_passenger",
+  trialStartDate:
+    result.user.trialStartDate ?? new Date().toISOString(),
+  baseUrl,
+});
+
+if (!cloudResult.success) {
+  return {
+    success: false,
+    error:
+      cloudResult.error ||
+      "Unable to register your account with the Drive Legal server.",
+  };
+}
+        } catch (error) {
+  console.error("[Register] Cloud registration failed:", error);
+
+  return {
+    success: false,
+    error:
+      "Unable to connect to the Drive Legal server. Please try again.",
+  };
+}
         // Clear local user — they need to verify email before accessing the app
         await LocalAuth.logoutUser();
         return { success: true, verificationRequired: true };
