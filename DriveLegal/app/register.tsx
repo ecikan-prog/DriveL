@@ -246,12 +246,6 @@ const DRIVER_TYPES: Array<{
   label: string;
   description: string;
 }> = [
-
-const DRIVER_TYPES: Array<{
-  value: DriverType;
-  label: string;
-  description: string;
-}> = [
   {
     value: "small_passenger",
     label: "Small Passenger Service",
@@ -632,17 +626,159 @@ export default function RegisterScreen() {
               icon="badge"
               autoCapitalize="characters"
             />
-            const LICENCE_CLASSES = [
-            
+            <View style={{ marginBottom: 18 }}>
+  <Text
+    style={{
+      color: "#12386E",
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 1,
+      marginBottom: 8,
+    }}
+  >
+    LICENCE CLASS
+  </Text>
 
-            <FormField
+  <TouchableOpacity
+    activeOpacity={0.75}
+    onPress={() =>
+      setLicenceClassOpen((current) => !current)
+    }
+    style={{
+      minHeight: 58,
+      borderWidth: 1,
+      borderColor: licenceClassOpen
+        ? "#3156D3"
+        : "#CED9EF",
+      borderRadius: 15,
+      backgroundColor: "#F8FAFF",
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 15,
+    }}
+  >
+    <MaterialIcons
+      name="credit-card"
+      size={21}
+      color="#8798B9"
+    />
+
+    <Text
+      style={{
+        flex: 1,
+        color: licenceClass
+          ? "#102A4C"
+          : "#9BA8C0",
+        fontSize: 16,
+        paddingHorizontal: 12,
+        paddingVertical: 14,
+      }}
+    >
+      {licenceClass || "Select licence class"}
+    </Text>
+
+    <MaterialIcons
+      name={
+        licenceClassOpen
+          ? "keyboard-arrow-up"
+          : "keyboard-arrow-down"
+      }
+      size={24}
+      color="#71809F"
+    />
+  </TouchableOpacity>
+
+  {licenceClassOpen ? (
+    <View
+      style={{
+        marginTop: 8,
+        borderWidth: 1,
+        borderColor: "#D5DEEF",
+        borderRadius: 15,
+        backgroundColor: "#FFFFFF",
+        overflow: "hidden",
+      }}
+    >
+      {LICENCE_CLASSES.map((item, index) => {
+        const selected = licenceClass === item;
+
+        return (
+          <TouchableOpacity
+            key={item}
+            activeOpacity={0.75}
+            onPress={() => {
+              setLicenceClass(item);
+              setLicenceClassOpen(false);
+
+              if (error) {
+                setError("");
+              }
+            }}
+            style={{
+              minHeight: 50,
+              flexDirection: "row",
+              alignItems: "center",
+              paddingHorizontal: 15,
+              borderBottomWidth:
+                index === LICENCE_CLASSES.length - 1
+                  ? 0
+                  : 1,
+              borderBottomColor: "#E8EEF8",
+              backgroundColor: selected
+                ? "#EEF2FF"
+                : "#FFFFFF",
+            }}
+          >
+            <Text
+              style={{
+                flex: 1,
+                color: "#12386E",
+                fontSize: 15,
+                fontWeight: selected
+                  ? "800"
+                  : "500",
+              }}
+            >
+              {item}
+            </Text>
+
+            {selected ? (
+              <MaterialIcons
+                name="check"
+                size={20}
+                color="#3156D3"
+              />
+            ) : null}
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  ) : null}
+</View>
+            
+             <FormField
               label="Licence expiry date"
               value={licenceExpiry}
-              onChangeText={setLicenceExpiry}
+              onChangeText={(value) => {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+
+  let formatted = digits;
+
+  if (digits.length > 2) {
+    formatted = `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  }
+
+  if (digits.length > 4) {
+    formatted = `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+  }
+
+  setLicenceExpiry(formatted);
+}}
               placeholder="DD/MM/YYYY"
               icon="event"
               keyboardType="numeric"
               autoCapitalize="none"
+              maxLength={20}
             />
 
             <SectionHeader
