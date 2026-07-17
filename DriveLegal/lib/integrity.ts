@@ -72,7 +72,7 @@ function canonicalizeLog(log: DailyLog): string {
     endTime: log.endTime,
     totalDrivingSeconds: log.totalDrivingSeconds,
     totalWorkSeconds: log.totalWorkSeconds,
-    breaks: log.breaks.map((b) => ({
+    breaks: (log.breaks ?? []).map((b) => ({
       startTime: b.startTime,
       endTime: b.endTime,
       durationSeconds: b.durationSeconds,
