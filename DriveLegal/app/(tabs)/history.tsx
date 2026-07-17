@@ -10,9 +10,9 @@ import {
   Image,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { ScreenContainer } from "../components/screen-container";
-import { useAuthContext } from "../lib/auth-context";
-import { getApiBaseUrl } from "../lib/api-base-url";
+import { ScreenContainer } from "@/components/screen-container";
+import { useAuthContext } from "@/lib/auth-context";
+import { getApiBaseUrl } from "@/lib/api-base-url";
 
 import {
  getAllLogs,
