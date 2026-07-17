@@ -17,7 +17,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { useAuthContext } from "@/lib/auth-context";
 import { getTrialDaysRemaining, updateUserProfile, type DriverType } from "@/lib/local-auth";
 import { getAllLogs, getFortnightlyDrivingSeconds, formatHoursMinutes } from "@/lib/logbook-storage";
-import { useShiftContext } from "@/lib/shift-context";
+
 
 const VEHICLE_TYPES = [
   "Rideshare/Taxi",
@@ -29,10 +29,26 @@ const VEHICLE_TYPES = [
 ];
 
 const DRIVER_TYPES = [
-  { value: "small_passenger", label: "Small Passenger Service", sublabel: "7-hour driving limit" },
-  { value: "large_passenger", label: "Large Passenger Service", sublabel: "5.5-hour driving limit" },
-  { value: "goods", label: "Goods Service", sublabel: "5.5-hour driving limit" },
-  { value: "vehicle_recovery", label: "Vehicle Recovery Service", sublabel: "5.5-hour driving limit" },
+  {
+    value: "small_passenger",
+    label: "Small Passenger Service",
+    sublabel: "7-hour limit only for qualifying short-fare work",
+  },
+  {
+    value: "large_passenger",
+    label: "Large Passenger Service",
+    sublabel: "5.5-hour work-time limit",
+  },
+  {
+    value: "goods",
+    label: "Goods Service",
+    sublabel: "5.5-hour work-time limit",
+  },
+  {
+    value: "vehicle_recovery",
+    label: "Vehicle Recovery Service",
+    sublabel: "5.5-hour work-time limit",
+  },
 ] as const;
 
 function VehicleTypePicker({
@@ -578,7 +594,7 @@ export default function ProfileScreen() {
                   <Text className="text-xs text-[#5980E9] font-bold">3</Text>
                 </View>
                 <Text className="text-xs text-[#6B7A99] flex-1 leading-relaxed">
-                  Maximum <Text className="font-bold">70 hours driving</Text> per fortnight (14 days)
+                  Maximum <Text className="font-bold">70 hours of work time</Text> in a cumulative work period before a continuous 24-hour break
                 </Text>
               </View>
               <View className="flex-row items-start gap-3">
