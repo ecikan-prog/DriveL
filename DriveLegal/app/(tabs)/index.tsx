@@ -163,7 +163,6 @@ function CountdownRing({
   }}
 >
   {timeDisplay}
-</Text>
         </Text>
         <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, fontWeight: "600", letterSpacing: 1.5, textTransform: "uppercase" }}>
           {bottomLabel}
