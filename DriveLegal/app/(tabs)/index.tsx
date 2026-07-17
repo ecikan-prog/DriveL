@@ -133,12 +133,36 @@ function CountdownRing({
         />
       </Svg>
       {/* Center text */}
-      <View style={{ alignItems: "center" }}>
+      <View
+  style={{
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: size,
+    height: size,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+    elevation: 10,
+  }}
+>
         <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, fontWeight: "600", letterSpacing: 1.5, textTransform: "uppercase" }}>
           {topLabel}
         </Text>
-        <Text style={{ color: "#FFFFFF", fontSize: 52, fontWeight: "700", marginVertical: 4, fontVariant: ["tabular-nums"] }}>
-          {timeDisplay}
+        <Text
+  style={{
+    color: "#FFFFFF",
+    fontSize: 48,
+    fontWeight: "800",
+    marginVertical: 6,
+    fontVariant: ["tabular-nums"],
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  }}
+>
+  {timeDisplay}
+</Text>
         </Text>
         <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, fontWeight: "600", letterSpacing: 1.5, textTransform: "uppercase" }}>
           {bottomLabel}
@@ -447,9 +471,16 @@ if (!user) {
   return (
     <ScreenContainer edges={["top", "left", "right"]} containerClassName="bg-[#003366]" safeAreaClassName="bg-[#003366]">
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1 }}
-        showsVerticalScrollIndicator={false}
-      >
+  style={{
+    flex: 1,
+    backgroundColor: "#003366",
+  }}
+  contentContainerStyle={{
+    flexGrow: 1,
+    backgroundColor: "#003366",
+  }}
+  showsVerticalScrollIndicator={false}
+>
         {/* Header */}
         <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
