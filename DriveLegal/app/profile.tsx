@@ -206,7 +206,11 @@ export default function ProfileScreen() {
   if (!user) return null;
 
   return (
-    <ScreenContainer containerClassName="bg-[#003366]" safeAreaClassName="bg-[#003366]">
+    <ScreenContainer
+  style={{
+    backgroundColor: "#003366",
+  }}
+>
       {/* Header */}
       <View className="px-5 pt-2 pb-4 flex-row items-center justify-between">
         <View className="flex-row items-center gap-2">
