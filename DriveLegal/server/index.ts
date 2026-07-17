@@ -348,7 +348,8 @@ app.get("/verify-email", async (req, res) => {
     </body>
   </html>
 `);
-
+  } catch (error) {
+    console.error("[verify-email] Verification failed:", error);
     return res.status(500).send(`
       <!DOCTYPE html>
       <html>
