@@ -346,7 +346,24 @@ export default function DashboardScreen() {
       setShowMandatoryBreakAlert(false);
     }
   }, [isShiftActive, isOnBreak, remainingDrivingSeconds]);
+  useEffect(() => {
+  if (
+    isShiftActive &&
+    isOnBreak &&
+    breakSeconds >= BREAK_DURATION_SECONDS &&
+    !autoEndBreakRef.current
+  ) {
+    autoEndBreakRef.current = true;
 
+    endBreak().finally(() => {
+      autoEndBreakRef.current = false;
+    });
+  }
+
+  if (!isOnBreak) {
+    autoEndBreakRef.current = false;
+  }
+}, [isShiftActive, isOnBreak, breakSeconds, endBreak]);
   const visibleWarnings = compliance.warnings.filter(
     (w) => !dismissedWarnings.has(w.id)
   );
