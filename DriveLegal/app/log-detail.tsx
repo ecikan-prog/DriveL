@@ -196,12 +196,12 @@ const totalBreakSeconds = breaks.reduce(
           </View>
 
           {/* Break Details */}
-          {log.breaks.length > 0 && (
+          {breaks.length > 0 && (
             <View className="bg-white rounded-2xl p-4 mb-4 border border-[#E8EEF8]">
               <Text className="text-xs font-bold text-[#003366] uppercase tracking-wide mb-3">
                 Break Details
               </Text>
-              {log.breaks.map((b, i) => (
+              {breaks.map((b, i) => (
                 <View key={i} className="flex-row items-center py-2 border-b border-[#F0F4FF]">
                   <View className="w-6 h-6 rounded-full bg-amber-100 items-center justify-center mr-3">
                     <Text className="text-amber-600 text-xs font-bold">{i + 1}</Text>
@@ -224,7 +224,7 @@ const totalBreakSeconds = breaks.reduce(
             <Text className="text-xs font-bold text-[#003366] uppercase tracking-wide mb-1">
               Event Timeline
             </Text>
-            {log.events.map((event, i) => (
+            {events.map((event, i) => (
               <EventRow key={i} event={event} />
             ))}
           </View>
