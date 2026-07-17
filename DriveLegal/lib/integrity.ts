@@ -77,7 +77,7 @@ function canonicalizeLog(log: DailyLog): string {
       endTime: b.endTime,
       durationSeconds: b.durationSeconds,
     })),
-    events: log.events.map((e) => ({
+    events: (log.events ?? []).map((e) => ({
       type: e.type,
       timestamp: e.timestamp,
     })),
