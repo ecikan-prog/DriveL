@@ -38,37 +38,76 @@ export default function EnforcementViewScreen() {
   }, [user]);
 
   async function loadData() {
-    if (!user) return;
-    setLoading(true);
+  if (!user) return;
 
-    // Load last 14 days of logs (fortnightly period)
+  setLoading(true);
+
+  try {
     const allLogs = await Logbook.getAllLogs(user.id);
     const twoWeeksAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
+
     const recentLogs = allLogs.filter(
-      (l) => new Date(l.startTime).getTime() >= twoWeeksAgo
+      (log) => new Date(log.startTime).getTime() >= twoWeeksAgo
     );
+
     setLogs(recentLogs);
 
-    // Verify chain integrity
     const chain = await verifyFullChain(user.id, allLogs);
-    setChainStatus({ valid: chain.valid, total: chain.totalEntries, verified: chain.verifiedEntries });
 
-    // Verify each log
+    setChainStatus({
+      valid: chain.valid,
+      total: chain.totalEntries,
+      verified: chain.verifiedEntries,
+    });
+
     const verMap = new Map<string, VerificationResult>();
+
     for (const log of recentLogs) {
-      const result = await verifyLogIntegrity(log);
-      verMap.set(log.id, { logId: log.id, verified: result.verified, hash: result.hash });
+      try {
+        const result = await verifyLogIntegrity(log);
+
+        verMap.set(log.id, {
+          logId: log.id,
+          verified: result.verified,
+          hash: result.hash,
+        });
+      } catch {
+        verMap.set(log.id, {
+          logId: log.id,
+          verified: false,
+          hash: "N/A",
+        });
+      }
     }
+
     setVerifications(verMap);
+  } catch (error) {
+    console.error("Failed to load enforcement view:", error);
+
+    setLogs([]);
+    setVerifications(new Map());
+    setChainStatus({
+      valid: false,
+      total: 0,
+      verified: 0,
+    });
+  } finally {
     setLoading(false);
   }
+}
 
   const totalDriving = logs.reduce((s, l) => s + l.totalDrivingSeconds, 0);
   const totalWork = logs.reduce((s, l) => s + l.totalWorkSeconds, 0);
   const totalBreaks = logs.reduce(
-    (s, l) => s + l.breaks.reduce((bs, b) => bs + b.durationSeconds, 0),
-    0
-  );
+  (sum, log) =>
+    sum +
+    (log.breaks ?? []).reduce(
+      (breakSum, breakEntry) =>
+        breakSum + (breakEntry.durationSeconds ?? 0),
+      0
+    ),
+  0
+);
 
   return (
     <ScreenContainer containerClassName="bg-[#003366]" safeAreaClassName="bg-[#003366]">
@@ -213,7 +252,10 @@ export default function EnforcementViewScreen() {
 
             {logs.map((log) => {
               const ver = verifications.get(log.id);
-              const totalBreakSec = log.breaks.reduce((s, b) => s + b.durationSeconds, 0);
+              const totalBreakSec = (log.breaks ?? []).reduce(
+  (sum, breakEntry) => sum + (breakEntry.durationSeconds ?? 0),
+  0
+);
               return (
                 <View
                   key={log.id}
