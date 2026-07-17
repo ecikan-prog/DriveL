@@ -407,7 +407,7 @@ export default function HistoryScreen() {
                     driverType={driverType}
                     onPress={() =>
                       router.push({
-                        pathname: "/shift-detail",
+                        pathname: "/log-detail",
                         params: { logId: log.id },
                       } as any)
                     }
