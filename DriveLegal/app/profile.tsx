@@ -212,62 +212,182 @@ export default function ProfileScreen() {
   }}
 >
       {/* Header */}
-      <View className="px-5 pt-2 pb-4 flex-row items-center justify-between">
-        <View className="flex-row items-center gap-2">
-          <Image
-            source={require("@/assets/images/icon.png")}
-            style={{ width: 36, height: 36, borderRadius: 8 }}
-            resizeMode="cover"
-          />
-          <View>
-            <Text className="text-white text-xs font-bold tracking-widest">
-              <Text className="text-white">DRIVE </Text><Text style={{ color: "#4ADE80" }}>LEGAL</Text>
-            </Text>
-            <Text className="text-blue-200 text-xs">👤 Profile</Text>
-          </View>
-        </View>
-        {!editing ? (
-          <TouchableOpacity
-            className="px-4 py-2 rounded-full bg-[#5980E9] flex-row items-center gap-1"
-            onPress={() => setEditing(true)}
-          >
-            <Text className="text-white text-lg">✏️</Text>
-            <Text className="text-white text-xs font-bold">Edit</Text>
-          </TouchableOpacity>
-        ) : (
-          <View className="flex-row gap-2">
-            <TouchableOpacity
-              className="px-3 py-2 rounded-full border border-[#4A6AB0]"
-              onPress={() => {
-                setEditing(false);
-                setForm({
-                  name: user.name ?? "",
-                  licenceNumber: user.licenceNumber ?? "",
-                  vehicleRegistration: user.vehicleRegistration ?? "",
-                  vehicleType: user.vehicleType ?? "",
-                  driverType: (user as any)?.driverType ?? "small_passenger",
-                });
-              }}
-            >
-              <Text className="text-blue-200 text-xs font-bold">Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="px-3 py-2 rounded-full bg-[#5980E9] flex-row items-center gap-1"
-              onPress={handleSave}
-              disabled={saving}
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <>
-                  <Text className="text-white text-lg">💾</Text>
-                  <Text className="text-white text-xs font-bold">Save</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
+<View
+  style={{
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 16,
+  }}
+>
+  <TouchableOpacity
+    onPress={() => {
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace("/(tabs)/more");
+      }
+    }}
+    style={{
+      paddingVertical: 8,
+      alignSelf: "flex-start",
+      marginBottom: 8,
+    }}
+  >
+    <Text
+      style={{
+        color: "#FFFFFF",
+        fontSize: 16,
+        fontWeight: "700",
+      }}
+    >
+      ‹ Back
+    </Text>
+  </TouchableOpacity>
+
+  <View
+    style={{
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    }}
+  >
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+      }}
+    >
+      <Image
+        source={require("@/assets/images/icon.png")}
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 8,
+        }}
+        resizeMode="cover"
+      />
+
+      <View>
+        <Text
+          style={{
+            color: "#FFFFFF",
+            fontSize: 13,
+            fontWeight: "800",
+            letterSpacing: 1.5,
+          }}
+        >
+          DRIVE <Text style={{ color: "#4ADE80" }}>LEGAL</Text>
+        </Text>
+
+        <Text
+          style={{
+            color: "#BFDBFE",
+            fontSize: 12,
+            marginTop: 2,
+          }}
+        >
+          👤 Profile
+        </Text>
       </View>
+    </View>
+
+    {!editing ? (
+      <TouchableOpacity
+        style={{
+          paddingHorizontal: 16,
+          paddingVertical: 10,
+          borderRadius: 20,
+          backgroundColor: "#5980E9",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 5,
+        }}
+        onPress={() => setEditing(true)}
+      >
+        <Text style={{ fontSize: 16 }}>✏️</Text>
+        <Text
+          style={{
+            color: "#FFFFFF",
+            fontSize: 12,
+            fontWeight: "700",
+          }}
+        >
+          Edit
+        </Text>
+      </TouchableOpacity>
+    ) : (
+      <View
+        style={{
+          flexDirection: "row",
+          gap: 8,
+        }}
+      >
+        <TouchableOpacity
+          style={{
+            paddingHorizontal: 12,
+            paddingVertical: 9,
+            borderRadius: 20,
+            borderWidth: 1,
+            borderColor: "#4A6AB0",
+          }}
+          onPress={() => {
+            setEditing(false);
+            setForm({
+              name: user.name ?? "",
+              licenceNumber: user.licenceNumber ?? "",
+              vehicleRegistration: user.vehicleRegistration ?? "",
+              vehicleType: user.vehicleType ?? "",
+              driverType:
+                (user as any)?.driverType ?? "small_passenger",
+            });
+          }}
+        >
+          <Text
+            style={{
+              color: "#BFDBFE",
+              fontSize: 12,
+              fontWeight: "700",
+            }}
+          >
+            Cancel
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={{
+            paddingHorizontal: 12,
+            paddingVertical: 9,
+            borderRadius: 20,
+            backgroundColor: "#5980E9",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 4,
+          }}
+          onPress={handleSave}
+          disabled={saving}
+        >
+          {saving ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <>
+              <Text style={{ fontSize: 16 }}>💾</Text>
+              <Text
+                style={{
+                  color: "#FFFFFF",
+                  fontSize: 12,
+                  fontWeight: "700",
+                }}
+              >
+                Save
+              </Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+    )}
+  </View>
+</View>
 
       <View className="flex-1 bg-[#F0F4FF] rounded-t-3xl">
         <ScrollView
