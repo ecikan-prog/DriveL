@@ -536,8 +536,9 @@ export default function ProfileScreen() {
                     onPress={() => setShowDriverTypePicker(true)}
                   >
                     <Text className="text-base text-[#0D1B2A] font-medium">
-                      {form.driverType === "goods" ? "Goods Service (5.5h)" : "Passenger Service (7h)"}
-                    </Text>
+  {DRIVER_TYPES.find((type) => type.value === form.driverType)?.label ??
+    "Select driver type"}
+</Text>
                     <Text className="text-lg">▼</Text>
                   </TouchableOpacity>
                 </View>
