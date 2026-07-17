@@ -50,8 +50,7 @@ async function sha256(message: string): Promise<string> {
     hash = ((hash << 5) - hash + char) | 0;
   }
   // Extend to 64-char hex-like string for consistency
-  const base = Math.abs(hash).toString(16).padStart(8, "0");
-  let result = "";
+ let result = "";
   for (let i = 0; i < 8; i++) {
     const segment = Math.abs(hash * (i + 1) * 31).toString(16).padStart(8, "0");
     result += segment;
