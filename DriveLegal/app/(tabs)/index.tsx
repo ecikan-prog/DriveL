@@ -485,9 +485,15 @@ if (!user) {
         <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             {/* D Logo */}
-            <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: "#2563EB", alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ color: "#FFFFFF", fontSize: 22, fontWeight: "900" }}>D</Text>
-            </View>
+            <Image
+  source={require("@/assets/images/icon.png")}
+  style={{
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+  }}
+  resizeMode="cover"
+/>
             <View>
               <Text style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "800", letterSpacing: 1 }}>
                 DRIVE <Text style={{ color: "#22C55E" }}>LEGAL</Text>
