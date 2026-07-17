@@ -1,4 +1,9 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
+
 import {
   View,
   Text,
@@ -9,22 +14,23 @@ import {
   Platform,
   Image,
 } from "react-native";
+
 import { useRouter } from "expo-router";
+
 import { ScreenContainer } from "@/components/screen-container";
+import { ActivityGrid } from "@/components/activity-grid";
+
 import { useAuthContext } from "@/lib/auth-context";
 import { getApiBaseUrl } from "@/lib/api-base-url";
-
 import {
- getAllLogs,
- logsToCSV,
- formatDate,
- formatTime,
- formatHoursMinutes,
- type DailyLog,
-} from "../lib/logbook-storage";
-import { isAmended } from "../lib/amendments";
-import { ActivityGrid } from "../components/activity-grid";
-import { getDrivingLimitSeconds } from "../hooks/use-nzta-compliance";
+  getAllLogs,
+  getLogsCSV,
+  formatHoursMinutes,
+  type DailyLog,
+} from "@/lib/logbook-storage";
+import { isAmended } from "@/lib/amendments";
+
+import { getDrivingLimitSeconds } from "@/hooks/use-nzta-compliance";
 
 function LogCard({
   log,
