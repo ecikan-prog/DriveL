@@ -330,6 +330,7 @@ export default function DashboardScreen() {
 
   // Mandatory break alert — fires once when consecutive driving hits the limit
   const mandatoryBreakFiredRef = useRef(false);
+  const autoEndBreakRef = useRef(false);
   useEffect(() => {
     if (
       isShiftActive &&
