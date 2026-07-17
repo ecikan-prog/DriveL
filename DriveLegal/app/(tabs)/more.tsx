@@ -128,7 +128,7 @@ export default function MoreScreen() {
               iconBg="#EFF6FF"
               title="Edit Profile"
               subtitle="Name, licence, vehicle details"
-              onPress={() => router.push("/(tabs)/profile" as any)}
+              onPress={() => router.push("/profile" as any)}
             />
             <MenuItem
               icon="subscriptions"
