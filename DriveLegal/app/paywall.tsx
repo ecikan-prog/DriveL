@@ -105,7 +105,16 @@ export default function PaywallScreen() {
 
   return (
     <ScreenContainer containerClassName="bg-[#003366]" safeAreaClassName="bg-[#003366]" edges={["top", "bottom", "left", "right"]}>
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+      <ScrollView
+  style={{
+    flex: 1,
+    backgroundColor: "#003366",
+  }}
+  contentContainerStyle={{
+    flexGrow: 1,
+    backgroundColor: "#003366",
+  }}
+>
         {/* Header */}
         <View
   style={{
