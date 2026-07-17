@@ -265,7 +265,7 @@ export default function HistoryScreen() {
       <View className="px-5 pt-2 pb-4 flex-row items-center justify-between">
         <View className="flex-row items-center gap-2">
           <Image
-            source={require("../../assets/images/icon.png")}
+            source={require("@/assets/images/icon.png")}
             style={{ width: 36, height: 36, borderRadius: 8 }}
             resizeMode="cover"
           />
