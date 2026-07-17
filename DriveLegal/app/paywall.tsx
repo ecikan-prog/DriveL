@@ -32,15 +32,15 @@ const PLANS: PlanOption[] = [
   {
     id: "monthly",
     name: "Monthly",
-    price: "NZD $4.99",
+    price: "NZD $6.99",
     period: "/month",
   },
   {
     id: "annual",
     name: "Annual",
-    price: "NZD $39.99",
+    price: "NZD $59.99",
     period: "/year",
-    savings: "Save 33%",
+    savings: "Save 29%",
     popular: true,
   },
 ];
