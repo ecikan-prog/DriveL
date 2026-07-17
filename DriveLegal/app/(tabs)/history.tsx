@@ -43,7 +43,12 @@ function LogCard({
   onPress: () => void;
   driverType?: string;
 }) {
-  const totalBreakSeconds = log.breaks.reduce((s, b) => s + b.durationSeconds, 0);
+  const breaks = log.breaks ?? [];
+
+const totalBreakSeconds = breaks.reduce(
+  (sum, breakEntry) => sum + (breakEntry.durationSeconds ?? 0),
+  0
+);
   const drivingHours = log.totalDrivingSeconds / 3600;
   const workHours = log.totalWorkSeconds / 3600;
   const drivingLimitHours = getDrivingLimitSeconds(driverType as any) / 3600;
