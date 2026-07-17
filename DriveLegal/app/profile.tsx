@@ -551,10 +551,17 @@ export default function ProfileScreen() {
                 <InfoRow label="Vehicle Type" value={user.vehicleType ?? "—"} icon="🚗" />
                 <InfoRow label="Vehicle Rego" value={user.vehicleRegistration ?? "—"} icon="📋" />
                 <InfoRow
-                  label="Driver Type"
-                  value={(user as any)?.driverType === "goods" ? "Goods Service (5.5h limit)" : "Passenger Service (7h limit)"}
-                  icon="🚦"
-                />
+                  <InfoRow
+  label="Driver Type"
+  value={
+    DRIVER_TYPES.find(
+      (type) =>
+        type.value ===
+        ((user as any)?.driverType ?? "small_passenger")
+    )?.label ?? "Small Passenger Service"
+  }
+  icon="🚦"
+/>
                 <InfoRow
                   label="Member Since"
                   value={new Date(user.createdAt).toLocaleDateString("en-NZ", {
