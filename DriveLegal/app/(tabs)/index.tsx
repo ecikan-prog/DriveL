@@ -8,6 +8,7 @@ import {
   Modal,
   Platform,
   TextInput,
+  Image,
 } from "react-native";
 import { Redirect, useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
