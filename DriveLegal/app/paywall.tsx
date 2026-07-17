@@ -190,6 +190,7 @@ export default function PaywallScreen() {
                   backgroundColor: isSelected ? "rgba(89, 128, 233, 0.2)" : "rgba(255, 255, 255, 0.05)",
                   borderRadius: 16,
                   padding: 20,
+                  paddingLeft: 54,
                   marginBottom: 12,
                   borderWidth: 2,
                   borderColor: isSelected ? "#5980E9" : "rgba(255, 255, 255, 0.1)",
