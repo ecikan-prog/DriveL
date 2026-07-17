@@ -24,7 +24,9 @@ import { useAuthContext } from "@/lib/auth-context";
 import { getApiBaseUrl } from "@/lib/api-base-url";
 import {
   getAllLogs,
-  getLogsCSV,
+  logsToCSV,
+  formatDate,
+  formatTime,
   formatHoursMinutes,
   type DailyLog,
 } from "@/lib/logbook-storage";
@@ -177,7 +179,7 @@ export default function HistoryScreen() {
     }
     setExporting(true);
     try {
-      const { generateAndSharePDF } = await import("../lib/pdf-export");
+      const { generateAndSharePDF } = await import("@/lib/pdf-export");
       await generateAndSharePDF({
         logs: getFilteredLogs(),
         driverName: user.name ?? "Driver",
