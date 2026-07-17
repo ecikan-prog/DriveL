@@ -107,6 +107,37 @@ export default function PaywallScreen() {
     <ScreenContainer containerClassName="bg-[#003366]" safeAreaClassName="bg-[#003366]" edges={["top", "bottom", "left", "right"]}>
       <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
         {/* Header */}
+        <View
+  style={{
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    alignItems: "flex-start",
+  }}
+>
+  <TouchableOpacity
+    onPress={() => {
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace("/(tabs)/more");
+      }
+    }}
+    style={{
+      paddingVertical: 8,
+      paddingHorizontal: 4,
+    }}
+  >
+    <Text
+      style={{
+        color: "#FFFFFF",
+        fontSize: 16,
+        fontWeight: "700",
+      }}
+    >
+      ‹ Back
+    </Text>
+  </TouchableOpacity>
+</View>
         <View style={{ alignItems: "center", paddingTop: 40, paddingBottom: 24 }}>
           <Image
             source={require("@/assets/images/icon.png")}
