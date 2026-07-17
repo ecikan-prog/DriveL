@@ -305,7 +305,7 @@ export default function EnforcementViewScreen() {
                   <View className="flex-row justify-between mb-1">
                     <Text className="text-[#6B7A99] text-xs">Breaks:</Text>
                     <Text className="text-[#003366] text-xs font-medium">
-                      {log.breaks.length} ({Logbook.formatHoursMinutes(totalBreakSec)})
+                      {(log.breaks ?? []).length} ({Logbook.formatHoursMinutes(totalBreakSec)})
                     </Text>
                   </View>
 
