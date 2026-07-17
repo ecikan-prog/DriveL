@@ -181,9 +181,11 @@ const totalBreakSeconds = breaks.reduce(
           <View className="flex-row gap-3 mb-5">
             <View className="flex-1 bg-white rounded-2xl p-4 border border-[#E8EEF8]">
               <Text className="text-xs text-[#6B7A99] mb-1">Breaks Taken</Text>
-              <Text className="text-xl font-bold text-[#003366]">{log.breaks.length}</Text>
+              <Text className="text-xl font-bold text-[#003366]">{breaks.length}</Text>
               <Text className="text-xs text-[#9BA8C0] mt-0.5">
-                {log.breaks.length > 0 ? formatHoursMinutes(totalBreakSeconds) + " total" : "No breaks"}
+               {breaks.length > 0
+  ? formatHoursMinutes(totalBreakSeconds) + " total"
+  : "No breaks"}
               </Text>
             </View>
             <View className="flex-1 bg-white rounded-2xl p-4 border border-[#E8EEF8]">
