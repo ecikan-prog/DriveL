@@ -4,6 +4,7 @@ import { getApiBaseUrl } from "@/lib/api-base-url";
 import type { DailyLog } from "@/lib/logbook-storage";
 
 type GeneratePDFOptions = {
+  driverId: string;
   logs: DailyLog[];
   driverName: string;
   licenceNumber: string;
@@ -20,9 +21,10 @@ type ExportResponse = {
 
 /**
  * Sends logbook data to the Drive Legal backend.
- * The backend creates the PDF report and returns a downloadable URL.
+ * The backend creates the report and returns a downloadable URL.
  */
 export async function generateAndSharePDF({
+  driverId,
   logs,
   driverName,
   licenceNumber,
@@ -30,6 +32,10 @@ export async function generateAndSharePDF({
   vehicleType,
   driverType,
 }: GeneratePDFOptions): Promise<void> {
+  if (!driverId.trim()) {
+    throw new Error("Driver ID is missing.");
+  }
+
   if (!Array.isArray(logs) || logs.length === 0) {
     throw new Error("No shift records are available to export.");
   }
@@ -54,6 +60,7 @@ export async function generateAndSharePDF({
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
+      driverId,
       logs: safeLogs,
       driverName,
       licenceNumber,
@@ -78,13 +85,13 @@ export async function generateAndSharePDF({
   const downloadUrl = result.downloadUrl ?? result.url;
 
   if (!downloadUrl) {
-    throw new Error("The server did not return a PDF download link.");
+    throw new Error("The server did not return a report download link.");
   }
 
   const canOpen = await Linking.canOpenURL(downloadUrl);
 
   if (!canOpen) {
-    throw new Error("The generated PDF download link cannot be opened.");
+    throw new Error("The generated report link cannot be opened.");
   }
 
   await Linking.openURL(downloadUrl);
