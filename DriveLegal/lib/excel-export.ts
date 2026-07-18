@@ -26,12 +26,14 @@ type ExportResponse = {
  * inside the mobile application.
  */
 export async function generateAndShareExcel({
+  driverId,
   logs,
   driverName,
   licenceNumber,
   vehicleRego,
   driverType,
   password,
+}: GenerateExcelOptions): Promise<void> {
 }: GenerateExcelOptions): Promise<void> {
   if (!Array.isArray(logs) || logs.length === 0) {
     throw new Error("No shift records are available to export.");
