@@ -319,7 +319,7 @@ export function exportRouter(app: Express) {
   ───────────────────────────────────────────── */
   app.post("/api/export/excel", async (req: Request, res: Response) => {
     try {
-      const { driverId } = req.body;
+      const { driverId, password } = req.body;
 
       if (!driverId) {
         return res.status(400).json({ error: "driverId required" });
@@ -370,7 +370,16 @@ export function exportRouter(app: Express) {
         sheet.cell(row, 6).value(log.distance_km || 0);
       });
 
-      const buffer = await workbook.outputAsync();
+      const cleanPassword =
+  typeof password === "string" ? password.trim() : "";
+
+const buffer = await workbook.outputAsync(
+  cleanPassword
+    ? {
+        password: cleanPassword,
+      }
+    : undefined
+);
 
       const { url } = await storagePut(
         `exports/logbook-${Date.now()}.xlsx`,
