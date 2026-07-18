@@ -4,7 +4,7 @@ import { getApiBaseUrl } from "@/lib/api-base-url";
 import type { DailyLog } from "@/lib/logbook-storage";
 
 type GeneratePDFOptions = {
-  driverId: string;
+  driverId?: string | number | null;
   logs: DailyLog[];
   driverName: string;
   licenceNumber: string;
@@ -32,8 +32,10 @@ export async function generateAndSharePDF({
   vehicleType,
   driverType,
 }: GeneratePDFOptions): Promise<void> {
-  if (!driverId.trim()) {
-    throw new Error("Driver ID is missing.");
+  const safeDriverId = String(driverId ?? "").trim();
+
+  if (!safeDriverId) {
+    throw new Error("Driver ID is missing. Please sign out and sign in again.");
   }
 
   if (!Array.isArray(logs) || logs.length === 0) {
@@ -44,8 +46,8 @@ export async function generateAndSharePDF({
     ...log,
     breaks: log.breaks ?? [],
     events: log.events ?? [],
-    totalDrivingSeconds: log.totalDrivingSeconds ?? 0,
-    totalWorkSeconds: log.totalWorkSeconds ?? 0,
+    totalDrivingSeconds: Number(log.totalDrivingSeconds) || 0,
+    totalWorkSeconds: Number(log.totalWorkSeconds) || 0,
   }));
 
   const apiBaseUrl = getApiBaseUrl();
@@ -60,13 +62,13 @@ export async function generateAndSharePDF({
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      driverId,
+      driverId: safeDriverId,
       logs: safeLogs,
-      driverName,
-      licenceNumber,
-      vehicleRegistration,
-      vehicleType,
-      driverType,
+      driverName: driverName ?? "",
+      licenceNumber: licenceNumber ?? "",
+      vehicleRegistration: vehicleRegistration ?? "",
+      vehicleType: vehicleType ?? "",
+      driverType: driverType ?? "small_passenger",
       platform: Platform.OS,
     }),
   });
