@@ -4,7 +4,7 @@ import { getApiBaseUrl } from "@/lib/api-base-url";
 import type { DailyLog } from "@/lib/logbook-storage";
 
 type GenerateExcelOptions = {
-  driverId: string;
+  driverId?: string | number | null;
   logs: DailyLog[];
   driverName: string;
   licenceNumber: string;
@@ -32,20 +32,25 @@ export async function generateAndShareExcel({
   driverType,
   password,
 }: GenerateExcelOptions): Promise<void> {
-  if (!driverId.trim()) {
-    throw new Error("Driver ID is missing.");
+  const safeDriverId = String(driverId ?? "").trim();
+
+  if (!safeDriverId) {
+    throw new Error("Driver ID is missing. Please sign out and sign in again.");
   }
 
   if (!Array.isArray(logs) || logs.length === 0) {
     throw new Error("No shift records are available to export.");
   }
 
+  const safePassword =
+    typeof password === "string" ? password.trim() : "";
+
   const safeLogs = logs.map((log) => ({
     ...log,
     breaks: log.breaks ?? [],
     events: log.events ?? [],
-    totalDrivingSeconds: log.totalDrivingSeconds ?? 0,
-    totalWorkSeconds: log.totalWorkSeconds ?? 0,
+    totalDrivingSeconds: Number(log.totalDrivingSeconds) || 0,
+    totalWorkSeconds: Number(log.totalWorkSeconds) || 0,
   }));
 
   const apiBaseUrl = getApiBaseUrl();
@@ -60,14 +65,14 @@ export async function generateAndShareExcel({
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      driverId,
+      driverId: safeDriverId,
       logs: safeLogs,
-      driverName,
-      licenceNumber,
-      vehicleRego,
-      driverType,
-      password: password?.trim() || undefined,
-      protected: Boolean(password?.trim()),
+      driverName: driverName ?? "",
+      licenceNumber: licenceNumber ?? "",
+      vehicleRego: vehicleRego ?? "",
+      driverType: driverType ?? "small_passenger",
+      password: safePassword || undefined,
+      protected: Boolean(safePassword),
       platform: Platform.OS,
     }),
   });
