@@ -39,13 +39,14 @@ export default function ReportsScreen() {
       const driverType = (user as any)?.driverType ?? "small_passenger";
       const { generateAndShareExcel } = await import("@/lib/excel-export");
       await generateAndShareExcel({
-        logs,
-        driverName: user.name ?? "",
-        licenceNumber: user.licenceNumber ?? "",
-        vehicleRego: user.vehicleRegistration ?? "",
-        driverType,
-        password: password || undefined,
-      });
+  driverId: user.id,
+  logs,
+  driverName: user.name ?? "",
+  licenceNumber: user.licenceNumber ?? "",
+  vehicleRego: user.vehicleRegistration ?? "",
+  driverType,
+  password: password || undefined,
+});
     } catch (e: any) {
       Alert.alert("Export Error", e.message || "Failed to generate Excel file.");
     } finally {
@@ -63,13 +64,14 @@ export default function ReportsScreen() {
       const driverType = (user as any)?.driverType ?? "small_passenger";
       const { generateAndSharePDF } = await import("@/lib/pdf-export");
       await generateAndSharePDF({
-        logs,
-        driverName: user.name ?? "",
-        licenceNumber: user.licenceNumber ?? "",
-        vehicleRegistration: user.vehicleRegistration ?? "",
-        vehicleType: user.vehicleType ?? "",
-        driverType,
-      });
+  driverId: user.id,
+  logs,
+  driverName: user.name ?? "",
+  licenceNumber: user.licenceNumber ?? "",
+  vehicleRegistration: user.vehicleRegistration ?? "",
+  vehicleType: user.vehicleType ?? "",
+  driverType,
+});
     } catch (e: any) {
       Alert.alert("Export Error", e.message || "Failed to generate PDF.");
     } finally {
