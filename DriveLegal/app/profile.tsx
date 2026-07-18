@@ -549,9 +549,8 @@ export default function ProfileScreen() {
                 <InfoRow label="Email" value={user.email ?? "—"} icon="📧" />
                 <InfoRow label="Licence Number" value={user.licenceNumber ?? "—"} icon="🪪" />
                 <InfoRow label="Vehicle Type" value={user.vehicleType ?? "—"} icon="🚗" />
-                <InfoRow label="Vehicle Rego" value={user.vehicleRegistration ?? "—"} icon="📋" />
-                <InfoRow
-                  <InfoRow
+                <InfoRow label="Vehicle Rego" value={user.vehicleRegistration ?? "—"} 
+    <InfoRow
   label="Driver Type"
   value={
     DRIVER_TYPES.find(
