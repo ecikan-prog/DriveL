@@ -4,6 +4,7 @@ import { getApiBaseUrl } from "@/lib/api-base-url";
 import type { DailyLog } from "@/lib/logbook-storage";
 
 type GenerateExcelOptions = {
+  driverId: string;
   logs: DailyLog[];
   driverName: string;
   licenceNumber: string;
@@ -21,9 +22,6 @@ type ExportResponse = {
 /**
  * Sends logbook data to the Drive Legal backend.
  * The backend creates the Excel document and returns a downloadable URL.
- *
- * This avoids requiring native Excel, filesystem, or sharing packages
- * inside the mobile application.
  */
 export async function generateAndShareExcel({
   driverId,
@@ -34,7 +32,10 @@ export async function generateAndShareExcel({
   driverType,
   password,
 }: GenerateExcelOptions): Promise<void> {
-}: GenerateExcelOptions): Promise<void> {
+  if (!driverId.trim()) {
+    throw new Error("Driver ID is missing.");
+  }
+
   if (!Array.isArray(logs) || logs.length === 0) {
     throw new Error("No shift records are available to export.");
   }
@@ -59,6 +60,7 @@ export async function generateAndShareExcel({
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
+      driverId,
       logs: safeLogs,
       driverName,
       licenceNumber,
