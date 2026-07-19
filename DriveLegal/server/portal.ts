@@ -25,21 +25,60 @@ export function portalRouter(app: Express) {
   });
 
   app.get("/portal/driver/:id/logs", async (req: Request, res: Response) => {
-    try {
-      if (!isAuthorized(req)) {
-        return res.status(401).json({ error: "Unauthorized" });
-      }
-      const { id } = req.params;
-      const logs = await query(
-        `SELECT * FROM daily_logs WHERE user_id = ? ORDER BY start_time DESC`,
-        [id]
-      );
-      res.json({ logs });
-    } catch (err: any) {
-      console.error("[PORTAL LOGS ERROR]", err);
-      res.status(500).json({ error: err.message });
+  try {
+    if (!isAuthorized(req)) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
-  });
+
+    const { id } = req.params;
+
+    const drivers = await query<any[]>(
+      `
+      SELECT localUserId
+      FROM drivers
+      WHERE id = ?
+      LIMIT 1
+      `,
+      [id]
+    );
+
+    if (drivers.length === 0) {
+      return res.status(404).json({
+        error: "Driver not found",
+      });
+    }
+
+    const logs = await query<any[]>(
+      `
+      SELECT
+        id,
+        logId,
+        driverLocalUserId,
+        date,
+        logData,
+        canonicalJson,
+        hash,
+        previousHash,
+        hashTimestamp,
+        startTime,
+        endTime,
+        createdAt
+      FROM shift_logs
+      WHERE driverLocalUserId = ?
+      ORDER BY startTime DESC
+      `,
+      [drivers[0].localUserId]
+    );
+
+    return res.json({ logs });
+  } catch (err: any) {
+    console.error("[PORTAL LOGS ERROR]", err);
+
+    return res.status(500).json({
+      error: err?.message || "Failed to load driver logs",
+    });
+  }
+});
 
   app.get("/portal/stats", async (req: Request, res: Response) => {
     try {
