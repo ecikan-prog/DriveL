@@ -13,10 +13,15 @@ export function portalRouter(app: Express) {
         return res.status(401).json({ error: "Unauthorized" });
       }
       const drivers = await query(`
-        SELECT id, email, name, licence_number, created_at
-        FROM drivers
-        ORDER BY id DESC
-      `);
+  SELECT
+    id,
+    email,
+    name,
+    licenceNumber AS licence_number,
+    createdAt AS created_at
+  FROM drivers
+  ORDER BY id DESC
+`);
       res.json({ drivers });
     } catch (err: any) {
       console.error("[PORTAL DRIVERS ERROR]", err);
