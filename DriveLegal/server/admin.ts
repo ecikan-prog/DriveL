@@ -38,7 +38,7 @@ export function adminRouter(app: Express) {
       }
 
       const [drivers] = await query<any[]>("SELECT COUNT(*) as count FROM drivers");
-      const [logs] = await query<any[]>("SELECT COUNT(*) as count FROM daily_logs");
+      const [logs] = await query<any[]>("SELECT COUNT(*) as count FROM shift_logs");
 
       res.json({
         drivers: drivers?.count || 0,
