@@ -655,14 +655,15 @@ if (user?.trialStartDate) {
                 />
                 <InfoRow
                   label="Member Since"
-                  value={new Date(user.createdAt).toLocaleDateString(
-                    "en-NZ",
-                    {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    }
-                  )}
+                  value={
+  user.createdAt && !Number.isNaN(new Date(user.createdAt).getTime())
+    ? new Date(user.createdAt).toLocaleDateString("en-NZ", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : "—"
+}
                   icon="📅"
                   last
                 />
