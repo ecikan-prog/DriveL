@@ -126,14 +126,24 @@ export async function startShift(
     location?: { latitude: number; longitude: number; displayName: string };
     odometer?: number;
     restOverrideNote?: string;
+    workTimeRule?: "standard_5_5_hour" | "sps_short_fares_7_hour";
   }
 ): Promise<ActiveShift> {
   const now = new Date().toISOString();
   const startEvent: ShiftEvent = { type: "shift_start", timestamp: now };
   if (options?.location) startEvent.location = options.location;
-  if (options?.odometer !== undefined) startEvent.odometer = options.odometer;
-  const shift: ActiveShift = { userId, startTime: now, events: [startEvent] };
-  if (options?.restOverrideNote) shift.restOverrideNote = options.restOverrideNote;
+  if (options?.odometer !== undefined) {
+  startEvent.odometer = options.odometer;
+}
+  const shift: ActiveShift = {
+  userId,
+  startTime: now,
+  events: [startEvent],
+  workTimeRule: options?.workTimeRule,
+};
+  if (options?.restOverrideNote) {
+  shift.restOverrideNote = options.restOverrideNote;
+}
   await saveActiveShift(shift);
   return shift;
 }
