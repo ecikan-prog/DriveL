@@ -15,16 +15,21 @@ export function exportRouter(app: Express) {
   ───────────────────────────────────────────── */
   app.post("/api/export/csv", async (req: Request, res: Response) => {
     try {
-      const { driverId } = req.body;
+      const { driverId, logs: requestLogs } = req.body;
 
-      if (!driverId) {
-        return res.status(400).json({ error: "driverId required" });
-      }
+if (!driverId) {
+  return res.status(400).json({
+    error: "driverId required",
+  });
+}
 
-      const logs = await query<any[]>(
-        "SELECT * FROM daily_logs WHERE user_id = ? ORDER BY start_time DESC",
-        [driverId]
-      );
+if (!Array.isArray(requestLogs) || requestLogs.length === 0) {
+  return res.status(400).json({
+    error: "No log records were supplied for export.",
+  });
+}
+
+const logs = requestLogs;
 
       const header = "Date,Start,End,Driving,Work,Distance";
 
