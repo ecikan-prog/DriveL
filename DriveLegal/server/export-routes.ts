@@ -93,13 +93,7 @@ const logs = requestLogs;
 
 const logs = requestLogs;
 
-      if (!Array.isArray(logs) || logs.length === 0) {
-        return res.status(404).json({
-          error: "No shift records were found for this driver.",
-        });
-      }
-
-      const document = new PDFDocument({
+const document = new PDFDocument({
         size: "A4",
         layout: "landscape",
         margins: {
