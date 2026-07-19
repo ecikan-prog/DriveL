@@ -43,7 +43,7 @@ export function excelProtectedRouter(app: Express) {
         const sheet = workbook.sheet(0).name("Logs");
 
         sheet.cell("A1").value("DRIVE LEGAL LOGBOOK REPORT");
-        sheet.cell("A1:G1").merged(true);
+        sheet.range("A1:G1").merged(true);
         sheet.cell("A1").style({
           bold: true,
           fill: "003366",
