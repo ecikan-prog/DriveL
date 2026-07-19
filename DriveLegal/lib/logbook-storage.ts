@@ -566,7 +566,7 @@ export function computeConsecutiveDrivingSeconds(
 
     // Do not count the active break or other-work period as driving.
     return Math.floor(consecutiveDrivingMs / 1000);
-  }
+}
 
   consecutiveDrivingMs += Math.max(
     0,
@@ -574,7 +574,9 @@ export function computeConsecutiveDrivingSeconds(
   );
 
   return Math.floor(consecutiveDrivingMs / 1000);
-}/**
+  }
+
+/**
  * Compute total work seconds for the current active shift.
  *
  * Driving and other work count as work time.
