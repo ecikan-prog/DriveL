@@ -319,7 +319,16 @@ export default function ProfileScreen() {
       });
   }, [user]);
 
-  const trialDays = user ? getTrialDaysRemaining(user.trialStartDate) : 0;
+  let trialDays = 0;
+
+if (user?.trialStartDate) {
+  try {
+    trialDays = getTrialDaysRemaining(user.trialStartDate);
+  } catch (error) {
+    console.error("Failed to calculate trial days:", error);
+    trialDays = 0;
+  }
+}
 
   const handleSave = async () => {
     if (!user) return;
