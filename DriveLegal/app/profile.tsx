@@ -260,14 +260,14 @@ type SelectorFieldProps = {
   onPress: () => void;
 };
 
-functio<Text
-  style={[
-    styles.selectorText,
-    !value && styles.selectorPlaceholder,
-  ]}
->
-  {value || placeholder}
-</Text>{styles.formGroup}>
+function SelectorField({
+  label,
+  value,
+  placeholder,
+  onPress,
+}: SelectorFieldProps) {
+  return (
+    <View style={styles.formGroup}>
       <Text style={styles.formLabel}>{label}</Text>
 
       <TouchableOpacity
@@ -282,4 +282,8 @@ functio<Text
           ]}
         >
           {value || placeholder}
-        </
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
