@@ -16,6 +16,7 @@ import { portalRouter } from "./portal";
 import { excelProtectedRouter } from "./excel-protected";
 import { exportRouter } from "./export-routes";
 import { adminRouter } from "./admin";
+import { registerAdminUi } from "./admin-ui";
 
 
 const app = express();
@@ -69,6 +70,7 @@ registerOAuthRoutes(app);
 
 portalRouter(app);
 adminRouter(app);
+registerAdminUi(app);
 excelProtectedRouter(app);
 exportRouter(app);
 
