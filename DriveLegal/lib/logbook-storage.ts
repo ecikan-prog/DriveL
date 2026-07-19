@@ -457,28 +457,28 @@ export function computeCurrentDrivingSeconds(shift: ActiveShift, nowMs: number):
   /** Start of the current driving segment */
   let segmentStart = new Date(shift.startTime).getTime();
   let paused = false;
-  let pauseStartMs = 0;
-  let isRestBreak = false;
+  
 
   for (const event of shift.events) {
     const ts = new Date(event.timestamp).getTime();
+
+if (!Number.isFinite(ts)) {
+  continue;
+}
 
     if ((event.type === "break_start" || event.type === "other_work_start") && !paused) {
       // Commit driving up to this point
       committedDrivingMs += ts - segmentStart;
       paused = true;
-      pauseStartMs = ts;
-      isRestBreak = event.type === "break_start";
-    } else if ((event.type === "break_end" || event.type === "other_work_end") && paused) {
       
-      
-      // New driving segment starts after break ends
-      segmentStart = ts;
-      paused = false;
-      pauseStartMs = 0;
-      isRestBreak = false;
-    }
-  }
+    } else if (
+  (event.type === "break_end" || event.type === "other_work_end") &&
+  paused
+) {
+  // New driving segment starts after break ends
+  segmentStart = ts;
+  paused = false;
+}
 
   // Add time elapsed in the current segment
   let currentSegmentMs = 0;
