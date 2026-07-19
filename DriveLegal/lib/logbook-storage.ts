@@ -48,6 +48,7 @@ export type ActiveShift = {
   userId: string;
   startTime: string; // ISO string
   events: ShiftEvent[];
+  workTimeRule?: "standard_5_5_hour" | "sps_short_fares_7_hour";
   vehicleChanges?: VehicleChange[];
   /** Stored when driver overrides the 10-hour rest block */
   restOverrideNote?: string;
@@ -78,6 +79,7 @@ export type DailyLog = {
   id: string;
   userId: string;
   date: string; // YYYY-MM-DD
+  workTimeRule?: "standard_5_5_hour" | "sps_short_fares_7_hour";
   startTime: string;
   endTime: string;
   totalDrivingSeconds: number;
@@ -405,6 +407,7 @@ export function buildDailyLog(shift: ActiveShift, endTimeIso: string): DailyLog 
     id: `${shift.userId}_${shift.startTime}`,
     userId: shift.userId,
     date: dateStr,
+    workTimeRule: shift.workTimeRule,
     startTime: shift.startTime,
     endTime: endTimeIso,
     totalDrivingSeconds,
@@ -435,8 +438,8 @@ export function buildDailyLog(shift: ActiveShift, endTimeIso: string): DailyLog 
  *
  * NZTA rule:
  *   - Goods/Large Passenger: max 5.5 hrs consecutive driving → 30 min break
- *   - Small Passenger: max 7 hrs consecutive driving → 30 min break
- *   - Daily driving cap: 13 hrs (enforced separately via totalWorkSeconds)
+*   - Maximum cumulative work-day work time: 13 hours,
+*     followed by at least 10 continuous hours of rest.
  */
 export function computeCurrentDrivingSeconds(shift: ActiveShift, nowMs: number): number {
   /** All driving time from segments before the most recent qualifying break */
@@ -457,13 +460,8 @@ export function computeCurrentDrivingSeconds(shift: ActiveShift, nowMs: number):
       pauseStartMs = ts;
       isRestBreak = event.type === "break_start";
     } else if ((event.type === "break_end" || event.type === "other_work_end") && paused) {
-      const pauseDurationMs = ts - pauseStartMs;
-      if (isRestBreak && pauseDurationMs >= 30 * 60 * 1000) {
-        // Qualifying 30-min rest break — reset consecutive counter only.
-        // committedDrivingMs is intentionally NOT reset here: total daily
-        // driving continues to accumulate across the full shift.
-        committedDrivingMs = committedDrivingMs; // explicit no-op for clarity
-      }
+      
+      
       // New driving segment starts after break ends
       segmentStart = ts;
       paused = false;
@@ -487,73 +485,123 @@ export function computeCurrentDrivingSeconds(shift: ActiveShift, nowMs: number):
  * This is what the dashboard countdown uses to warn before the 7-hr limit.
  * Resets to 0 after a qualifying 30-min break.
  */
-export function computeConsecutiveDrivingSeconds(shift: ActiveShift, nowMs: number): number {
-  let segmentStart = new Date(shift.startTime).getTime();
+export function computeConsecutiveDrivingSeconds(
+  shift: ActiveShift,
+  nowMs: number
+): number {
+  let consecutiveDrivingMs = 0;
+  let drivingSegmentStartMs = new Date(shift.startTime).getTime();
+
   let paused = false;
   let pauseStartMs = 0;
-  let isRestBreak = false;
+  let pauseType: "break" | "other_work" | null = null;
 
   for (const event of shift.events) {
-    const ts = new Date(event.timestamp).getTime();
+    const eventMs = new Date(event.timestamp).getTime();
 
-    if ((event.type === "break_start" || event.type === "other_work_start") && !paused) {
+    if (!Number.isFinite(eventMs)) {
+      continue;
+    }
+
+    if (
+      (event.type === "break_start" ||
+        event.type === "other_work_start") &&
+      !paused
+    ) {
+      // Commit only the driving completed before the pause.
+      consecutiveDrivingMs += Math.max(
+        0,
+        eventMs - drivingSegmentStartMs
+      );
+
       paused = true;
-      pauseStartMs = ts;
-      isRestBreak = event.type === "break_start";
-    } else if ((event.type === "break_end" || event.type === "other_work_end") && paused) {
-      const pauseDurationMs = ts - pauseStartMs;
-      if (isRestBreak && pauseDurationMs >= 30 * 60 * 1000) {
-        // Qualifying break — consecutive timer resets
-        segmentStart = ts;
-      } else {
-        // Short break or other work — consecutive timer continues
-        segmentStart = segmentStart; // no reset
+      pauseStartMs = eventMs;
+      pauseType =
+        event.type === "break_start" ? "break" : "other_work";
+    } else if (
+      (event.type === "break_end" ||
+        event.type === "other_work_end") &&
+      paused
+    ) {
+      const pauseDurationMs = Math.max(
+        0,
+        eventMs - pauseStartMs
+      );
+
+      // Only a continuous break of at least 30 minutes resets
+      // the consecutive-driving total.
+      if (
+        pauseType === "break" &&
+        pauseDurationMs >= 30 * 60 * 1000
+      ) {
+        consecutiveDrivingMs = 0;
       }
+
       paused = false;
       pauseStartMs = 0;
-      isRestBreak = false;
+      pauseType = null;
+      drivingSegmentStartMs = eventMs;
     }
   }
 
   if (paused) {
-    // Currently on break — consecutive driving has paused
-    // Check if break has already reached 30 min (qualifies for reset)
-    const breakSoFar = nowMs - pauseStartMs;
-    if (isRestBreak && breakSoFar >= 30 * 60 * 1000) {
-      return 0; // Break completed — consecutive timer will reset on resume
+    // A qualifying break resets the displayed counter as soon as
+    // it reaches 30 continuous minutes.
+    if (
+      pauseType === "break" &&
+      nowMs - pauseStartMs >= 30 * 60 * 1000
+    ) {
+      return 0;
     }
-    // Break in progress — return driving up to when break started
-    return Math.floor((pauseStartMs - segmentStart) / 1000);
+
+    // Do not count the active break or other-work period as driving.
+    return Math.floor(consecutiveDrivingMs / 1000);
   }
 
-  return Math.floor((nowMs - segmentStart) / 1000);
-}
+  consecutiveDrivingMs += Math.max(
+    0,
+    nowMs - drivingSegmentStartMs
+  );
 
-/**
- * Compute work seconds for the current active shift (total elapsed since start,
- * including break time — NZTA counts breaks within the work period).
+  return Math.floor(consecutiveDrivingMs / 1000);
+}/**
+ * Compute total work seconds for the current active shift.
+ *
+ * Driving and other work count as work time.
+ * Rest-break time is excluded.
+ *
+ * This is total work accumulated across the shift and does not reset
+ * after a 30-minute break.
  */
-export function computeCurrentWorkSeconds(shift: ActiveShift, nowMs: number): number {
-  return Math.floor((nowMs - new Date(shift.startTime).getTime()) / 1000);
-}
+export function computeCurrentWorkSeconds(
+  shift: ActiveShift,
+  nowMs: number
+): number {
+  let totalWorkMs = 0;
+  let workSegmentStartMs = new Date(shift.startTime).getTime();
+  let onBreak = false;
 
-/** Check if the shift is currently on a break. */
-export function isCurrentlyOnBreak(shift: ActiveShift): boolean {
-  const lastEvent = shift.events[shift.events.length - 1];
-  return lastEvent?.type === "break_start";
-}
+  for (const event of shift.events) {
+    const eventMs = new Date(event.timestamp).getTime();
 
-/** Check if the shift is currently in "Other Work" mode. */
-export function isCurrentlyOtherWork(shift: ActiveShift): boolean {
-  const lastEvent = shift.events[shift.events.length - 1];
-  return lastEvent?.type === "other_work_start";
-}
+    if (!Number.isFinite(eventMs)) {
+      continue;
+    }
 
-/** Get current break duration in seconds (0 if not on break). */
-export function computeCurrentBreakSeconds(shift: ActiveShift, nowMs: number): number {
-  const lastEvent = shift.events[shift.events.length - 1];
-  if (lastEvent?.type !== "break_start") return 0;
-  return Math.floor((nowMs - new Date(lastEvent.timestamp).getTime()) / 1000);
+    if (event.type === "break_start" && !onBreak) {
+      totalWorkMs += Math.max(0, eventMs - workSegmentStartMs);
+      onBreak = true;
+    } else if (event.type === "break_end" && onBreak) {
+      onBreak = false;
+      workSegmentStartMs = eventMs;
+    }
+  }
+
+  if (!onBreak) {
+    totalWorkMs += Math.max(0, nowMs - workSegmentStartMs);
+  }
+
+  return Math.floor(totalWorkMs / 1000);
 }
 
 // ─── Migration: Recalculate old logs ─────────────────────────────────────────
@@ -607,18 +655,27 @@ export async function migrateLogCalculations(userId: string): Promise<void> {
 // ─── Fortnightly Hours ────────────────────────────────────────────────────────
 
 /**
- * Compute total driving seconds in the last 14 days (fortnightly limit).
- * Note: does NOT include the current active shift — callers must add
- * computeCurrentDrivingSeconds() to get the live total.
+ * Compute total work seconds in the last 14 days.
+ *
+ * NOTE:
+ * This excludes the current active shift. Callers should add
+ * computeCurrentWorkSeconds() for the live total.
  */
-export async function getFortnightlyDrivingSeconds(userId: string): Promise<number> {
+export async function getFortnightlyDrivingSeconds(
+  userId: string
+): Promise<number> {
   const logs = await getAllLogs(userId);
   const twoWeeksAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
-  return logs
-    .filter((l) => new Date(l.startTime).getTime() >= twoWeeksAgo)
-    .reduce((sum, l) => sum + l.totalDrivingSeconds, 0);
-}
 
+  return logs
+    .filter(
+      (l) => new Date(l.startTime).getTime() >= twoWeeksAgo
+    )
+    .reduce(
+      (sum, l) => sum + l.totalWorkSeconds,
+      0
+    );
+}
 // ─── Formatting ───────────────────────────────────────────────────────────────
 
 export function formatDuration(seconds: number): string {
