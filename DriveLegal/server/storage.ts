@@ -1,54 +1,167 @@
-import fs from "fs";
+import fs from "fs/promises";
 import path from "path";
 
 const STORAGE_ROOT =
-  process.env.STORAGE_DIR ||
+  process.env.STORAGE_DIR?.trim() ||
   path.join(process.cwd(), "storage");
 
-function ensureDir(dir: string) {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+const PUBLIC_BASE_URL = (
+  process.env.PUBLIC_BASE_URL ||
+  process.env.RAILWAY_PUBLIC_DOMAIN ||
+  ""
+)
+  .trim()
+  .replace(/\/+$/, "");
+
+function normalizeBaseUrl(value: string): string {
+  if (!value) {
+    return "";
   }
+
+  if (
+    value.startsWith("http://") ||
+    value.startsWith("https://")
+  ) {
+    return value.replace(/\/+$/, "");
+  }
+
+  return `https://${value.replace(/\/+$/, "")}`;
+}
+
+function getSafeKey(key: string): string {
+  const normalizedKey = key
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "");
+
+  const resolvedRoot = path.resolve(STORAGE_ROOT);
+  const resolvedFile = path.resolve(
+    STORAGE_ROOT,
+    normalizedKey
+  );
+
+  if (
+    resolvedFile !== resolvedRoot &&
+    !resolvedFile.startsWith(`${resolvedRoot}${path.sep}`)
+  ) {
+    throw new Error("Invalid storage key.");
+  }
+
+  return normalizedKey;
+}
+
+function getFilePath(key: string): string {
+  const safeKey = getSafeKey(key);
+
+  return path.resolve(STORAGE_ROOT, safeKey);
+}
+
+function getPublicUrl(key: string): string {
+  const safeKey = getSafeKey(key);
+
+  const encodedPath = safeKey
+    .split("/")
+    .map((section) => encodeURIComponent(section))
+    .join("/");
+
+  const relativeUrl = `/storage/${encodedPath}`;
+  const baseUrl = normalizeBaseUrl(PUBLIC_BASE_URL);
+
+  if (!baseUrl) {
+    return relativeUrl;
+  }
+
+  return `${baseUrl}${relativeUrl}`;
+}
+
+async function ensureDirectory(
+  directoryPath: string
+): Promise<void> {
+  await fs.mkdir(directoryPath, {
+    recursive: true,
+  });
 }
 
 /**
- * Save file and return public URL
+ * Saves a file and returns its public URL.
  */
 export async function storagePut(
   key: string,
   data: Buffer,
   contentType: string
-): Promise<{ url: string }> {
-  const safeKey = key.replace(/^\/+/, "");
-  const filePath = path.join(STORAGE_ROOT, safeKey);
+): Promise<{
+  url: string;
+  key: string;
+  contentType: string;
+}> {
+  const safeKey = getSafeKey(key);
+  const filePath = getFilePath(safeKey);
 
-  ensureDir(path.dirname(filePath));
-
-  fs.writeFileSync(filePath, data);
+  await ensureDirectory(path.dirname(filePath));
+  await fs.writeFile(filePath, data);
 
   return {
-    url: `/storage/${safeKey}`,
+    key: safeKey,
+    url: getPublicUrl(safeKey),
+    contentType,
   };
 }
 
 /**
- * Read file
+ * Reads a stored file.
  */
-export async function storageGet(key: string): Promise<Buffer | null> {
-  const filePath = path.join(STORAGE_ROOT, key);
-  if (!fs.existsSync(filePath)) return null;
-  return fs.readFileSync(filePath);
-}
+export async function storageGet(
+  key: string
+): Promise<Buffer | null> {
+  try {
+    const filePath = getFilePath(key);
 
-/**
- * Delete file
- */
-export async function storageDelete(key: string): Promise<void> {
-  const filePath = path.join(STORAGE_ROOT, key);
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
+    return await fs.readFile(filePath);
+  } catch (error: unknown) {
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return null;
+    }
+
+    throw error;
   }
 }
 
-// Ensure folder exists at startup
-ensureDir(STORAGE_ROOT);
+/**
+ * Deletes a stored file.
+ */
+export async function storageDelete(
+  key: string
+): Promise<void> {
+  try {
+    const filePath = getFilePath(key);
+
+    await fs.unlink(filePath);
+  } catch (error: unknown) {
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return;
+    }
+
+    throw error;
+  }
+}
+
+/**
+ * Returns the local storage root for Express static hosting.
+ */
+export function getStorageRoot(): string {
+  return STORAGE_ROOT;
+}
+
+/**
+ * Creates the storage directory at server startup.
+ */
+export async function initializeStorage(): Promise<void> {
+  await ensureDirectory(STORAGE_ROOT);
+}
