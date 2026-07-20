@@ -127,6 +127,80 @@ function formatDuration(
 
   return `${hours}h ${minutes}m`;
 }
+const TRIAL_DAYS = 21;
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+type TrialStatus = {
+  label: string;
+  daysLeft: number | null;
+  expired: boolean;
+  started: boolean;
+  expiryDate: Date | null;
+};
+
+function getTrialStatus(
+  trialStartValue: unknown
+): TrialStatus {
+  if (!trialStartValue) {
+    return {
+      label: "Trial not started",
+      daysLeft: null,
+      expired: false,
+      started: false,
+      expiryDate: null,
+    };
+  }
+
+  const trialStart = new Date(String(trialStartValue));
+
+  if (Number.isNaN(trialStart.getTime())) {
+    return {
+      label: "Trial not started",
+      daysLeft: null,
+      expired: false,
+      started: false,
+      expiryDate: null,
+    };
+  }
+
+  const expiryDate = new Date(trialStart);
+  expiryDate.setDate(
+    expiryDate.getDate() + TRIAL_DAYS
+  );
+
+  const daysLeft = Math.max(
+    0,
+    Math.ceil(
+      (expiryDate.getTime() - Date.now()) /
+        ONE_DAY_MS
+    )
+  );
+
+  const expired =
+    expiryDate.getTime() <= Date.now();
+
+  return {
+    label: expired
+      ? "Trial Expired"
+      : `Trial (${daysLeft}d left)`,
+    daysLeft,
+    expired,
+    started: true,
+    expiryDate,
+  };
+}
+
+function formatTrialExpiry(
+  trialStartValue: unknown
+): string {
+  const trial = getTrialStatus(
+    trialStartValue
+  );
+
+  return trial.expiryDate
+    ? formatDate(trial.expiryDate)
+    : "—";
+}
 
 /* ─────────────────────────────────────────────
    SHARED PAGE STYLES
