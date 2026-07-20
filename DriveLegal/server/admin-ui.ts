@@ -4,6 +4,10 @@ import { query } from "./db";
 
 const COOKIE_NAME = "drivelegal_admin_session";
 
+/* ─────────────────────────────────────────────
+   SECURITY HELPERS
+   ───────────────────────────────────────────── */
+
 function safeEqual(a: string, b: string): boolean {
   const first = Buffer.from(a);
   const second = Buffer.from(b);
@@ -32,7 +36,9 @@ function hasAdminSession(req: Request): boolean {
   const sessionCookie = cookies
     .split(";")
     .map((cookie) => cookie.trim())
-    .find((cookie) => cookie.startsWith(`${COOKIE_NAME}=`));
+    .find((cookie) =>
+      cookie.startsWith(`${COOKIE_NAME}=`)
+    );
 
   if (!sessionCookie) {
     return false;
@@ -44,6 +50,10 @@ function hasAdminSession(req: Request): boolean {
 
   return safeEqual(supplied, sessionValue());
 }
+
+/* ─────────────────────────────────────────────
+   DISPLAY HELPERS
+   ───────────────────────────────────────────── */
 
 function escapeHtml(value: unknown): string {
   return String(value ?? "")
@@ -65,161 +75,674 @@ function formatDate(value: unknown): string {
     return "—";
   }
 
-  return date.toLocaleDateString("en-NZ");
+  return date.toLocaleDateString("en-NZ", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 }
 
-export function registerAdminUi(app: Express) {
-  app.get("/admin", (_req: Request, res: Response) => {
-    res.redirect("/admin/login");
-  });
+function formatDateTime(value: unknown): string {
+  if (!value) {
+    return "—";
+  }
 
-  app.get("/admin/login", (req: Request, res: Response) => {
-    if (hasAdminSession(req)) {
+  const date = new Date(String(value));
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return date.toLocaleString("en-NZ", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function formatDuration(
+  startValue: unknown,
+  endValue: unknown
+): string {
+  if (!startValue || !endValue) {
+    return "—";
+  }
+
+  const start = new Date(String(startValue)).getTime();
+  const end = new Date(String(endValue)).getTime();
+
+  if (
+    !Number.isFinite(start) ||
+    !Number.isFinite(end) ||
+    end < start
+  ) {
+    return "—";
+  }
+
+  const totalMinutes = Math.round(
+    (end - start) / 60000
+  );
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  return `${hours}h ${minutes}m`;
+}
+
+/* ─────────────────────────────────────────────
+   SHARED PAGE STYLES
+   ───────────────────────────────────────────── */
+
+const adminStyles = `
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    margin: 0;
+    min-height: 100%;
+    background: #061d38;
+    color: #ffffff;
+    font-family:
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      Arial,
+      sans-serif;
+  }
+
+  body {
+    min-height: 100vh;
+  }
+
+  .layout {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+
+  aside {
+    min-height: 100vh;
+    background: #123d72;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .brand {
+    padding: 34px 28px 30px;
+    border-bottom: 1px solid rgba(255,255,255,0.13);
+  }
+
+  .brand strong {
+    display: block;
+    font-size: 25px;
+    letter-spacing: 0.5px;
+  }
+
+  .brand strong span {
+    color: #46d171;
+  }
+
+  .brand small {
+    display: block;
+    margin-top: 7px;
+    color: #cad6e8;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2px;
+  }
+
+  nav {
+    flex: 1;
+    padding-top: 28px;
+  }
+
+  nav a {
+    display: block;
+    padding: 18px 30px;
+    border-left: 4px solid transparent;
+    color: #ffffff;
+    text-decoration: none;
+    font-size: 17px;
+    font-weight: 750;
+  }
+
+  nav a:hover {
+    background: rgba(255,255,255,0.07);
+  }
+
+  nav a.active {
+    background: #315a98;
+    border-left-color: #708cff;
+  }
+
+  .logout {
+    padding: 26px 30px;
+    border-top: 1px solid rgba(255,255,255,0.13);
+  }
+
+  .logout button {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 750;
+    cursor: pointer;
+  }
+
+  main {
+    min-width: 0;
+    padding: 42px;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: clamp(30px, 4vw, 42px);
+    line-height: 1.1;
+  }
+
+  .subtitle {
+    margin: 10px 0 34px;
+    color: #b9c5d8;
+    font-size: 18px;
+  }
+
+  .cards {
+    display: grid;
+    grid-template-columns:
+      repeat(4, minmax(160px, 1fr));
+    gap: 20px;
+    margin-bottom: 38px;
+  }
+
+  .card,
+  .panel {
+    background: #172f4b;
+    border: 1px solid #36506d;
+    border-radius: 20px;
+  }
+
+  .card {
+    min-height: 150px;
+    padding: 27px;
+  }
+
+  .label {
+    color: #d5dce8;
+    font-size: 13px;
+    font-weight: 850;
+    letter-spacing: 1.5px;
+  }
+
+  .number {
+    margin-top: 17px;
+    color: #6486ff;
+    font-size: 44px;
+    font-weight: 850;
+  }
+
+  .panel {
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: 23px 26px;
+    font-size: 22px;
+    font-weight: 850;
+  }
+
+  .table-scroll {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th,
+  td {
+    padding: 18px 20px;
+    border-top: 1px solid #36506d;
+    text-align: left;
+    vertical-align: middle;
+  }
+
+  th {
+    background: #2a425e;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 850;
+    letter-spacing: 1px;
+    white-space: nowrap;
+  }
+
+  td {
+    background: #172f4b;
+  }
+
+  td strong {
+    font-size: 16px;
+  }
+
+  td .muted {
+    display: inline-block;
+    margin-top: 4px;
+    color: #b8c4d6;
+  }
+
+  .status {
+    display: inline-block;
+    padding: 7px 13px;
+    border-radius: 999px;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+
+  .verified {
+    background: #d9f8e2;
+    color: #176b37;
+  }
+
+  .unverified {
+    background: #ffe0e0;
+    color: #a22323;
+  }
+
+  .action-cell {
+    width: 90px;
+    text-align: right;
+  }
+
+  .action-button,
+  .secondary-button {
+    display: inline-block;
+    padding: 9px 15px;
+    border-radius: 10px;
+    color: #ffffff;
+    text-decoration: none;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .action-button {
+    background: #4d70d8;
+    border: 1px solid #7893ed;
+  }
+
+  .secondary-button {
+    background: #243d59;
+    border: 1px solid #637a94;
+  }
+
+  .profile-grid {
+    display: grid;
+    grid-template-columns:
+      repeat(3, minmax(180px, 1fr));
+    gap: 26px;
+    padding: 27px;
+  }
+
+  .profile-item small {
+    display: block;
+    margin-bottom: 8px;
+    color: #aebbcf;
+    font-size: 12px;
+    font-weight: 850;
+    letter-spacing: 1.3px;
+  }
+
+  .profile-item strong {
+    display: block;
+    font-size: 18px;
+    overflow-wrap: anywhere;
+  }
+
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 26px 0 30px;
+  }
+
+  .empty {
+    padding: 34px;
+    color: #b8c4d6;
+    text-align: center;
+  }
+
+  .error-box {
+    max-width: 760px;
+    margin: 50px auto;
+    padding: 30px;
+    background: #5b1f2a;
+    border-radius: 18px;
+  }
+
+  @media (max-width: 1100px) {
+    .cards {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .profile-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    th,
+    td {
+      padding: 16px 14px;
+    }
+
+    /*
+     * Hide less important columns on iPad-sized screens.
+     * Actions remain visible without horizontal scrolling.
+     */
+    .hide-tablet {
+      display: none;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .layout {
+      display: block;
+    }
+
+    aside {
+      min-height: auto;
+    }
+
+    .brand {
+      padding: 22px 20px;
+    }
+
+    nav {
+      display: flex;
+      overflow-x: auto;
+      padding: 0;
+    }
+
+    nav a {
+      flex: 0 0 auto;
+      padding: 15px 18px;
+      border-left: 0;
+      border-bottom: 4px solid transparent;
+    }
+
+    nav a.active {
+      border-bottom-color: #708cff;
+    }
+
+    .logout {
+      display: none;
+    }
+
+    main {
+      padding: 25px 16px;
+    }
+
+    .cards,
+    .profile-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .hide-mobile {
+      display: none;
+    }
+
+    th,
+    td {
+      padding: 14px 11px;
+    }
+
+    .action-button {
+      padding: 8px 11px;
+    }
+  }
+`;
+
+function renderSidebar(activePage: string): string {
+  const active = (page: string) =>
+    activePage === page ? "active" : "";
+
+  return `
+    <aside>
+      <div class="brand">
+        <strong>DRIVE <span>LEGAL</span></strong>
+        <small>ADMIN DASHBOARD</small>
+      </div>
+
+      <nav>
+        <a
+          class="${active("users")}"
+          href="/admin/dashboard"
+        >
+          👥 Users
+        </a>
+
+        <a href="#">
+          💳 Subscriptions
+        </a>
+
+        <a href="#">
+          🏢 Operators
+        </a>
+
+        <a href="#">
+          🛡️ Compliance
+        </a>
+
+        <a href="#">
+          🔧 Support
+        </a>
+      </nav>
+
+      <form
+        class="logout"
+        method="POST"
+        action="/admin/logout"
+      >
+        <button type="submit">
+          Sign Out
+        </button>
+      </form>
+    </aside>
+  `;
+}
+
+/* ─────────────────────────────────────────────
+   ADMIN ROUTES
+   ───────────────────────────────────────────── */
+
+export function registerAdminUi(app: Express) {
+  app.get(
+    "/admin",
+    (_req: Request, res: Response) => {
+      return res.redirect("/admin/login");
+    }
+  );
+
+  /* ───────────────────────────────────────────
+     LOGIN PAGE
+     ─────────────────────────────────────────── */
+
+  app.get(
+    "/admin/login",
+    (req: Request, res: Response) => {
+      if (hasAdminSession(req)) {
+        return res.redirect("/admin/dashboard");
+      }
+
+      const showError = req.query.error === "1";
+
+      return res.status(200).send(`
+        <!DOCTYPE html>
+        <html lang="en">
+          <head>
+            <meta charset="UTF-8" />
+
+            <meta
+              name="viewport"
+              content="width=device-width, initial-scale=1"
+            />
+
+            <title>Drive Legal Admin</title>
+
+            <style>
+              * {
+                box-sizing: border-box;
+              }
+
+              body {
+                margin: 0;
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 24px;
+                background: #eef3ff;
+                color: #12386e;
+                font-family:
+                  -apple-system,
+                  BlinkMacSystemFont,
+                  "Segoe UI",
+                  Arial,
+                  sans-serif;
+              }
+
+              .login-card {
+                width: 100%;
+                max-width: 430px;
+                padding: 36px;
+                border-radius: 25px;
+                background: #ffffff;
+                box-shadow:
+                  0 18px 48px rgba(18,56,110,0.16);
+              }
+
+              h1 {
+                margin: 0 0 8px;
+                font-size: 32px;
+              }
+
+              p {
+                margin: 0 0 26px;
+                color: #63738e;
+              }
+
+              label {
+                display: block;
+                margin-bottom: 8px;
+                font-weight: 800;
+              }
+
+              input {
+                width: 100%;
+                padding: 15px;
+                border: 1px solid #ccd6e8;
+                border-radius: 12px;
+                font-size: 16px;
+              }
+
+              button {
+                width: 100%;
+                margin-top: 19px;
+                padding: 15px;
+                border: 0;
+                border-radius: 12px;
+                background: #145ddd;
+                color: #ffffff;
+                font-size: 17px;
+                font-weight: 850;
+                cursor: pointer;
+              }
+
+              .error {
+                margin-bottom: 18px;
+                padding: 12px;
+                border-radius: 10px;
+                background: #fff0f0;
+                color: #a31515;
+              }
+            </style>
+          </head>
+
+          <body>
+            <main class="login-card">
+              <h1>Drive Legal</h1>
+              <p>Administrator portal</p>
+
+              ${
+                showError
+                  ? `
+                    <div class="error">
+                      Invalid administrator key.
+                    </div>
+                  `
+                  : ""
+              }
+
+              <form
+                method="POST"
+                action="/admin/login"
+              >
+                <label for="adminKey">
+                  Administrator key
+                </label>
+
+                <input
+                  id="adminKey"
+                  name="adminKey"
+                  type="password"
+                  autocomplete="current-password"
+                  required
+                />
+
+                <button type="submit">
+                  Sign in
+                </button>
+              </form>
+            </main>
+          </body>
+        </html>
+      `);
+    }
+  );
+
+  app.post(
+    "/admin/login",
+    (req: Request, res: Response) => {
+      const configuredKey = process.env.ADMIN_KEY;
+
+      const submittedKey =
+        typeof req.body?.adminKey === "string"
+          ? req.body.adminKey
+          : "";
+
+      if (
+        !configuredKey ||
+        !submittedKey ||
+        !safeEqual(submittedKey, configuredKey)
+      ) {
+        return res.redirect("/admin/login?error=1");
+      }
+
+      res.setHeader(
+        "Set-Cookie",
+        `${COOKIE_NAME}=${encodeURIComponent(
+          sessionValue()
+        )}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=28800`
+      );
+
       return res.redirect("/admin/dashboard");
     }
+  );
 
-    const showError = req.query.error === "1";
-
-    return res.status(200).send(`
-      <!DOCTYPE html>
-      <html lang="en">
-        <head>
-          <meta charset="UTF-8" />
-          <meta
-            name="viewport"
-            content="width=device-width, initial-scale=1"
-          />
-          <title>Drive Legal Admin</title>
-
-          <style>
-            * {
-              box-sizing: border-box;
-            }
-
-            body {
-              margin: 0;
-              min-height: 100vh;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              padding: 24px;
-              background: #eef3ff;
-              color: #12386e;
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
-                Arial, sans-serif;
-            }
-
-            .card {
-              width: 100%;
-              max-width: 420px;
-              padding: 34px;
-              border-radius: 24px;
-              background: white;
-              box-shadow: 0 18px 45px rgba(18, 56, 110, 0.15);
-            }
-
-            h1 {
-              margin: 0 0 8px;
-              font-size: 30px;
-            }
-
-            p {
-              margin: 0 0 24px;
-              color: #63738e;
-            }
-
-            label {
-              display: block;
-              margin-bottom: 8px;
-              font-weight: 700;
-            }
-
-            input {
-              width: 100%;
-              padding: 15px;
-              border: 1px solid #ccd6e8;
-              border-radius: 12px;
-              font-size: 16px;
-            }
-
-            button {
-              width: 100%;
-              margin-top: 18px;
-              padding: 15px;
-              border: 0;
-              border-radius: 12px;
-              background: #145ddd;
-              color: white;
-              font-size: 17px;
-              font-weight: 800;
-              cursor: pointer;
-            }
-
-            .error {
-              margin-bottom: 18px;
-              padding: 12px;
-              border-radius: 10px;
-              background: #fff0f0;
-              color: #a31515;
-            }
-          </style>
-        </head>
-
-        <body>
-          <main class="card">
-            <h1>Drive Legal</h1>
-            <p>Administrator portal</p>
-
-            ${
-              showError
-                ? '<div class="error">Invalid administrator key.</div>'
-                : ""
-            }
-
-            <form method="POST" action="/admin/login">
-              <label for="adminKey">Administrator key</label>
-
-              <input
-                id="adminKey"
-                name="adminKey"
-                type="password"
-                autocomplete="current-password"
-                required
-              />
-
-              <button type="submit">Sign in</button>
-            </form>
-          </main>
-        </body>
-      </html>
-    `);
-  });
-
-  app.post("/admin/login", (req: Request, res: Response) => {
-    const configuredKey = process.env.ADMIN_KEY;
-
-    const submittedKey =
-      typeof req.body?.adminKey === "string"
-        ? req.body.adminKey
-        : "";
-
-    if (
-      !configuredKey ||
-      !submittedKey ||
-      !safeEqual(submittedKey, configuredKey)
-    ) {
-      return res.redirect("/admin/login?error=1");
-    }
-
-    res.setHeader(
-      "Set-Cookie",
-      `${COOKIE_NAME}=${encodeURIComponent(
-        sessionValue()
-      )}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=28800`
-    );
-
-    return res.redirect("/admin/dashboard");
-  });
+  /* ───────────────────────────────────────────
+     USERS DASHBOARD
+     ─────────────────────────────────────────── */
 
   app.get(
     "/admin/dashboard",
@@ -232,6 +755,7 @@ export function registerAdminUi(app: Express) {
         const drivers = await query<any>(`
           SELECT
             id,
+            localUserId,
             name,
             email,
             licenceNumber,
@@ -251,10 +775,12 @@ export function registerAdminUi(app: Express) {
         const totalDrivers = drivers.length;
 
         const verifiedEmails = drivers.filter(
-          (driver: any) => Boolean(driver.emailVerified)
+          (driver: any) =>
+            Boolean(driver.emailVerified)
         ).length;
 
-        const unverifiedEmails = totalDrivers - verifiedEmails;
+        const unverifiedEmails =
+          totalDrivers - verifiedEmails;
 
         const totalShifts = Number(
           shiftCountRows[0]?.count ?? 0
@@ -265,25 +791,46 @@ export function registerAdminUi(app: Express) {
             return `
               <tr>
                 <td>
-                  <strong>${escapeHtml(driver.name)}</strong><br />
-                  <span>${escapeHtml(driver.email)}</span>
+                  <strong>
+                    ${escapeHtml(driver.name)}
+                  </strong>
+
+                  <br />
+
+                  <span class="muted">
+                    ${escapeHtml(driver.email)}
+                  </span>
                 </td>
 
-                <td>${escapeHtml(driver.licenceNumber)}</td>
+                <td>
+                  ${escapeHtml(driver.licenceNumber)}
+                </td>
 
                 <td>
                   ${
                     driver.emailVerified
-                      ? '<span class="verified">Verified</span>'
-                      : '<span class="unverified">Unverified</span>'
+                      ? `
+                        <span class="status verified">
+                          Verified
+                        </span>
+                      `
+                      : `
+                        <span class="status unverified">
+                          Unverified
+                        </span>
+                      `
                   }
                 </td>
 
-                <td>${escapeHtml(driver.driverType)}</td>
+                <td class="hide-mobile">
+                  ${escapeHtml(driver.driverType)}
+                </td>
 
-                <td>${formatDate(driver.createdAt)}</td>
+                <td class="hide-tablet">
+                  ${formatDate(driver.createdAt)}
+                </td>
 
-                <td>
+                <td class="action-cell">
                   <a
                     class="action-button"
                     href="/admin/driver/${encodeURIComponent(
@@ -309,280 +856,18 @@ export function registerAdminUi(app: Express) {
                 content="width=device-width, initial-scale=1"
               />
 
-              <title>Users — Drive Legal Admin</title>
+              <title>
+                Users — Drive Legal Admin
+              </title>
 
               <style>
-                * {
-                  box-sizing: border-box;
-                }
-
-                body {
-                  margin: 0;
-                  background: #061d38;
-                  color: #ffffff;
-                  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
-                    Arial, sans-serif;
-                }
-
-                .layout {
-                  min-height: 100vh;
-                  display: grid;
-                  grid-template-columns: 260px 1fr;
-                }
-
-                aside {
-                  background: #123d72;
-                  padding: 30px 0;
-                  display: flex;
-                  flex-direction: column;
-                }
-
-                .brand {
-                  padding: 0 28px 28px;
-                  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-                }
-
-                .brand strong {
-                  font-size: 24px;
-                }
-
-                .brand span {
-                  color: #46d171;
-                }
-
-                .brand small {
-                  display: block;
-                  margin-top: 6px;
-                  letter-spacing: 2px;
-                  color: #c7d4e8;
-                }
-
-                nav {
-                  padding-top: 24px;
-                  flex: 1;
-                }
-
-                nav a {
-                  display: block;
-                  padding: 17px 28px;
-                  color: white;
-                  text-decoration: none;
-                  font-weight: 700;
-                }
-
-                nav a.active {
-                  background: #2d5592;
-                  border-left: 4px solid #6c8fff;
-                }
-
-                .logout {
-                  padding: 24px 28px 0;
-                  border-top: 1px solid rgba(255, 255, 255, 0.12);
-                }
-
-                .logout button {
-                  border: 0;
-                  background: transparent;
-                  color: white;
-                  font-size: 16px;
-                  font-weight: 700;
-                  cursor: pointer;
-                }
-
-                main {
-                  padding: 42px;
-                  overflow-x: auto;
-                }
-
-                h1 {
-                  margin: 0;
-                  font-size: 36px;
-                }
-
-                .subtitle {
-                  margin: 8px 0 34px;
-                  color: #b9c5d8;
-                  font-size: 18px;
-                }
-
-                .cards {
-                  display: grid;
-                  grid-template-columns: repeat(
-                    4,
-                    minmax(180px, 1fr)
-                  );
-                  gap: 18px;
-                  margin-bottom: 34px;
-                }
-
-                .card {
-                  background: #172f4b;
-                  border: 1px solid #36506d;
-                  border-radius: 20px;
-                  padding: 26px;
-                }
-
-                .label {
-                  color: #d2d9e6;
-                  font-size: 13px;
-                  font-weight: 800;
-                  letter-spacing: 1.5px;
-                }
-
-                .number {
-                  margin-top: 14px;
-                  font-size: 42px;
-                  font-weight: 800;
-                  color: #6486ff;
-                }
-
-                .table-card {
-                  background: #172f4b;
-                  border: 1px solid #36506d;
-                  border-radius: 20px;
-                  overflow: hidden;
-                }
-
-                .table-title {
-                  padding: 22px 26px;
-                  font-size: 22px;
-                  font-weight: 800;
-                }
-
-                table {
-  width: 1100px;
-  min-width: 1100px;
-  border-collapse: collapse;
-}
-
-                th,
-                td {
-                  padding: 18px 20px;
-                  text-align: left;
-                  border-top: 1px solid #36506d;
-                }
-
-                th {
-                  background: #2a425e;
-                  font-size: 13px;
-                  letter-spacing: 1px;
-                }
-
-                td span {
-                  color: #b8c4d6;
-                }
-
-                .verified,
-                .unverified {
-                  display: inline-block;
-                  padding: 7px 12px;
-                  border-radius: 999px;
-                  font-weight: 800;
-                }
-
-                .verified {
-                  background: #d9f8e2;
-                  color: #176b37;
-                }
-
-                .unverified {
-                  background: #ffe0e0;
-                  color: #a22323;
-                }
-
-                .action-button {
-                  display: inline-block;
-                  padding: 8px 14px;
-                  border: 1px solid #69809b;
-                  border-radius: 10px;
-                  color: white;
-                  text-decoration: none;
-                  font-weight: 700;
-                }
-
-                .error-card {
-                  padding: 24px;
-                  border-radius: 16px;
-                  background: #5b1f2a;
-                  color: white;
-                }
-
-                @media (max-width: 900px) {
-                  .layout {
-                    grid-template-columns: 1fr;
-                  }
-
-                  aside {
-                    display: none;
-                  }
-
-                  main {
-                    padding: 24px 16px;
-                  }
-
-                  .cards {
-                    grid-template-columns: repeat(2, 1fr);
-                  }
-
-                  table {
-                    min-width: 850px;
-                  }
-                }
-
-                @media (max-width: 520px) {
-                  .cards {
-                    grid-template-columns: 1fr;
-                  }
-                }
+                ${adminStyles}
               </style>
             </head>
 
             <body>
               <div class="layout">
-                <aside>
-                  <div class="brand">
-                    <strong>
-                      DRIVE <span>LEGAL</span>
-                    </strong>
-
-                    <small>ADMIN DASHBOARD</small>
-                  </div>
-
-                  <nav>
-                    <a
-                      class="active"
-                      href="/admin/dashboard"
-                    >
-                      👥 Users
-                    </a>
-
-                    <a href="#">
-                      💳 Subscriptions
-                    </a>
-
-                    <a href="#">
-                      🏢 Operators
-                    </a>
-
-                    <a href="#">
-                      🛡️ Compliance
-                    </a>
-
-                    <a href="#">
-                      🔧 Support
-                    </a>
-                  </nav>
-
-                  <form
-                    class="logout"
-                    method="POST"
-                    action="/admin/logout"
-                  >
-                    <button type="submit">
-                      Sign Out
-                    </button>
-                  </form>
-                </aside>
+                ${renderSidebar("users")}
 
                 <main>
                   <h1>User Management</h1>
@@ -633,36 +918,46 @@ export function registerAdminUi(app: Express) {
                     </div>
                   </section>
 
-                  <section class="table-card">
-                    <div class="table-title">
+                  <section class="panel">
+                    <div class="panel-header">
                       All Drivers
                     </div>
-                    <div class="table-scroll">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>DRIVER</th>
-                          <th>LICENCE</th>
-                          <th>EMAIL STATUS</th>
-                          <th>TYPE</th>
-                          <th>REGISTERED</th>
-                          <th>ACTIONS</th>
-                        </tr>
-                      </thead>
 
-                      <tbody>
-                        ${
-                          driverRows ||
-                          `
-                            <tr>
-                              <td colspan="6">
-                                No drivers registered
-                              </td>
-                            </tr>
-                          `
-                        }
-                      </tbody>
-                    </table>
+                    <div class="table-scroll">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>DRIVER</th>
+                            <th>LICENCE</th>
+                            <th>EMAIL STATUS</th>
+
+                            <th class="hide-mobile">
+                              TYPE
+                            </th>
+
+                            <th class="hide-tablet">
+                              REGISTERED
+                            </th>
+
+                            <th class="action-cell">
+                              ACTION
+                            </th>
+                          </tr>
+                        </thead>
+
+                        <tbody>
+                          ${
+                            driverRows ||
+                            `
+                              <tr>
+                                <td colspan="6">
+                                  No drivers registered
+                                </td>
+                              </tr>
+                            `
+                          }
+                        </tbody>
+                      </table>
                     </div>
                   </section>
                 </main>
@@ -671,49 +966,35 @@ export function registerAdminUi(app: Express) {
           </html>
         `);
       } catch (error) {
-        console.error("[ADMIN DASHBOARD ERROR]", error);
+        console.error(
+          "[ADMIN DASHBOARD ERROR]",
+          error
+        );
 
         return res.status(500).send(`
           <!DOCTYPE html>
           <html lang="en">
             <head>
               <meta charset="UTF-8" />
+              <title>Dashboard Error</title>
 
-              <meta
-                name="viewport"
-                content="width=device-width, initial-scale=1"
-              />
-
-              <title>Admin Dashboard Error</title>
+              <style>
+                ${adminStyles}
+              </style>
             </head>
 
-            <body
-              style="
-                margin:0;
-                padding:30px;
-                background:#061d38;
-                color:white;
-                font-family:Arial,sans-serif;
-              "
-            >
-              <div
-                style="
-                  max-width:700px;
-                  margin:40px auto;
-                  padding:28px;
-                  background:#5b1f2a;
-                  border-radius:16px;
-                "
-              >
+            <body>
+              <div class="error-box">
                 <h1>Dashboard unavailable</h1>
 
                 <p>
-                  The admin dashboard could not load the database.
+                  The dashboard could not load the
+                  Railway database.
                 </p>
 
                 <a
+                  class="secondary-button"
                   href="/admin/dashboard"
-                  style="color:white"
                 >
                   Try again
                 </a>
@@ -724,6 +1005,440 @@ export function registerAdminUi(app: Express) {
       }
     }
   );
+
+  /* ───────────────────────────────────────────
+     DRIVER PROFILE
+     ─────────────────────────────────────────── */
+
+  app.get(
+    "/admin/driver/:id",
+    async (req: Request, res: Response) => {
+      if (!hasAdminSession(req)) {
+        return res.redirect("/admin/login");
+      }
+
+      const driverId = Number(req.params.id);
+
+      if (
+        !Number.isInteger(driverId) ||
+        driverId <= 0
+      ) {
+        return res.status(400).send(
+          "Invalid driver ID"
+        );
+      }
+
+      try {
+        const driverRows = await query<any>(
+          `
+            SELECT
+              id,
+              localUserId,
+              name,
+              email,
+              licenceNumber,
+              vehicleRegistration,
+              driverType,
+              emailVerified,
+              createdAt
+            FROM drivers
+            WHERE id = ?
+            LIMIT 1
+          `,
+          [driverId]
+        );
+
+        const driver = driverRows[0];
+
+        if (!driver) {
+          return res.status(404).send(`
+            <!DOCTYPE html>
+            <html lang="en">
+              <head>
+                <meta charset="UTF-8" />
+                <title>Driver Not Found</title>
+
+                <style>
+                  ${adminStyles}
+                </style>
+              </head>
+
+              <body>
+                <div class="error-box">
+                  <h1>Driver not found</h1>
+
+                  <a
+                    class="secondary-button"
+                    href="/admin/dashboard"
+                  >
+                    Back to Users
+                  </a>
+                </div>
+              </body>
+            </html>
+          `);
+        }
+
+        const shifts = driver.localUserId
+          ? await query<any>(
+              `
+                SELECT
+                  id,
+                  logId,
+                  startTime,
+                  endTime,
+                  hash,
+                  previousHash,
+                  createdAt
+                FROM shift_logs
+                WHERE driverLocalUserId = ?
+                ORDER BY startTime DESC
+              `,
+              [driver.localUserId]
+            )
+          : [];
+
+        const completedShifts = shifts.filter(
+          (shift: any) => shift.endTime
+        );
+
+        const totalMinutes =
+          completedShifts.reduce(
+            (sum: number, shift: any) => {
+              const start = new Date(
+                String(shift.startTime)
+              ).getTime();
+
+              const end = new Date(
+                String(shift.endTime)
+              ).getTime();
+
+              if (
+                !Number.isFinite(start) ||
+                !Number.isFinite(end) ||
+                end < start
+              ) {
+                return sum;
+              }
+
+              return (
+                sum +
+                Math.round((end - start) / 60000)
+              );
+            },
+            0
+          );
+
+        const totalHours =
+          Math.round((totalMinutes / 60) * 10) /
+          10;
+
+        const shiftRows = shifts
+          .map((shift: any) => {
+            return `
+              <tr>
+                <td>
+                  ${formatDate(shift.startTime)}
+                </td>
+
+                <td>
+                  ${formatDateTime(shift.startTime)}
+                </td>
+
+                <td>
+                  ${formatDateTime(shift.endTime)}
+                </td>
+
+                <td>
+                  ${formatDuration(
+                    shift.startTime,
+                    shift.endTime
+                  )}
+                </td>
+
+                <td class="hide-mobile">
+                  ${
+                    shift.hash
+                      ? escapeHtml(
+                          String(shift.hash).slice(
+                            0,
+                            14
+                          )
+                        ) + "…"
+                      : "—"
+                  }
+                </td>
+              </tr>
+            `;
+          })
+          .join("");
+
+        return res.status(200).send(`
+          <!DOCTYPE html>
+          <html lang="en">
+            <head>
+              <meta charset="UTF-8" />
+
+              <meta
+                name="viewport"
+                content="width=device-width, initial-scale=1"
+              />
+
+              <title>
+                ${escapeHtml(driver.name)}
+                — Drive Legal Admin
+              </title>
+
+              <style>
+                ${adminStyles}
+              </style>
+            </head>
+
+            <body>
+              <div class="layout">
+                ${renderSidebar("users")}
+
+                <main>
+                  <h1>
+                    ${escapeHtml(driver.name)}
+                  </h1>
+
+                  <p class="subtitle">
+                    ${escapeHtml(driver.email)}
+                    · Licence:
+                    ${escapeHtml(
+                      driver.licenceNumber
+                    )}
+                  </p>
+
+                  <section class="panel">
+                    <div class="panel-header">
+                      Driver Profile
+                    </div>
+
+                    <div class="profile-grid">
+                      <div class="profile-item">
+                        <small>FULL NAME</small>
+                        <strong>
+                          ${escapeHtml(driver.name)}
+                        </strong>
+                      </div>
+
+                      <div class="profile-item">
+                        <small>EMAIL</small>
+                        <strong>
+                          ${escapeHtml(driver.email)}
+                        </strong>
+                      </div>
+
+                      <div class="profile-item">
+                        <small>LICENCE NUMBER</small>
+                        <strong>
+                          ${escapeHtml(
+                            driver.licenceNumber
+                          )}
+                        </strong>
+                      </div>
+
+                      <div class="profile-item">
+                        <small>VEHICLE REGO</small>
+                        <strong>
+                          ${escapeHtml(
+                            driver.vehicleRegistration
+                          )}
+                        </strong>
+                      </div>
+
+                      <div class="profile-item">
+                        <small>DRIVER TYPE</small>
+                        <strong>
+                          ${escapeHtml(
+                            driver.driverType
+                          )}
+                        </strong>
+                      </div>
+
+                      <div class="profile-item">
+                        <small>REGISTERED</small>
+                        <strong>
+                          ${formatDate(
+                            driver.createdAt
+                          )}
+                        </strong>
+                      </div>
+
+                      <div class="profile-item">
+                        <small>EMAIL STATUS</small>
+
+                        <strong>
+                          ${
+                            driver.emailVerified
+                              ? `
+                                <span
+                                  class="status verified"
+                                >
+                                  Verified
+                                </span>
+                              `
+                              : `
+                                <span
+                                  class="status unverified"
+                                >
+                                  Unverified
+                                </span>
+                              `
+                          }
+                        </strong>
+                      </div>
+                    </div>
+                  </section>
+
+                  <div class="toolbar">
+                    <a
+                      class="secondary-button"
+                      href="/admin/dashboard"
+                    >
+                      ← Back to Users
+                    </a>
+                  </div>
+
+                  <section class="cards">
+                    <div class="card">
+                      <div class="label">
+                        TOTAL SHIFTS
+                      </div>
+
+                      <div class="number">
+                        ${shifts.length}
+                      </div>
+                    </div>
+
+                    <div class="card">
+                      <div class="label">
+                        COMPLETED SHIFTS
+                      </div>
+
+                      <div class="number">
+                        ${completedShifts.length}
+                      </div>
+                    </div>
+
+                    <div class="card">
+                      <div class="label">
+                        TOTAL SHIFT HOURS
+                      </div>
+
+                      <div class="number">
+                        ${totalHours}
+                      </div>
+                    </div>
+
+                    <div class="card">
+                      <div class="label">
+                        DRIVER TYPE
+                      </div>
+
+                      <div
+                        style="
+                          margin-top:18px;
+                          font-size:20px;
+                          font-weight:850;
+                        "
+                      >
+                        ${escapeHtml(
+                          driver.driverType
+                        )}
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="panel">
+                    <div class="panel-header">
+                      Shift History
+                    </div>
+
+                    ${
+                      shiftRows
+                        ? `
+                          <div class="table-scroll">
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>DATE</th>
+                                  <th>START</th>
+                                  <th>END</th>
+                                  <th>DURATION</th>
+
+                                  <th class="hide-mobile">
+                                    HASH
+                                  </th>
+                                </tr>
+                              </thead>
+
+                              <tbody>
+                                ${shiftRows}
+                              </tbody>
+                            </table>
+                          </div>
+                        `
+                        : `
+                          <div class="empty">
+                            No shifts logged
+                          </div>
+                        `
+                    }
+                  </section>
+                </main>
+              </div>
+            </body>
+          </html>
+        `);
+      } catch (error) {
+        console.error(
+          "[ADMIN DRIVER PROFILE ERROR]",
+          error
+        );
+
+        return res.status(500).send(`
+          <!DOCTYPE html>
+          <html lang="en">
+            <head>
+              <meta charset="UTF-8" />
+              <title>Driver Profile Error</title>
+
+              <style>
+                ${adminStyles}
+              </style>
+            </head>
+
+            <body>
+              <div class="error-box">
+                <h1>
+                  Driver profile unavailable
+                </h1>
+
+                <p>
+                  The driver or shift data could
+                  not be loaded.
+                </p>
+
+                <a
+                  class="secondary-button"
+                  href="/admin/dashboard"
+                >
+                  Back to Users
+                </a>
+              </div>
+            </body>
+          </html>
+        `);
+      }
+    }
+  );
+
+  /* ───────────────────────────────────────────
+     LOGOUT
+     ─────────────────────────────────────────── */
 
   app.post(
     "/admin/logout",
