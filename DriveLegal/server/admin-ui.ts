@@ -1,5 +1,6 @@
 import { Express, Request, Response } from "express";
 import { createHmac, timingSafeEqual } from "crypto";
+import { query } from "./db";
 
 const COOKIE_NAME = "drivelegal_admin_session";
 
@@ -47,10 +48,53 @@ export function registerAdminUi(app: Express) {
     res.redirect("/admin/login");
   });
 
-  app.get("/admin/login", (req, res) => {
-    if (hasAdminSession(req)) {
-      return res.redirect("/admin/dashboard");
-    }
+  app.get("/admin/dashboard", async (req, res) => {
+  if (!hasAdminSession(req)) {
+    return res.redirect("/admin/login");
+  }
+
+  const drivers = await query(`
+    SELECT
+      id,
+      name,
+      email,
+      licenceNumber,
+      vehicleRegistration,
+      driverType,
+      emailVerified,
+      createdAt
+    FROM drivers
+    ORDER BY createdAt DESC
+  `);
+
+ const totalDrivers = drivers.length;
+
+const driverRows = drivers
+  .map((driver: any) => {
+    const registered = driver.createdAt
+      ? new Date(driver.createdAt).toLocaleDateString("en-NZ")
+      : "—";
+
+    return `
+      <tr>
+        <td>
+          <strong>${escapeHtml(driver.name)}</strong><br />
+          <span>${escapeHtml(driver.email)}</span>
+        </td>
+        <td>${escapeHtml(driver.licenceNumber)}</td>
+        <td>
+          ${
+            driver.emailVerified
+              ? '<span class="verified">Verified</span>'
+              : '<span class="unverified">Unverified</span>'
+          }
+        </td>
+        <td>${escapeHtml(driver.driverType)}</td>
+        <td>${registered}</td>
+      </tr>
+    `;
+  })
+  .join("");
 
     res.status(200).send(`
       <!DOCTYPE html>
