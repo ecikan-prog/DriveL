@@ -450,9 +450,10 @@ export function registerAdminUi(app: Express) {
                 }
 
                 table {
-                  width: 100%;
-                  border-collapse: collapse;
-                }
+  width: 1100px;
+  min-width: 1100px;
+  border-collapse: collapse;
+}
 
                 th,
                 td {
