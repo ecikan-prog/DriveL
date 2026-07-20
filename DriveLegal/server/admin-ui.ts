@@ -1028,7 +1028,7 @@ const expiredTrials = drivers.filter(
                             driverRows ||
                             `
                               <tr>
-                                <td colspan="6">
+                                <td colspan="7">
                                   No drivers registered
                                 </td>
                               </tr>
