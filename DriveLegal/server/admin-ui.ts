@@ -97,119 +97,303 @@ const driverRows = drivers
   .join("");
 
     res.status(200).send(`
-      <!DOCTYPE html>
-      <html lang="en">
-        <head>
-          <meta charset="UTF-8" />
-          <meta
-            name="viewport"
-            content="width=device-width, initial-scale=1"
-          />
-          <title>Drive Legal Admin</title>
+  <!DOCTYPE html>
+  <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+      />
+      <title>Users — Drive Legal Admin</title>
 
-          <style>
-            * {
-              box-sizing: border-box;
-            }
+      <style>
+        * {
+          box-sizing: border-box;
+        }
 
-            body {
-              margin: 0;
-              min-height: 100vh;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              padding: 24px;
-              background: #eef3ff;
-              color: #12386e;
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
-                Arial, sans-serif;
-            }
+        body {
+          margin: 0;
+          background: #061d38;
+          color: #ffffff;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+            Arial, sans-serif;
+        }
 
-            .card {
-              width: 100%;
-              max-width: 420px;
-              padding: 34px;
-              border-radius: 24px;
-              background: white;
-              box-shadow: 0 18px 45px rgba(18, 56, 110, 0.15);
-            }
+        .layout {
+          min-height: 100vh;
+          display: grid;
+          grid-template-columns: 260px 1fr;
+        }
 
-            h1 {
-              margin: 0 0 8px;
-              font-size: 30px;
-            }
+        aside {
+          background: #123d72;
+          padding: 30px 0;
+          display: flex;
+          flex-direction: column;
+        }
 
-            p {
-              margin: 0 0 24px;
-              color: #63738e;
-            }
+        .brand {
+          padding: 0 28px 28px;
+          border-bottom: 1px solid rgba(255,255,255,0.12);
+        }
 
-            label {
-              display: block;
-              margin-bottom: 8px;
-              font-weight: 700;
-            }
+        .brand strong {
+          font-size: 24px;
+        }
 
-            input {
-              width: 100%;
-              padding: 15px;
-              border: 1px solid #ccd6e8;
-              border-radius: 12px;
-              font-size: 16px;
-            }
+        .brand span {
+          color: #46d171;
+        }
 
-            button {
-              width: 100%;
-              margin-top: 18px;
-              padding: 15px;
-              border: 0;
-              border-radius: 12px;
-              background: #145ddd;
-              color: white;
-              font-size: 17px;
-              font-weight: 800;
-              cursor: pointer;
-            }
+        .brand small {
+          display: block;
+          margin-top: 6px;
+          letter-spacing: 2px;
+          color: #c7d4e8;
+        }
 
-            .error {
-              margin-bottom: 18px;
-              padding: 12px;
-              border-radius: 10px;
-              background: #fff0f0;
-              color: #a31515;
-            }
-          </style>
-        </head>
+        nav {
+          padding-top: 24px;
+          flex: 1;
+        }
 
-        <body>
-          <main class="card">
-            <h1>Drive Legal</h1>
-            <p>Administrator portal</p>
+        nav a {
+          display: block;
+          padding: 17px 28px;
+          color: white;
+          text-decoration: none;
+          font-weight: 700;
+        }
 
-            ${
-              req.query.error
-                ? '<div class="error">Invalid administrator key.</div>'
-                : ""
-            }
+        nav a.active {
+          background: #2d5592;
+          border-left: 4px solid #6c8fff;
+        }
 
-            <form method="POST" action="/admin/login">
-              <label for="adminKey">Administrator key</label>
+        .logout {
+          padding: 24px 28px 0;
+          border-top: 1px solid rgba(255,255,255,0.12);
+        }
 
-              <input
-                id="adminKey"
-                name="adminKey"
-                type="password"
-                autocomplete="current-password"
-                required
-              />
+        .logout button {
+          border: 0;
+          background: transparent;
+          color: white;
+          font-size: 16px;
+          font-weight: 700;
+          cursor: pointer;
+        }
 
-              <button type="submit">Sign in</button>
-            </form>
-          </main>
-        </body>
-      </html>
-    `);
-  });
+        main {
+          padding: 42px;
+          overflow-x: auto;
+        }
+
+        h1 {
+          margin: 0;
+          font-size: 36px;
+        }
+
+        .subtitle {
+          margin: 8px 0 34px;
+          color: #b9c5d8;
+          font-size: 18px;
+        }
+
+        .cards {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(180px, 1fr));
+          gap: 18px;
+          margin-bottom: 34px;
+        }
+
+        .card {
+          background: #172f4b;
+          border: 1px solid #36506d;
+          border-radius: 20px;
+          padding: 26px;
+        }
+
+        .label {
+          color: #d2d9e6;
+          font-size: 13px;
+          font-weight: 800;
+          letter-spacing: 1.5px;
+        }
+
+        .number {
+          margin-top: 14px;
+          font-size: 42px;
+          font-weight: 800;
+          color: #6486ff;
+        }
+
+        .table-card {
+          background: #172f4b;
+          border: 1px solid #36506d;
+          border-radius: 20px;
+          overflow: hidden;
+        }
+
+        .table-title {
+          padding: 22px 26px;
+          font-size: 22px;
+          font-weight: 800;
+        }
+
+        table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+
+        th,
+        td {
+          padding: 18px 20px;
+          text-align: left;
+          border-top: 1px solid #36506d;
+        }
+
+        th {
+          background: #2a425e;
+          font-size: 13px;
+          letter-spacing: 1px;
+        }
+
+        td span {
+          color: #b8c4d6;
+        }
+
+        .verified,
+        .unverified {
+          display: inline-block;
+          padding: 7px 12px;
+          border-radius: 999px;
+          font-weight: 800;
+        }
+
+        .verified {
+          background: #d9f8e2;
+          color: #176b37;
+        }
+
+        .unverified {
+          background: #ffe0e0;
+          color: #a22323;
+        }
+
+        @media (max-width: 900px) {
+          .layout {
+            grid-template-columns: 1fr;
+          }
+
+          aside {
+            display: none;
+          }
+
+          main {
+            padding: 24px 16px;
+          }
+
+          .cards {
+            grid-template-columns: repeat(2, 1fr);
+          }
+
+          table {
+            min-width: 760px;
+          }
+        }
+      </style>
+    </head>
+
+    <body>
+      <div class="layout">
+        <aside>
+          <div class="brand">
+            <strong>DRIVE <span>LEGAL</span></strong>
+            <small>ADMIN DASHBOARD</small>
+          </div>
+
+          <nav>
+            <a class="active" href="/admin/dashboard">👥 Users</a>
+            <a href="#">💳 Subscriptions</a>
+            <a href="#">🏢 Operators</a>
+            <a href="#">🛡️ Compliance</a>
+            <a href="#">🔧 Support</a>
+          </nav>
+
+          <form class="logout" method="POST" action="/admin/logout">
+            <button type="submit">Sign Out</button>
+          </form>
+        </aside>
+
+        <main>
+          <h1>User Management</h1>
+          <p class="subtitle">
+            Manage all registered Drive Legal drivers
+          </p>
+
+          <section class="cards">
+            <div class="card">
+              <div class="label">TOTAL DRIVERS</div>
+              <div class="number">${totalDrivers}</div>
+            </div>
+
+            <div class="card">
+              <div class="label">VERIFIED EMAILS</div>
+              <div class="number">
+                ${
+                  drivers.filter(
+                    (driver: any) => Boolean(driver.emailVerified)
+                  ).length
+                }
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="label">UNVERIFIED EMAILS</div>
+              <div class="number">
+                ${
+                  drivers.filter(
+                    (driver: any) => !Boolean(driver.emailVerified)
+                  ).length
+                }
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="label">TOTAL SHIFTS</div>
+              <div class="number">—</div>
+            </div>
+          </section>
+
+          <section class="table-card">
+            <div class="table-title">All Drivers</div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>DRIVER</th>
+                  <th>LICENCE</th>
+                  <th>EMAIL STATUS</th>
+                  <th>TYPE</th>
+                  <th>REGISTERED</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                ${
+                  driverRows ||
+                  '<tr><td colspan="5">No drivers registered</td></tr>'
+                }
+              </tbody>
+            </table>
+          </section>
+        </main>
+      </div>
+    </body>
+  </html>
+`);
 
   app.post("/admin/login", (req: Request, res: Response) => {
     const configuredKey = process.env.ADMIN_KEY;
