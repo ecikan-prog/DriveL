@@ -636,7 +636,7 @@ export function registerAdminUi(app: Express) {
                     <div class="table-title">
                       All Drivers
                     </div>
-
+                    <div class="table-scroll">
                     <table>
                       <thead>
                         <tr>
@@ -662,6 +662,7 @@ export function registerAdminUi(app: Express) {
                         }
                       </tbody>
                     </table>
+                    </div>
                   </section>
                 </main>
               </div>
