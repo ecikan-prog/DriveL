@@ -230,8 +230,9 @@ export default function HistoryScreen() {
       );
 
       await generateAndSharePDF({
-        logs: getFilteredLogs(),
-        driverName: user.name ?? "Driver",
+  driverId: user.id,
+  logs: getFilteredLogs(),
+  driverName: user.name ?? "Driver",
         licenceNumber: user.licenceNumber,
         vehicleRegistration: user.vehicleRegistration,
         vehicleType: user.vehicleType,
