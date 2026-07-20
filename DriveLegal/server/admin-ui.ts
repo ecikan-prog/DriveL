@@ -934,23 +934,47 @@ const expiredTrials = drivers.filter(
   ${Number(driver.shiftCount ?? 0)}
 </td>
 
-                <td class="hide-tablet">
-                  ${formatDate(driver.createdAt)}
-                </td>
-
                 <td class="action-cell">
-                  <a
-                    class="action-button"
-                    href="/admin/driver/${encodeURIComponent(
-                      String(driver.id)
-                    )}"
-                  >
-                    View
-                  </a>
-                </td>
-              </tr>
-            `;
-          })
+  <a
+    class="action-button"
+    href="/admin/driver/${encodeURIComponent(
+      String(driver.id)
+    )}"
+  >
+    View
+  </a>
+
+  <form
+    method="POST"
+    action="/admin/driver/${encodeURIComponent(
+      String(driver.id)
+    )}/reset-password"
+    style="display:inline"
+  >
+    <button
+      class="secondary-button"
+      type="submit"
+    >
+      Reset PW
+    </button>
+  </form>
+
+  <form
+    method="POST"
+    action="/admin/driver/${encodeURIComponent(
+      String(driver.id)
+    )}/delete"
+    style="display:inline"
+    onsubmit="return confirm('Delete this driver and all linked shift logs?');"
+  >
+    <button
+      class="secondary-button"
+      type="submit"
+    >
+      Delete
+    </button>
+  </form>
+</td>
           .join("");
 
         return res.status(200).send(`
