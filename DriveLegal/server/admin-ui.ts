@@ -425,11 +425,26 @@ const adminStyles = `
     background: #ffe0e0;
     color: #a22323;
   }
+  .trial {
+  background: #fff2c7;
+  color: #8a5a00;
+}
+
+.expired {
+  background: #ffe0e0;
+  color: #a22323;
+}
 
   .action-cell {
-    width: 90px;
-    text-align: right;
-  }
+  width: 240px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.action-cell .action-button,
+.action-cell .secondary-button {
+  margin-left: 6px;
+}
 
   .action-button,
   .secondary-button {
