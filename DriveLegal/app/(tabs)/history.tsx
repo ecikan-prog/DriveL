@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
-
+import { File, Paths } from "expo-file-system";
+import * as Sharing from "expo-sharing";
 import {
   Alert,
   Image,
@@ -291,11 +292,11 @@ export default function HistoryScreen() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          logs: filteredLogs,
-          driverName: user.name ?? "Driver",
-          licenceNumber: user.licenceNumber,
-        }),
-      });
+  driverId: user.id,
+  logs: filteredLogs,
+  driverName: user.name ?? "Driver",
+  licenceNumber: user.licenceNumber,
+}),
 
       if (!response.ok) {
         const errorBody = await response
