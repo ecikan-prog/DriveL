@@ -1608,7 +1608,82 @@ const expiredTrials = drivers.filter(
     }
   }
 );
+app.post(
+  "/admin/driver/:id/delete",
+  async (req: Request, res: Response) => {
+    if (!hasAdminSession(req)) {
+      return res.redirect("/admin/login");
+    }
 
+    const driverId = Number(req.params.id);
+
+    if (
+      !Number.isInteger(driverId) ||
+      driverId <= 0
+    ) {
+      return res.status(400).send(
+        "Invalid driver ID"
+      );
+    }
+
+    try {
+      const driverRows = await query<any>(
+        `
+          SELECT localUserId
+          FROM drivers
+          WHERE id = ?
+          LIMIT 1
+        `,
+        [driverId]
+      );
+
+      const driver = driverRows[0];
+
+      if (!driver) {
+        return res.status(404).send(
+          "Driver not found"
+        );
+      }
+
+      await query(
+        `
+          DELETE FROM shift_logs
+          WHERE driverLocalUserId = ?
+        `,
+        [driver.localUserId]
+      );
+
+      await query(
+        `
+          DELETE FROM operator_drivers
+          WHERE driverLocalUserId = ?
+        `,
+        [driver.localUserId]
+      );
+
+      await query(
+        `
+          DELETE FROM drivers
+          WHERE id = ?
+        `,
+        [driverId]
+      );
+
+      return res.redirect(
+        "/admin/dashboard"
+      );
+    } catch (error) {
+      console.error(
+        "[ADMIN DELETE DRIVER ERROR]",
+        error
+      );
+
+      return res.status(500).send(
+        "Could not delete driver"
+      );
+    }
+  }
+);
   /* ───────────────────────────────────────────
      LOGOUT
      ─────────────────────────────────────────── */
