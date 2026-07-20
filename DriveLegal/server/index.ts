@@ -22,6 +22,8 @@ import { registerAdminUi } from "./admin-ui";
 const app = express();
 const server = createServer(app);
 
+app.set("trust proxy", 1);
+
 
 // Body parsing
 app.use(
