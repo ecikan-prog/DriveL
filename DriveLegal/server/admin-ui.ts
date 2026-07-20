@@ -874,15 +874,13 @@ const expiredTrials = drivers.filter(
     getTrialStatus(driver.trialStartDate).expired
 ).length;
 
-        const unverifiedEmails =
-          totalDrivers - verifiedEmails;
-
         const totalShifts = Number(
           shiftCountRows[0]?.count ?? 0
         );
 
         const driverRows = drivers
           .map((driver: any) => {
+             const trial = getTrialStatus(driver.trialStartDate);
             return `
               <tr>
                 <td>
@@ -902,24 +900,24 @@ const expiredTrials = drivers.filter(
                 </td>
 
                 <td>
-                  ${
-                    driver.emailVerified
-                      ? `
-                        <span class="status verified">
-                          Verified
-                        </span>
-                      `
-                      : `
-                        <span class="status unverified">
-                          Unverified
-                        </span>
-                      `
-                  }
-                </td>
-
+  <span
+    class="status ${
+      !trial.started
+        ? "unverified"
+        : trial.expired
+          ? "expired"
+          : "trial"
+    }"
+  >
+    ${escapeHtml(trial.label)}
+  </span>
+</td>
                 <td class="hide-mobile">
                   ${escapeHtml(driver.driverType)}
                 </td>
+                <td>
+  ${Number(driver.shiftCount ?? 0)}
+</td>
 
                 <td class="hide-tablet">
                   ${formatDate(driver.createdAt)}
