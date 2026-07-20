@@ -974,7 +974,9 @@ const expiredTrials = drivers.filter(
       Delete
     </button>
   </form>
-</td>
+              </td>
+            `;
+          })
           .join("");
 
         return res.status(200).send(`
