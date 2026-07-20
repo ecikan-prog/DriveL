@@ -73,14 +73,14 @@ const logs = requestLogs;
   app.post("/api/export/pdf", async (req: Request, res: Response) => {
     try {
       const {
-        driverId,
-        driverName,
-        licenceNumber,
-        vehicleRegistration,
-        vehicleType,
-        driverType,
-      } = req.body;
-
+  driverId,
+  logs: requestLogs,
+  driverName,
+  licenceNumber,
+  vehicleRegistration,
+  vehicleType,
+  driverType,
+} = req.body;
       if (!driverId) {
         return res.status(400).json({ error: "driverId required" });
       }
