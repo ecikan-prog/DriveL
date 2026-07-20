@@ -827,19 +827,34 @@ export function registerAdminUi(app: Express) {
 
       try {
         const drivers = await query<any>(`
-          SELECT
-            id,
-            localUserId,
-            name,
-            email,
-            licenceNumber,
-            vehicleRegistration,
-            driverType,
-            emailVerified,
-            createdAt
-          FROM drivers
-          ORDER BY createdAt DESC
-        `);
+  SELECT
+    d.id,
+    d.localUserId,
+    d.name,
+    d.email,
+    d.licenceNumber,
+    d.vehicleRegistration,
+    d.driverType,
+    d.emailVerified,
+    d.trialStartDate,
+    d.createdAt,
+    COUNT(sl.id) AS shiftCount
+  FROM drivers d
+  LEFT JOIN shift_logs sl
+    ON sl.driverLocalUserId = d.localUserId
+  GROUP BY
+    d.id,
+    d.localUserId,
+    d.name,
+    d.email,
+    d.licenceNumber,
+    d.vehicleRegistration,
+    d.driverType,
+    d.emailVerified,
+    d.trialStartDate,
+    d.createdAt
+  ORDER BY d.createdAt DESC
+`);
 
         const shiftCountRows = await query<any>(`
           SELECT COUNT(*) AS count
@@ -848,10 +863,16 @@ export function registerAdminUi(app: Express) {
 
         const totalDrivers = drivers.length;
 
-        const verifiedEmails = drivers.filter(
-          (driver: any) =>
-            Boolean(driver.emailVerified)
-        ).length;
+        const activeTrials = drivers.filter(
+  (driver: any) =>
+    getTrialStatus(driver.trialStartDate).started &&
+    !getTrialStatus(driver.trialStartDate).expired
+).length;
+
+const expiredTrials = drivers.filter(
+  (driver: any) =>
+    getTrialStatus(driver.trialStartDate).expired
+).length;
 
         const unverifiedEmails =
           totalDrivers - verifiedEmails;
