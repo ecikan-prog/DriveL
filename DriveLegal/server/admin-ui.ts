@@ -1552,6 +1552,62 @@ const expiredTrials = drivers.filter(
       }
     }
   );
+  app.post(
+  "/admin/driver/:id/reset-password",
+  async (req: Request, res: Response) => {
+    if (!hasAdminSession(req)) {
+      return res.redirect("/admin/login");
+    }
+
+    const driverId = Number(req.params.id);
+
+    if (
+      !Number.isInteger(driverId) ||
+      driverId <= 0
+    ) {
+      return res.status(400).send(
+        "Invalid driver ID"
+      );
+    }
+
+    try {
+      const driverRows = await query<any>(
+        `
+          SELECT email
+          FROM drivers
+          WHERE id = ?
+          LIMIT 1
+        `,
+        [driverId]
+      );
+
+      const driver = driverRows[0];
+
+      if (!driver) {
+        return res.status(404).send(
+          "Driver not found"
+        );
+      }
+
+      return res.redirect(
+        `/admin/driver/${encodeURIComponent(
+          String(driverId)
+        )}?message=${encodeURIComponent(
+          "Password reset route reached. Email delivery still needs to be connected."
+        )}`
+      );
+    } catch (error) {
+      console.error(
+        "[ADMIN RESET PASSWORD ERROR]",
+        error
+      );
+
+      return res.status(500).send(
+        "Could not start password reset"
+      );
+    }
+  }
+);
 
   /* ───────────────────────────────────────────
      LOGOUT
