@@ -980,26 +980,7 @@ const expiredTrials = drivers.filter(
                       </div>
                     </div>
 
-                    <div class="card">
-                      <div class="label">
-                        VERIFIED EMAILS
-                      </div>
-
-                      <div class="number">
-                        ${verifiedEmails}
-                      </div>
-                    </div>
-
-                    <div class="card">
-                      <div class="label">
-                        UNVERIFIED EMAILS
-                      </div>
-
-                      <div class="number">
-                        ${unverifiedEmails}
-                      </div>
-                    </div>
-
+                  
                     <div class="card">
                       <div class="label">
                         TOTAL SHIFTS
@@ -1022,15 +1003,19 @@ const expiredTrials = drivers.filter(
                           <tr>
                             <th>DRIVER</th>
                             <th>LICENCE</th>
-                            <th>EMAIL STATUS</th>
+                            <th>STATUS</th>
 
                             <th class="hide-mobile">
-                              TYPE
-                            </th>
+  TYPE
+</th>
 
-                            <th class="hide-tablet">
-                              REGISTERED
-                            </th>
+<th>
+  SHIFTS
+</th>
+
+<th class="hide-tablet">
+  REGISTERED
+</th>
 
                             <th class="action-cell">
                               ACTION
