@@ -296,7 +296,7 @@ export default function HistoryScreen() {
   logs: filteredLogs,
   driverName: user.name ?? "Driver",
   licenceNumber: user.licenceNumber,
-}),
+});
 
       if (!response.ok) {
         const errorBody = await response
