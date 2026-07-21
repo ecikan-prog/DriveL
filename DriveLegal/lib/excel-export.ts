@@ -35,7 +35,9 @@ function createAbsoluteUrl(
     return trimmedUrl;
   }
 
-  return new URL(trimmedUrl, apiBaseUrl).toString();
+  const serverOrigin = new URL(apiBaseUrl).origin;
+
+  return new URL(trimmedUrl, serverOrigin).toString();
 }
 
 /**
