@@ -2363,6 +2363,358 @@ export function registerAdminUi(app: Express) {
       );
     }
   });
+    /* OPERATOR PROFILE */
+
+  app.get("/admin/operator/:id", async (req: Request, res: Response) => {
+    if (!requireAdmin(req, res)) {
+      return;
+    }
+
+    const operatorId = Number(req.params.id);
+
+    if (!Number.isInteger(operatorId) || operatorId <= 0) {
+      return res.status(400).send(
+        renderSimplePage(
+          "Invalid operator",
+          "The requested operator ID is not valid.",
+          "/admin/operators"
+        )
+      );
+    }
+
+    try {
+      const operatorRows = await query<{
+        id: number;
+        email: string;
+        companyName: string;
+        contactName: string;
+        createdAt: string | Date;
+        updatedAt: string | Date;
+      }>(
+        `
+          SELECT
+            id,
+            email,
+            companyName,
+            contactName,
+            createdAt,
+            updatedAt
+          FROM operators
+          WHERE id = ?
+          LIMIT 1
+        `,
+        [operatorId]
+      );
+
+      const operator = operatorRows[0];
+
+      if (!operator) {
+        return res.status(404).send(
+          renderSimplePage(
+            "Operator not found",
+            "This operator account no longer exists.",
+            "/admin/operators"
+          )
+        );
+      }
+
+      const linkedDrivers = await query<{
+        linkId: number;
+        addedAt: string | Date;
+        driverId: number;
+        localUserId: string;
+        name: string;
+        email: string;
+        licenceNumber: string | null;
+        vehicleRegistration: string | null;
+        driverType: string;
+        emailVerified: number | boolean;
+        trialStartDate: string | Date | null;
+        shiftCount: number | string;
+      }>(
+        `
+          SELECT
+            od.id AS linkId,
+            od.addedAt,
+            d.id AS driverId,
+            d.localUserId,
+            d.name,
+            d.email,
+            d.licenceNumber,
+            d.vehicleRegistration,
+            d.driverType,
+            d.emailVerified,
+            d.trialStartDate,
+            COUNT(sl.id) AS shiftCount
+          FROM operator_drivers od
+          INNER JOIN drivers d
+            ON d.localUserId = od.driverLocalUserId
+          LEFT JOIN shift_logs sl
+            ON sl.driverLocalUserId = d.localUserId
+          WHERE od.operatorId = ?
+          GROUP BY
+            od.id,
+            od.addedAt,
+            d.id,
+            d.localUserId,
+            d.name,
+            d.email,
+            d.licenceNumber,
+            d.vehicleRegistration,
+            d.driverType,
+            d.emailVerified,
+            d.trialStartDate
+          ORDER BY od.addedAt DESC
+        `,
+        [operatorId]
+      );
+
+      const csrfToken = createCsrfToken(req);
+
+      const driverRows = linkedDrivers
+        .map((driver) => {
+          const trial = getTrialStatus(driver.trialStartDate);
+          const driverId = encodeURIComponent(
+            String(driver.driverId)
+          );
+
+          return `
+            <tr>
+              <td class="driver-cell">
+                <div class="driver-summary">
+                  <span class="avatar">
+                    ${escapeHtml(initials(driver.name))}
+                  </span>
+
+                  <span>
+                    <strong>
+                      ${escapeHtml(driver.name)}
+                    </strong>
+
+                    <span class="muted">
+                      ${escapeHtml(driver.email)}
+                    </span>
+                  </span>
+                </div>
+              </td>
+
+              <td>
+                ${escapeHtml(driver.licenceNumber || "—")}
+              </td>
+
+              <td>
+                ${escapeHtml(driver.vehicleRegistration || "—")}
+              </td>
+
+              <td class="hide-mobile">
+                ${escapeHtml(driver.driverType || "—")}
+              </td>
+
+              <td>
+                ${statusBadge(trial)}
+              </td>
+
+              <td>
+                ${Number(driver.shiftCount ?? 0)}
+              </td>
+
+              <td class="action-cell">
+                <a
+                  class="button button-primary button-compact"
+                  href="/admin/driver/${driverId}"
+                >
+                  View Driver
+                </a>
+              </td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      const body = `
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              Operator Profile
+              <div class="panel-subtitle">
+                Company account and linked driver information
+              </div>
+            </div>
+          </div>
+
+          <div class="profile-grid">
+            <div class="profile-item">
+              <small>Company name</small>
+              <strong>
+                ${escapeHtml(operator.companyName)}
+              </strong>
+            </div>
+
+            <div class="profile-item">
+              <small>Contact person</small>
+              <strong>
+                ${escapeHtml(operator.contactName)}
+              </strong>
+            </div>
+
+            <div class="profile-item">
+              <small>Email</small>
+              <strong>
+                ${escapeHtml(operator.email)}
+              </strong>
+            </div>
+
+            <div class="profile-item">
+              <small>Status</small>
+              <strong>
+                <span class="status verified">Active</span>
+              </strong>
+            </div>
+
+            <div class="profile-item">
+              <small>Registered</small>
+              <strong>
+                ${formatDate(operator.createdAt)}
+              </strong>
+            </div>
+
+            <div class="profile-item">
+              <small>Last updated</small>
+              <strong>
+                ${formatDate(operator.updatedAt)}
+              </strong>
+            </div>
+          </div>
+        </section>
+
+        <div class="toolbar">
+          <div class="toolbar-group">
+            <a
+              class="button button-secondary"
+              href="/admin/operators"
+            >
+              ← Back to Operators
+            </a>
+          </div>
+        </div>
+
+        <section class="cards" aria-label="Operator statistics">
+          <div class="card">
+            <div class="card-label">Linked drivers</div>
+            <div class="card-value">
+              ${linkedDrivers.length}
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-label">Verified drivers</div>
+            <div class="card-value success">
+              ${
+                linkedDrivers.filter((driver) =>
+                  booleanValue(driver.emailVerified)
+                ).length
+              }
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-label">Active trials</div>
+            <div class="card-value success">
+              ${
+                linkedDrivers.filter((driver) => {
+                  const trial = getTrialStatus(
+                    driver.trialStartDate
+                  );
+
+                  return trial.started && !trial.expired;
+                }).length
+              }
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-label">Total shifts</div>
+            <div class="card-value">
+              ${linkedDrivers.reduce(
+                (total, driver) =>
+                  total + Number(driver.shiftCount ?? 0),
+                0
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              Linked Drivers
+              <div class="panel-subtitle">
+                Drivers currently assigned to this operator
+              </div>
+            </div>
+          </div>
+
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Driver</th>
+                  <th>Licence</th>
+                  <th>Vehicle</th>
+                  <th class="hide-mobile">Type</th>
+                  <th>Trial</th>
+                  <th>Shifts</th>
+                  <th class="action-cell">Action</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                ${
+                  driverRows ||
+                  `
+                    <tr>
+                      <td colspan="7">
+                        <div class="empty">
+                          <strong>No linked drivers</strong>
+                          This operator does not currently have any drivers assigned.
+                        </div>
+                      </td>
+                    </tr>
+                  `
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <p class="page-note">
+          Operator status is currently shown as active because the
+          operators table does not yet contain an account-status column.
+        </p>
+      `;
+
+      return res.status(200).send(
+        renderPage({
+          title: operator.companyName,
+          subtitle: `${operator.contactName} · ${operator.email}`,
+          activePage: "operators",
+          csrfToken,
+          flash: renderFlash(req),
+          body,
+        })
+      );
+    } catch (error) {
+      console.error("[ADMIN OPERATOR PROFILE ERROR]", error);
+
+      return res.status(500).send(
+        renderSimplePage(
+          "Operator profile unavailable",
+          "The operator or linked driver information could not be loaded.",
+          "/admin/operators"
+        )
+      );
+    }
+  });
   /* COMPLIANCE */
 
   app.get("/admin/compliance", async (req: Request, res: Response) => {
