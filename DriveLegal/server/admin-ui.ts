@@ -2633,6 +2633,68 @@ export function registerAdminUi(app: Express) {
             </a>
           </div>
         </div>
+                <section class="panel">
+          <div class="panel-header">
+            <div>
+              Link Driver
+              <div class="panel-subtitle">
+                Assign an existing Drive Legal driver to this operator
+              </div>
+            </div>
+          </div>
+
+          ${
+            availableDriverOptions
+              ? `
+                <form
+                  method="POST"
+                  action="/admin/operator/${encodeURIComponent(
+                    String(operator.id)
+                  )}/link-driver"
+                  style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; padding:20px;"
+                >
+                  <input
+                    type="hidden"
+                    name="csrfToken"
+                    value="${escapeHtml(csrfToken)}"
+                  />
+
+                  <div style="flex:1 1 320px;">
+                    <label
+                      class="field-label"
+                      for="driverLocalUserId"
+                    >
+                      Select driver
+                    </label>
+
+                    <select
+                      class="field-input"
+                      id="driverLocalUserId"
+                      name="driverLocalUserId"
+                      required
+                    >
+                      <option value="">Choose a driver</option>
+                      ${availableDriverOptions}
+                    </select>
+                  </div>
+
+                  <button
+                    class="button button-success"
+                    type="submit"
+                    style="min-height:47px;"
+                  >
+                    Link Driver
+                  </button>
+                </form>
+              `
+              : `
+                <div class="empty">
+                  <strong>No available drivers</strong>
+                  Every registered driver is already linked to this operator.
+                </div>
+              `
+          }
+        </section>
 
         <section class="cards" aria-label="Operator statistics">
           <div class="card">
