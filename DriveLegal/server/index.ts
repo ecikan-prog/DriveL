@@ -68,7 +68,7 @@ app.use((req, res, next) => {
 
 
 // Routes
-registerStorageProxy(app);
+
 registerOAuthRoutes(app);
 
 portalRouter(app);
