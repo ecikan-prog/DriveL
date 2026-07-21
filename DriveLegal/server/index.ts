@@ -73,6 +73,7 @@ registerOAuthRoutes(app);
 
 portalRouter(app);
 adminRouter(app);
+registerOperatorUi(app);
 registerAdminUi(app);
 excelProtectedRouter(app);
 exportRouter(app);
