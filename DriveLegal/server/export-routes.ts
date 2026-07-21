@@ -172,17 +172,8 @@ function validateExportRequest(
   req: Request,
   res: Response
 ): NormalizedLog[] | null {
-  const driverId = req.body?.driverId;
-
-  if (!driverId) {
-    res.status(400).json({
-      error: "driverId required",
-    });
-
-    return null;
-  }
-
-  const logs = getLogsFromRequest(req);
+  
+ const logs = getLogsFromRequest(req);
 
   if (logs.length === 0) {
     res.status(400).json({
