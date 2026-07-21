@@ -34,8 +34,19 @@ type ShiftContextValue = {
   isOtherWork: boolean;
   /** Total driving across the full shift — used for End Shift summary */
   drivingSeconds: number;
-  /** Consecutive driving since last qualifying break — used for dashboard countdown */
+  /**
+   * Consecutive DRIVING since last qualifying break. Retained for driving-time
+   * reporting only. Do NOT use this for the legal rest-break countdown —
+   * see continuousWorkSeconds below.
+   */
   consecutiveDrivingSeconds: number;
+  /**
+   * Consecutive WORK (driving + other work) since the last qualifying break.
+   * This is what the NZTA continuous-work threshold (7h SPS / 5.5h standard)
+   * actually measures — it does NOT pause during Other Work, only during a
+   * genuine break. Use this for the dashboard rest-break countdown.
+   */
+  continuousWorkSeconds: number;
   workSeconds: number;
   breakSeconds: number;
   fortnightlyDrivingSeconds: number;
@@ -75,6 +86,7 @@ export function ShiftProvider({ children }: { children: React.ReactNode }) {
   const [subscriptionState, setSubscriptionState] = useState<SubscriptionState | null>(null);
   const [drivingSeconds, setDrivingSeconds] = useState(0);
   const [consecutiveDrivingSeconds, setConsecutiveDrivingSeconds] = useState(0);
+  const [continuousWorkSeconds, setContinuousWorkSeconds] = useState(0);
   const [workSeconds, setWorkSeconds] = useState(0);
   const [breakSeconds, setBreakSeconds] = useState(0);
   const [fortnightlyDrivingSeconds, setFortnightlyDrivingSeconds] = useState(0);
@@ -129,19 +141,25 @@ export function ShiftProvider({ children }: { children: React.ReactNode }) {
       const now = Date.now();
       const driving = Logbook.computeCurrentDrivingSeconds(shift, now);
       const consecutive = Logbook.computeConsecutiveDrivingSeconds(shift, now);
+      // FIX: continuous WORK (driving + other work) — this is the value the
+      // NZTA rest-break threshold actually measures. It keeps ticking during
+      // Other Work and only pauses/resets on a genuine qualifying break.
+      const continuousWork = Logbook.computeContinuousWorkSeconds(shift, now);
       const work = Logbook.computeCurrentWorkSeconds(shift, now);
       const breakSecs = Logbook.computeCurrentBreakSeconds(shift, now);
 
       setDrivingSeconds(driving);
       setConsecutiveDrivingSeconds(consecutive);
+      setContinuousWorkSeconds(continuousWork);
       setWorkSeconds(work);
       setBreakSeconds(breakSecs);
 
-      // Compliance uses consecutive driving for break warnings,
-      // and total fortnightly (base + current shift total) for CWP
+      // Compliance uses continuous WORK (driving + other work) for break
+      // warnings — matching the same value now driving the dashboard
+      // countdown — and total fortnightly (base + current shift total) for CWP.
       const totalFortnightly = fortnightlyBase + driving;
       const driverType = user?.driverType || "small_passenger";
-      const newCompliance = evaluateCompliance(consecutive, work, totalFortnightly, driverType);
+      const newCompliance = evaluateCompliance(continuousWork, work, totalFortnightly, driverType);
       setCompliance(newCompliance);
 
       // Fire notifications for new warnings
@@ -264,6 +282,7 @@ export function ShiftProvider({ children }: { children: React.ReactNode }) {
     setCurrentLocation(null);
     setDrivingSeconds(0);
     setConsecutiveDrivingSeconds(0);
+    setContinuousWorkSeconds(0);
     setWorkSeconds(0);
     setBreakSeconds(0);
     setCompliance(NULL_COMPLIANCE);
@@ -347,6 +366,7 @@ export function ShiftProvider({ children }: { children: React.ReactNode }) {
         isOtherWork,
         drivingSeconds,
         consecutiveDrivingSeconds,
+        continuousWorkSeconds,
         workSeconds,
         breakSeconds,
         fortnightlyDrivingSeconds,
