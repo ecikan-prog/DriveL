@@ -295,7 +295,8 @@ export default function HistoryScreen() {
   driverId: user.id,
   logs: filteredLogs,
   driverName: user.name ?? "Driver",
-  licenceNumber: user.licenceNumber,
+    licenceNumber: user.licenceNumber,
+  }),
 });
 
       if (!response.ok) {
