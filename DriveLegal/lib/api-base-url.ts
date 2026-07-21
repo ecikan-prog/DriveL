@@ -1,9 +1,12 @@
 export function getApiBaseUrl(): string {
-  const configuredUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+  const configuredUrl =
+    process.env.EXPO_PUBLIC_API_URL?.trim();
 
-  if (configuredUrl) {
-    return configuredUrl.replace(/\/+$/, "");
-  }
+  const baseUrl =
+    configuredUrl ||
+    "https://admin.drivelegal.app";
 
-  return "https://drivel-production.up.railway.app";
+  return baseUrl
+    .replace(/\/+$/, "")
+    .replace(/\/admin$/, "");
 }
