@@ -67,8 +67,10 @@ function getPublicUrl(key: string): string {
   const baseUrl = normalizeBaseUrl(PUBLIC_BASE_URL);
 
   if (!baseUrl) {
-    return relativeUrl;
-  }
+  throw new Error(
+    "PUBLIC_BASE_URL is not configured. Cannot create a public download URL."
+  );
+}
 
   return `${baseUrl}${relativeUrl}`;
 }
