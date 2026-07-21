@@ -4,7 +4,6 @@ import * as Sharing from "expo-sharing";
 import {
   Alert,
   Image,
-  Linking,
   Platform,
   RefreshControl,
   ScrollView,
@@ -285,8 +284,33 @@ export default function HistoryScreen() {
       }
 
       const apiBase = getApiBaseUrl();
+      
 
-      const result = await response.json();
+const response = await fetch(`${apiBase}/api/export/csv`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    driverId: user.id,
+    logs: filteredLogs,
+    driverName: user.name ?? "Driver",
+    licenceNumber: user.licenceNumber,
+  }),
+});
+
+if (!response.ok) {
+  const errorBody = await response
+    .json()
+    .catch(() => ({ error: "Server error" }));
+
+  throw new Error(
+    errorBody.error || "Failed to export CSV."
+  );
+}
+
+const result = await response.json();
+      
 
 const returnedUrl = result.downloadUrl ?? result.url;
 
