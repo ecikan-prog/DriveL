@@ -2942,6 +2942,135 @@ export function registerAdminUi(app: Express) {
   });
 
   /* ACTIONS */
+    app.post(
+    "/admin/operator/:id/link-driver",
+    async (req: Request, res: Response) => {
+      if (
+        !requireAdmin(req, res) ||
+        rejectInvalidCsrf(req, res)
+      ) {
+        return;
+      }
+
+      const operatorId = Number(req.params.id);
+      const driverLocalUserId =
+        typeof req.body?.driverLocalUserId === "string"
+          ? req.body.driverLocalUserId.trim()
+          : "";
+
+      if (
+        !Number.isInteger(operatorId) ||
+        operatorId <= 0
+      ) {
+        return res.status(400).send("Invalid operator ID");
+      }
+
+      if (!driverLocalUserId) {
+        return redirectWithMessage(
+          res,
+          `/admin/operator/${encodeURIComponent(
+            String(operatorId)
+          )}`,
+          "Select a driver before linking.",
+          "warning"
+        );
+      }
+
+      try {
+        const operatorRows = await query<{ id: number }>(
+          `
+            SELECT id
+            FROM operators
+            WHERE id = ?
+            LIMIT 1
+          `,
+          [operatorId]
+        );
+
+        if (!operatorRows[0]) {
+          return res.status(404).send("Operator not found");
+        }
+
+        const driverRows = await query<{
+          localUserId: string;
+          name: string;
+        }>(
+          `
+            SELECT
+              localUserId,
+              name
+            FROM drivers
+            WHERE localUserId = ?
+            LIMIT 1
+          `,
+          [driverLocalUserId]
+        );
+
+        const driver = driverRows[0];
+
+        if (!driver) {
+          return redirectWithMessage(
+            res,
+            `/admin/operator/${encodeURIComponent(
+              String(operatorId)
+            )}`,
+            "The selected driver no longer exists.",
+            "error"
+          );
+        }
+
+        const existingRows = await query<{ id: number }>(
+          `
+            SELECT id
+            FROM operator_drivers
+            WHERE operatorId = ?
+              AND driverLocalUserId = ?
+            LIMIT 1
+          `,
+          [operatorId, driverLocalUserId]
+        );
+
+        if (existingRows[0]) {
+          return redirectWithMessage(
+            res,
+            `/admin/operator/${encodeURIComponent(
+              String(operatorId)
+            )}`,
+            "This driver is already linked to the operator.",
+            "warning"
+          );
+        }
+
+        await query(
+          `
+            INSERT INTO operator_drivers (
+              operatorId,
+              driverLocalUserId
+            )
+            VALUES (?, ?)
+          `,
+          [operatorId, driverLocalUserId]
+        );
+
+        return redirectWithMessage(
+          res,
+          `/admin/operator/${encodeURIComponent(
+            String(operatorId)
+          )}`,
+          `${driver.name} successfully linked to the operator.`
+        );
+      } catch (error) {
+        console.error(
+          "[ADMIN LINK OPERATOR DRIVER ERROR]",
+          error
+        );
+
+        return res.status(500).send(
+          "Could not link the driver to the operator"
+        );
+      }
+    }
+  );
 
   app.post("/admin/driver/:id/reset-password", async (req: Request, res: Response) => {
     if (!requireAdmin(req, res) || rejectInvalidCsrf(req, res)) {
