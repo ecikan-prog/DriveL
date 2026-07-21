@@ -17,6 +17,7 @@ import { excelProtectedRouter } from "./excel-protected";
 import { exportRouter } from "./export-routes";
 import { adminRouter } from "./admin";
 import { registerAdminUi } from "./admin-ui";
+import { registerOperatorUi } from "./operator-ui";
 
 
 const app = express();
