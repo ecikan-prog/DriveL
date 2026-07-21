@@ -2146,56 +2146,223 @@ export function registerAdminUi(app: Express) {
     }
 
     try {
+      const operators = await query<{
+        id: number;
+        email: string;
+        companyName: string;
+        contactName: string;
+        createdAt: string | Date;
+        driverCount: number | string;
+      }>(`
+        SELECT
+          o.id,
+          o.email,
+          o.companyName,
+          o.contactName,
+          o.createdAt,
+          COUNT(od.id) AS driverCount
+        FROM operators o
+        LEFT JOIN operator_drivers od
+          ON od.operatorId = o.id
+        GROUP BY
+          o.id,
+          o.email,
+          o.companyName,
+          o.contactName,
+          o.createdAt
+        ORDER BY o.createdAt DESC
+      `);
+
       const linkRows = await query<{ count: number | string }>(`
         SELECT COUNT(*) AS count
         FROM operator_drivers
       `);
-      const driverRows = await query<{ count: number | string }>(`
+
+      const linkedDriverRows = await query<{
+        count: number | string;
+      }>(`
+        SELECT COUNT(DISTINCT driverLocalUserId) AS count
+        FROM operator_drivers
+      `);
+
+      const totalDriverRows = await query<{
+        count: number | string;
+      }>(`
         SELECT COUNT(*) AS count
         FROM drivers
       `);
+
+      const totalOperators = operators.length;
+      const totalLinks = Number(linkRows[0]?.count ?? 0);
+      const linkedDrivers = Number(
+        linkedDriverRows[0]?.count ?? 0
+      );
+      const totalDrivers = Number(
+        totalDriverRows[0]?.count ?? 0
+      );
+      const unlinkedDrivers = Math.max(
+        0,
+        totalDrivers - linkedDrivers
+      );
+
       const csrfToken = createCsrfToken(req);
+
+      const operatorRows = operators
+        .map((operator) => {
+          const operatorId = encodeURIComponent(
+            String(operator.id)
+          );
+
+          return `
+            <tr>
+              <td class="driver-cell">
+                <div class="driver-summary">
+                  <span class="avatar">
+                    ${escapeHtml(initials(operator.companyName))}
+                  </span>
+
+                  <span>
+                    <strong>
+                      ${escapeHtml(operator.companyName)}
+                    </strong>
+
+                    <span class="muted">
+                      ${escapeHtml(operator.email)}
+                    </span>
+                  </span>
+                </div>
+              </td>
+
+              <td>
+                ${escapeHtml(operator.contactName)}
+              </td>
+
+              <td>
+                <span class="status verified">
+                  Active
+                </span>
+              </td>
+
+              <td>
+                ${Number(operator.driverCount ?? 0)}
+              </td>
+
+              <td class="hide-mobile">
+                ${formatDate(operator.createdAt)}
+              </td>
+
+              <td class="action-cell">
+                <div class="actions-inline">
+                  <a
+                    class="button button-primary button-compact"
+                    href="/admin/operator/${operatorId}"
+                  >
+                    Manage
+                  </a>
+                </div>
+              </td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      const body = `
+        <section class="cards" aria-label="Operator statistics">
+          <div class="card">
+            <div class="card-label">Operators</div>
+            <div class="card-value">${totalOperators}</div>
+          </div>
+
+          <div class="card">
+            <div class="card-label">Operator-driver links</div>
+            <div class="card-value">${totalLinks}</div>
+          </div>
+
+          <div class="card">
+            <div class="card-label">Linked drivers</div>
+            <div class="card-value success">${linkedDrivers}</div>
+          </div>
+
+          <div class="card">
+            <div class="card-label">Unlinked drivers</div>
+            <div class="card-value ${
+              unlinkedDrivers > 0 ? "danger" : "success"
+            }">
+              ${unlinkedDrivers}
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              Operator Accounts
+              <div class="panel-subtitle">
+                Companies registered to manage linked drivers
+              </div>
+            </div>
+          </div>
+
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th>Contact</th>
+                  <th>Status</th>
+                  <th>Drivers</th>
+                  <th class="hide-mobile">Registered</th>
+                  <th class="action-cell">Action</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                ${
+                  operatorRows ||
+                  `
+                    <tr>
+                      <td colspan="6">
+                        <div class="empty">
+                          <strong>No operators registered</strong>
+                          Operator accounts will appear here after registration.
+                        </div>
+                      </td>
+                    </tr>
+                  `
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <p class="page-note">
+          Driver counts are calculated from the operator_drivers
+          relationship table.
+        </p>
+      `;
 
       return res.status(200).send(
         renderPage({
           title: "Operators",
-          subtitle: "Operator and driver relationship overview",
+          subtitle: "Manage operator companies and linked drivers",
           activePage: "operators",
           csrfToken,
-          body: `
-            <section class="cards">
-              <div class="card"><div class="card-label">Operator-driver links</div><div class="card-value">${Number(linkRows[0]?.count ?? 0)}</div></div>
-              <div class="card"><div class="card-label">Registered drivers</div><div class="card-value">${Number(driverRows[0]?.count ?? 0)}</div></div>
-              <div class="card"><div class="card-label">Management status</div><div class="card-value text-value success">Connected</div></div>
-              <div class="card"><div class="card-label">Data source</div><div class="card-value text-value">Railway</div></div>
-            </section>
-
-            <section class="panel">
-              <div class="panel-header">Operator Management</div>
-              <div class="summary-list">
-                <div class="summary-row"><span>Relationship table</span><strong class="code">operator_drivers</strong></div>
-                <div class="summary-row"><span>Linked records</span><strong>${Number(linkRows[0]?.count ?? 0)}</strong></div>
-                <div class="summary-row"><span>Driver accounts</span><strong>${Number(driverRows[0]?.count ?? 0)}</strong></div>
-                <div class="summary-row"><span>Portal status</span><strong>Operational</strong></div>
-              </div>
-            </section>
-
-            <p class="page-note">This page deliberately avoids assuming operator table columns that are not present in the existing admin code. Add operator names and account controls once the operator schema is confirmed.</p>
-          `,
+          flash: renderFlash(req),
+          body,
         })
       );
     } catch (error) {
       console.error("[ADMIN OPERATORS ERROR]", error);
+
       return res.status(500).send(
         renderSimplePage(
           "Operators unavailable",
-          "Operator relationship information could not be loaded.",
+          "Operator account information could not be loaded.",
           "/admin/dashboard"
         )
       );
     }
   });
-
   /* COMPLIANCE */
 
   app.get("/admin/compliance", async (req: Request, res: Response) => {
