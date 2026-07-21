@@ -2469,7 +2469,43 @@ export function registerAdminUi(app: Express) {
         [operatorId]
       );
 
-      const csrfToken = createCsrfToken(req);
+       const availableDrivers = await query<{
+        id: number;
+        localUserId: string;
+        name: string;
+        email: string;
+        licenceNumber: string | null;
+      }>(
+        `
+          SELECT
+            d.id,
+            d.localUserId,
+            d.name,
+            d.email,
+            d.licenceNumber
+          FROM drivers d
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM operator_drivers od
+            WHERE od.operatorId = ?
+              AND od.driverLocalUserId = d.localUserId
+          )
+          ORDER BY d.name ASC, d.email ASC
+        `,
+        [operatorId]
+      );
+
+            const csrfToken = createCsrfToken(req);
+
+      const availableDriverOptions = availableDrivers
+        .map(
+          (driver) => `
+            <option value="${escapeHtml(driver.localUserId)}">
+              ${escapeHtml(driver.name)} — ${escapeHtml(driver.email)}
+            </option>
+          `
+        )
+        .join("");
 
       const driverRows = linkedDrivers
         .map((driver) => {
