@@ -15,7 +15,7 @@ import { useRouter } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuthContext } from "@/lib/auth-context";
-
+import { hasPin } from "@/lib/pin-security";
 export default function LoginScreen() {
   const router = useRouter();
   const { login } = useAuthContext();
@@ -54,10 +54,17 @@ export default function LoginScreen() {
     try {
       const result = await login(normalizedEmail, password);
 
-      if (result.success) {
-        router.replace("/");
-        return;
-      }
+     if (result.success) {
+  const pinExists = await hasPin();
+
+  if (!pinExists) {
+    router.replace("/setup-pin?next=/" as any);
+  } else {
+    router.replace("/");
+  }
+
+  return;
+}
 
       if (result.verificationRequired) {
         router.push({
