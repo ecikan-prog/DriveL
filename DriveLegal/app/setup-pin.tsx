@@ -15,7 +15,10 @@ import {
 } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
-import { savePin } from "@/lib/pin-security";
+import {
+  markPinSessionUnlocked,
+  savePin,
+} from "@/lib/pin-security";
 
 export default function SetupPinScreen() {
   const router = useRouter();
@@ -89,8 +92,9 @@ export default function SetupPinScreen() {
 
     try {
       await savePin(pin);
+      markPinSessionUnlocked();
 
-      const nextRoute =
+        const nextRoute =
         typeof params.next === "string" &&
         params.next.startsWith("/")
           ? params.next
