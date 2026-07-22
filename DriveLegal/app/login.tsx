@@ -1,85 +1,154 @@
 import { useRef, useState } from "react";
 import {
-  View,
+  ActivityIndicator,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-  Image,
+  View,
 } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { useRouter } from "expo-router";
+import {
+  useLocalSearchParams,
+  useRouter,
+} from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuthContext } from "@/lib/auth-context";
-import { hasPin } from "@/lib/pin-security";
+import {
+  hasPin,
+  removePin,
+} from "@/lib/pin-security";
+
 export default function LoginScreen() {
   const router = useRouter();
+
+  const params = useLocalSearchParams<{
+    resetPin?: string | string[];
+  }>();
+
   const { login } = useAuthContext();
 
   const passwordInputRef = useRef<TextInput>(null);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [showPassword, setShowPassword] =
+    useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const normalizedEmail = email.trim().toLowerCase();
+  const resetPinParam = Array.isArray(
+    params.resetPin
+  )
+    ? params.resetPin[0]
+    : params.resetPin;
+
+  const resetPinRequested =
+    resetPinParam === "true";
+
+  const normalizedEmail = email
+    .trim()
+    .toLowerCase();
+
   const canSubmit =
     normalizedEmail.length > 0 &&
     password.trim().length > 0 &&
     !loading;
 
   const handleLogin = async () => {
-    if (loading) return;
+    if (loading) {
+      return;
+    }
 
     setError("");
 
     if (!normalizedEmail || !password.trim()) {
-      setError("Please enter your email address and password.");
+      setError(
+        "Please enter your email address and password."
+      );
       return;
     }
 
     if (!normalizedEmail.includes("@")) {
-      setError("Please enter a valid email address.");
+      setError(
+        "Please enter a valid email address."
+      );
       return;
     }
 
     setLoading(true);
 
     try {
-      const result = await login(normalizedEmail, password);
+      const result = await login(
+        normalizedEmail,
+        password
+      );
 
-     if (result.success) {
-  if (!result.userId) {
-    setError(
-      "Your account could not be loaded. Please try signing in again."
-    );
-    return;
-  }
+      if (result.success) {
+        if (!result.userId) {
+          setError(
+            "Your account could not be loaded. Please try signing in again."
+          );
+          return;
+        }
 
-  const pinExists = await hasPin(result.userId);
+        /*
+         * The user selected Continue with Email from
+         * the Enter PIN screen.
+         *
+         * Password authentication has now succeeded,
+         * so remove only this account's existing PIN
+         * and require the user to create a new PIN.
+         */
+        if (resetPinRequested) {
+          await removePin(result.userId);
 
-  if (!pinExists) {
-    router.replace("/setup-pin?next=/" as any);
-  } else {
-    router.replace("/pin-login" as any);
-  }
+          router.replace(
+            "/setup-pin?next=/" as any
+          );
+          return;
+        }
 
-  return;
-}
+        /*
+         * Normal email sign-in:
+         *
+         * No PIN for this account:
+         *   Create PIN
+         *
+         * Existing PIN for this account:
+         *   Enter PIN
+         */
+        const pinExists = await hasPin(
+          result.userId
+        );
+
+        if (!pinExists) {
+          router.replace(
+            "/setup-pin?next=/" as any
+          );
+        } else {
+          router.replace(
+            "/pin-login" as any
+          );
+        }
+
+        return;
+      }
 
       if (result.verificationRequired) {
         router.push({
           pathname: "/verify-email",
           params: {
-            email: result.email ?? normalizedEmail,
+            email:
+              result.email ??
+              normalizedEmail,
           },
         } as any);
+
         return;
       }
 
@@ -87,9 +156,15 @@ export default function LoginScreen() {
         result.error ??
           "Unable to sign in. Please check your details and try again."
       );
-    } catch {
+    } catch (e: any) {
+      console.error(
+        "[Login] Sign-in failed:",
+        e
+      );
+
       setError(
-        "Unable to connect to Drive Legal. Please check your internet connection and try again."
+        e?.message ||
+          "Unable to connect to Drive Legal. Please check your internet connection and try again."
       );
     } finally {
       setLoading(false);
@@ -103,11 +178,17 @@ export default function LoginScreen() {
       safeAreaClassName="bg-[#3156D3]"
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={
+          Platform.OS === "ios"
+            ? "padding"
+            : "height"
+        }
         style={{ flex: 1 }}
       >
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
+          contentContainerStyle={{
+            flexGrow: 1,
+          }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -133,7 +214,10 @@ export default function LoginScreen() {
                 justifyContent: "center",
                 marginBottom: 20,
                 shadowColor: "#000000",
-                shadowOffset: { width: 0, height: 8 },
+                shadowOffset: {
+                  width: 0,
+                  height: 8,
+                },
                 shadowOpacity: 0.16,
                 shadowRadius: 12,
                 elevation: 6,
@@ -159,7 +243,11 @@ export default function LoginScreen() {
               }}
             >
               DRIVE{" "}
-              <Text style={{ color: "#65E58A" }}>
+              <Text
+                style={{
+                  color: "#65E58A",
+                }}
+              >
                 LEGAL
               </Text>
             </Text>
@@ -195,7 +283,9 @@ export default function LoginScreen() {
                 marginBottom: 8,
               }}
             >
-              Sign In
+              {resetPinRequested
+                ? "Verify Your Account"
+                : "Sign In"}
             </Text>
 
             <Text
@@ -206,7 +296,9 @@ export default function LoginScreen() {
                 marginBottom: 26,
               }}
             >
-              Sign in to your Drive Legal account to continue.
+              {resetPinRequested
+                ? "Sign in with your email and password to create a new PIN."
+                : "Sign in to your Drive Legal account to continue."}
             </Text>
 
             {error ? (
@@ -228,6 +320,7 @@ export default function LoginScreen() {
                   size={19}
                   color="#B91C1C"
                 />
+
                 <Text
                   style={{
                     color: "#B91C1C",
@@ -243,7 +336,11 @@ export default function LoginScreen() {
             ) : null}
 
             {/* Email */}
-            <View style={{ marginBottom: 18 }}>
+            <View
+              style={{
+                marginBottom: 18,
+              }}
+            >
               <Text
                 style={{
                   color: "#12386E",
@@ -287,7 +384,10 @@ export default function LoginScreen() {
                   value={email}
                   onChangeText={(value) => {
                     setEmail(value);
-                    if (error) setError("");
+
+                    if (error) {
+                      setError("");
+                    }
                   }}
                   keyboardType="email-address"
                   autoCapitalize="none"
@@ -303,7 +403,11 @@ export default function LoginScreen() {
             </View>
 
             {/* Password */}
-            <View style={{ marginBottom: 22 }}>
+            <View
+              style={{
+                marginBottom: 22,
+              }}
+            >
               <Text
                 style={{
                   color: "#12386E",
@@ -348,7 +452,10 @@ export default function LoginScreen() {
                   value={password}
                   onChangeText={(value) => {
                     setPassword(value);
-                    if (error) setError("");
+
+                    if (error) {
+                      setError("");
+                    }
                   }}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
@@ -356,12 +463,16 @@ export default function LoginScreen() {
                   autoComplete="password"
                   textContentType="password"
                   returnKeyType="done"
-                  onSubmitEditing={handleLogin}
+                  onSubmitEditing={() =>
+                    void handleLogin()
+                  }
                 />
 
                 <TouchableOpacity
                   onPress={() =>
-                    setShowPassword((current) => !current)
+                    setShowPassword(
+                      (current) => !current
+                    )
                   }
                   style={{
                     paddingHorizontal: 15,
@@ -388,7 +499,9 @@ export default function LoginScreen() {
 
             {/* Sign-in button */}
             <TouchableOpacity
-              onPress={handleLogin}
+              onPress={() =>
+                void handleLogin()
+              }
               disabled={!canSubmit}
               activeOpacity={0.85}
               style={{
@@ -401,15 +514,23 @@ export default function LoginScreen() {
                 justifyContent: "center",
                 flexDirection: "row",
                 shadowColor: "#3156D3",
-                shadowOffset: { width: 0, height: 6 },
-                shadowOpacity: canSubmit ? 0.2 : 0,
+                shadowOffset: {
+                  width: 0,
+                  height: 6,
+                },
+                shadowOpacity: canSubmit
+                  ? 0.2
+                  : 0,
                 shadowRadius: 10,
                 elevation: canSubmit ? 4 : 0,
               }}
             >
               {loading ? (
                 <>
-                  <ActivityIndicator color="#FFFFFF" />
+                  <ActivityIndicator
+                    color="#FFFFFF"
+                  />
+
                   <Text
                     style={{
                       color: "#FFFFFF",
@@ -418,7 +539,9 @@ export default function LoginScreen() {
                       marginLeft: 10,
                     }}
                   >
-                    Signing In...
+                    {resetPinRequested
+                      ? "Verifying..."
+                      : "Signing In..."}
                   </Text>
                 </>
               ) : (
@@ -429,7 +552,9 @@ export default function LoginScreen() {
                     fontWeight: "800",
                   }}
                 >
-                  Sign In
+                  {resetPinRequested
+                    ? "Verify and Create New PIN"
+                    : "Sign In"}
                 </Text>
               )}
             </TouchableOpacity>
@@ -441,7 +566,9 @@ export default function LoginScreen() {
                 paddingVertical: 18,
               }}
               onPress={() =>
-                router.push("/forgot-password")
+                router.push(
+                  "/forgot-password"
+                )
               }
             >
               <Text
@@ -455,30 +582,59 @@ export default function LoginScreen() {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={{
-                alignItems: "center",
-                paddingVertical: 6,
-              }}
-              onPress={() => router.push("/register")}
-            >
-              <Text
+            {!resetPinRequested ? (
+              <TouchableOpacity
                 style={{
-                  color: "#71809F",
-                  fontSize: 15,
+                  alignItems: "center",
+                  paddingVertical: 6,
                 }}
+                onPress={() =>
+                  router.push("/register")
+                }
               >
-                Don&apos;t have an account?{" "}
+                <Text
+                  style={{
+                    color: "#71809F",
+                    fontSize: 15,
+                  }}
+                >
+                  Don&apos;t have an
+                  account?{" "}
+                  <Text
+                    style={{
+                      color: "#3156D3",
+                      fontWeight: "800",
+                    }}
+                  >
+                    Sign Up
+                  </Text>
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+
+            {resetPinRequested ? (
+              <TouchableOpacity
+                style={{
+                  alignItems: "center",
+                  paddingVertical: 8,
+                }}
+                onPress={() =>
+                  router.replace(
+                    "/pin-login" as any
+                  )
+                }
+              >
                 <Text
                   style={{
                     color: "#3156D3",
-                    fontWeight: "800",
+                    fontSize: 15,
+                    fontWeight: "700",
                   }}
                 >
-                  Sign Up
+                  Back to Enter PIN
                 </Text>
-              </Text>
-            </TouchableOpacity>
+              </TouchableOpacity>
+            ) : null}
 
             {/* Legal links */}
             <View
@@ -496,14 +652,17 @@ export default function LoginScreen() {
                   textAlign: "center",
                 }}
               >
-                By continuing, you acknowledge the{" "}
+                By continuing, you
+                acknowledge the{" "}
                 <Text
                   style={{
                     color: "#3156D3",
                     fontWeight: "700",
                   }}
                   onPress={() =>
-                    router.push("/terms-of-service")
+                    router.push(
+                      "/terms-of-service"
+                    )
                   }
                 >
                   Terms of Service
@@ -515,7 +674,9 @@ export default function LoginScreen() {
                     fontWeight: "700",
                   }}
                   onPress={() =>
-                    router.push("/privacy-policy")
+                    router.push(
+                      "/privacy-policy"
+                    )
                   }
                 >
                   Privacy Policy
@@ -528,4 +689,4 @@ export default function LoginScreen() {
       </KeyboardAvoidingView>
     </ScreenContainer>
   );
-} 
+}
