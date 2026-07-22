@@ -162,27 +162,59 @@ export async function generateAndShareExcel({
   );
 
   if (destinationFile.exists) {
-    destinationFile.delete();
-  }
+    let downloadedFile: File;
 
-  let downloadedFile: File;
+try {
+  console.log("[EXCEL DOWNLOAD URL]", downloadUrl);
 
-  try {
-    downloadedFile =
-      await File.downloadFileAsync(
-        downloadUrl,
-        destinationFile
-      );
-  } catch (error) {
-    console.error(
-      "[EXCEL DOWNLOAD ERROR]",
-      error
-    );
+  const testResponse = await fetch(downloadUrl, {
+    method: "GET",
+    headers: {
+      Accept:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/octet-stream, */*",
+    },
+  });
+
+  const contentType =
+    testResponse.headers.get("content-type") ?? "unknown";
+
+  console.log("[EXCEL DOWNLOAD RESPONSE]", {
+    status: testResponse.status,
+    contentType,
+    url: testResponse.url,
+  });
+
+  if (!testResponse.ok) {
+    const errorBody = await testResponse
+      .text()
+      .catch(() => "");
 
     throw new Error(
-      "The Excel file was generated, but it could not be downloaded."
+      `Download server returned ${testResponse.status}. ` +
+        `${errorBody.slice(0, 200)}`
     );
   }
+
+  const bytes = new Uint8Array(
+    await testResponse.arrayBuffer()
+  );
+
+  if (bytes.length === 0) {
+    throw new Error(
+      "The server returned an empty Excel file."
+    );
+  }
+
+  destinationFile.write(bytes);
+  downloadedFile = destinationFile;
+} catch (error: any) {
+  console.error("[EXCEL DOWNLOAD ERROR]", error);
+
+  throw new Error(
+    error?.message ||
+      "The Excel file was generated, but it could not be downloaded."
+  );
+}
 
   if (
     !downloadedFile.exists ||
