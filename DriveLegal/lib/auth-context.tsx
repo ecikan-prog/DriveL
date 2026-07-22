@@ -32,6 +32,7 @@ const LIVE_BACKEND =
 
 type LoginResult = {
   success: boolean;
+  userId?: string;
   error?: string;
   verificationRequired?: boolean;
   email?: string;
