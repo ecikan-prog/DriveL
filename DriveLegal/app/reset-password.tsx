@@ -70,7 +70,7 @@ try {
 } finally {
   setLoading(false);
 }
-
+};
   return (
     <ScreenContainer containerClassName="bg-[#003366]" safeAreaClassName="bg-[#003366]">
       <KeyboardAvoidingView
