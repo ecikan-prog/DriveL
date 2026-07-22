@@ -2,7 +2,19 @@ import * as SecureStore from "expo-secure-store";
 
 const PIN_KEY = "drivelegal_pin";
 const PIN_ENABLED_KEY = "drivelegal_pin_enabled";
+let pinSessionUnlocked = false;
 
+export function isPinSessionUnlocked(): boolean {
+  return pinSessionUnlocked;
+}
+
+export function markPinSessionUnlocked(): void {
+  pinSessionUnlocked = true;
+}
+
+export function lockPinSession(): void {
+  pinSessionUnlocked = false;
+}
 function validatePin(pin: string): void {
   if (!/^\d{4}$/.test(pin)) {
     throw new Error("PIN must be exactly 4 digits.");
