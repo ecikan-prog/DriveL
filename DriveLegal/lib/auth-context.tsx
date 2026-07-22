@@ -26,7 +26,7 @@ import {
 } from "./cloud-sync";
 
 import { migrateLogCalculations } from "./logbook-storage";
-
+import { lockPinSession } from "./pin-security";
 const LIVE_BACKEND =
   "https://drivel-production.up.railway.app";
 
