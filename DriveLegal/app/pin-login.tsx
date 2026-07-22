@@ -41,7 +41,7 @@ const COLORS = {
 
 export default function PinLoginScreen() {
   const router = useRouter();
-  const { logout } = useAuthContext();
+  const { user, logout } = useAuthContext();
 
   const inputRef = useRef<TextInput>(null);
 
@@ -51,12 +51,16 @@ export default function PinLoginScreen() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!user?.id) {
+      return;
+    }
+
     const timer = setTimeout(() => {
       inputRef.current?.focus();
     }, 300);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [user?.id]);
 
   const handleUnlock = async (enteredPin: string) => {
     if (!/^\d{4}$/.test(enteredPin)) {
@@ -64,16 +68,29 @@ export default function PinLoginScreen() {
       return;
     }
 
+    if (!user?.id) {
+      setError(
+        "Your account could not be identified. Please sign in again."
+      );
+      return;
+    }
+
+    if (loading || attempts >= MAX_ATTEMPTS) {
+      return;
+    }
+
     setLoading(true);
     setError("");
 
     try {
-      const valid = await verifyPin(enteredPin);
+      const valid = await verifyPin(user.id, enteredPin);
 
       if (valid) {
-        markPinSessionUnlocked();
+        markPinSessionUnlocked(user.id);
+
         setPin("");
         setAttempts(0);
+
         router.replace("/" as any);
         return;
       }
@@ -102,6 +119,7 @@ export default function PinLoginScreen() {
       }, 250);
     } catch (e: any) {
       setPin("");
+
       setError(
         e?.message ||
           "Drive Legal could not verify your PIN. Please try again."
@@ -132,12 +150,15 @@ export default function PinLoginScreen() {
     setAttempts(0);
     setError("");
 
-    await logout();
-
-    router.replace("/login" as any);
+    try {
+      await logout();
+    } finally {
+      router.replace("/login" as any);
+    }
   };
 
   const lockedOut = attempts >= MAX_ATTEMPTS;
+  const accountMissing = !user?.id;
 
   return (
     <ScreenContainer
@@ -183,6 +204,21 @@ export default function PinLoginScreen() {
               </Text>
             </View>
 
+            {accountMissing ? (
+              <View style={styles.errorBox}>
+                <MaterialIcons
+                  name="error-outline"
+                  size={20}
+                  color={COLORS.error}
+                />
+
+                <Text style={styles.errorText}>
+                  Your account could not be identified. Please
+                  continue with your email and password.
+                </Text>
+              </View>
+            ) : null}
+
             {error ? (
               <View style={styles.errorBox}>
                 <MaterialIcons
@@ -198,8 +234,12 @@ export default function PinLoginScreen() {
             <TouchableOpacity
               activeOpacity={1}
               onPress={() => inputRef.current?.focus()}
-              disabled={lockedOut}
-              style={styles.pinArea}
+              disabled={lockedOut || accountMissing}
+              style={[
+                styles.pinArea,
+                (lockedOut || accountMissing) &&
+                  styles.pinAreaDisabled,
+              ]}
             >
               <View style={styles.pinDots}>
                 {[0, 1, 2, 3].map((index) => {
@@ -228,6 +268,11 @@ export default function PinLoginScreen() {
                 textContentType="oneTimeCode"
                 accessibilityLabel="Four digit PIN"
                 caretHidden
+                editable={
+                  !loading &&
+                  !lockedOut &&
+                  !accountMissing
+                }
                 style={styles.hiddenInput}
               />
             </TouchableOpacity>
@@ -240,11 +285,17 @@ export default function PinLoginScreen() {
                   inputRef.current?.focus();
                 }
               }}
-              disabled={loading || lockedOut}
+              disabled={
+                loading ||
+                lockedOut ||
+                accountMissing
+              }
               activeOpacity={0.85}
               style={[
                 styles.unlockButton,
-                (loading || lockedOut) &&
+                (loading ||
+                  lockedOut ||
+                  accountMissing) &&
                   styles.unlockButtonDisabled,
               ]}
             >
@@ -265,7 +316,9 @@ export default function PinLoginScreen() {
 
             <View style={styles.dividerRow}>
               <View style={styles.divider} />
+
               <Text style={styles.dividerText}>OR</Text>
+
               <View style={styles.divider} />
             </View>
 
@@ -415,6 +468,10 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     borderRadius: 20,
     backgroundColor: COLORS.white,
+  },
+
+  pinAreaDisabled: {
+    opacity: 0.6,
   },
 
   pinDots: {
