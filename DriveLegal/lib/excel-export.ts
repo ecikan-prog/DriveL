@@ -40,9 +40,32 @@ function createAbsoluteUrl(
   return new URL(trimmedUrl, serverOrigin).toString();
 }
 
+function createSafeFileName(fileName?: string): string {
+  const fallbackName = `drive-legal-logbook-${Date.now()}.xlsx`;
+
+  if (
+    typeof fileName !== "string" ||
+    fileName.trim() === ""
+  ) {
+    return fallbackName;
+  }
+
+  const lastPart =
+    fileName.trim().split("/").pop() || fallbackName;
+
+  const safeName = lastPart.replace(
+    /[^a-zA-Z0-9._-]/g,
+    "_"
+  );
+
+  return safeName.toLowerCase().endsWith(".xlsx")
+    ? safeName
+    : `${safeName}.xlsx`;
+}
+
 /**
  * Sends logbook records to the backend, downloads the generated Excel file
- * into the app cache, and opens the native share sheet.
+ * into the app cache, and opens the native iOS/Android share sheet.
  */
 export async function generateAndShareExcel({
   driverId,
@@ -96,12 +119,16 @@ export async function generateAndShareExcel({
     );
   }
 
-  const response = await fetch(
+  /*
+   * Step 1: Ask the server to generate the Excel file.
+   */
+  const exportResponse = await fetch(
     `${apiBaseUrl}/api/export/excel`,
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Accept: "application/json",
       },
       body: JSON.stringify({
         driverId: safeDriverId,
@@ -120,15 +147,15 @@ export async function generateAndShareExcel({
   );
 
   const result: ExportResponse =
-    await response.json().catch(() => ({
+    await exportResponse.json().catch(() => ({
       error:
-        "The server returned an invalid response.",
+        "The server returned an invalid export response.",
     }));
 
-  if (!response.ok) {
+  if (!exportResponse.ok) {
     throw new Error(
       result.error ||
-        `Excel export failed with server status ${response.status}.`
+        `Excel export failed with server status ${exportResponse.status}.`
     );
   }
 
@@ -149,12 +176,9 @@ export async function generateAndShareExcel({
     apiBaseUrl
   );
 
-  const fileName =
-    typeof result.fileName === "string" &&
-    result.fileName.trim() !== ""
-      ? result.fileName.split("/").pop() ??
-        `drive-legal-logbook-${Date.now()}.xlsx`
-      : `drive-legal-logbook-${Date.now()}.xlsx`;
+  const fileName = createSafeFileName(
+    result.fileName
+  );
 
   const destinationFile = new File(
     Paths.cache,
@@ -162,60 +186,87 @@ export async function generateAndShareExcel({
   );
 
   if (destinationFile.exists) {
-    let downloadedFile: File;
-
-try {
-  console.log("[EXCEL DOWNLOAD URL]", downloadUrl);
-
-  const testResponse = await fetch(downloadUrl, {
-    method: "GET",
-    headers: {
-      Accept:
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/octet-stream, */*",
-    },
-  });
-
-  const contentType =
-    testResponse.headers.get("content-type") ?? "unknown";
-
-  console.log("[EXCEL DOWNLOAD RESPONSE]", {
-    status: testResponse.status,
-    contentType,
-    url: testResponse.url,
-  });
-
-  if (!testResponse.ok) {
-    const errorBody = await testResponse
-      .text()
-      .catch(() => "");
-
-    throw new Error(
-      `Download server returned ${testResponse.status}. ` +
-        `${errorBody.slice(0, 200)}`
-    );
+    destinationFile.delete();
   }
 
-  const bytes = new Uint8Array(
-    await testResponse.arrayBuffer()
-  );
+  /*
+   * Step 2: Download the generated file ourselves.
+   * This exposes the real HTTP error instead of hiding it.
+   */
+  let downloadedFile: File;
 
-  if (bytes.length === 0) {
-    throw new Error(
-      "The server returned an empty Excel file."
+  try {
+    console.log(
+      "[EXCEL DOWNLOAD URL]",
+      downloadUrl
     );
+
+    const downloadResponse = await fetch(
+      downloadUrl,
+      {
+        method: "GET",
+        headers: {
+          Accept:
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/octet-stream, */*",
+        },
+      }
+    );
+
+    const contentType =
+      downloadResponse.headers.get(
+        "content-type"
+      ) ?? "unknown";
+
+    console.log(
+      "[EXCEL DOWNLOAD RESPONSE]",
+      {
+        status: downloadResponse.status,
+        contentType,
+        url: downloadResponse.url,
+      }
+    );
+
+    if (!downloadResponse.ok) {
+      const errorBody = await downloadResponse
+        .text()
+        .catch(() => "");
+
+      throw new Error(
+        `Download server returned ${downloadResponse.status}. ` +
+          errorBody.slice(0, 200)
+      );
+    }
+
+    const arrayBuffer =
+      await downloadResponse.arrayBuffer();
+
+    const bytes = new Uint8Array(arrayBuffer);
+
+    if (bytes.length === 0) {
+      throw new Error(
+        "The server returned an empty Excel file."
+      );
+    }
+
+    destinationFile.write(bytes);
+    downloadedFile = destinationFile;
+  } catch (error: unknown) {
+    console.error(
+      "[EXCEL DOWNLOAD ERROR]",
+      error
+    );
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "The Excel file was generated, but it could not be downloaded.";
+
+    throw new Error(message);
   }
 
-  destinationFile.write(bytes);
-  downloadedFile = destinationFile;
-} catch (error: any) {
-  console.error("[EXCEL DOWNLOAD ERROR]", error);
-
-  throw new Error(
-    error?.message ||
-      "The Excel file was generated, but it could not be downloaded."
-  );
-}
-
+  /*
+   * Step 3: Confirm that a real file was written.
+   */
   if (
     !downloadedFile.exists ||
     downloadedFile.size <= 0
@@ -225,6 +276,9 @@ try {
     );
   }
 
+  /*
+   * Step 4: Open the native share/save sheet.
+   */
   const sharingAvailable =
     await Sharing.isAvailableAsync();
 
@@ -234,15 +288,29 @@ try {
     );
   }
 
-  await Sharing.shareAsync(
-    downloadedFile.uri,
-    {
-      mimeType:
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      UTI:
-        "org.openxmlformats.spreadsheetml.sheet",
-      dialogTitle:
-        "Share Drive Legal Excel Report",
-    }
-  );
+  try {
+    await Sharing.shareAsync(
+      downloadedFile.uri,
+      {
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        UTI:
+          "org.openxmlformats.spreadsheetml.sheet",
+        dialogTitle:
+          "Share Drive Legal Excel Report",
+      }
+    );
+  } catch (error: unknown) {
+    console.error(
+      "[EXCEL SHARING ERROR]",
+      error
+    );
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "The Excel file was downloaded, but the share window could not be opened.";
+
+    throw new Error(message);
+  }
 }
