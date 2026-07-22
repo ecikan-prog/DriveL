@@ -6,7 +6,6 @@ import {
   ScrollView,
   Alert,
   Platform,
-  Image,
   Linking,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -153,24 +152,60 @@ export default function MoreScreen() {
             />
           </View>
 
-          {/* Legal Section */}
-          <Text style={{ fontSize: 11, color: "#6B7A99", fontWeight: "700", letterSpacing: 1, marginBottom: 8 }}>LEGAL</Text>
-          <View style={{ backgroundColor: "#FFFFFF", borderRadius: 16, paddingHorizontal: 16, marginBottom: 20, borderWidth: 1, borderColor: "#E8EEF8" }}>
-            <MenuItem
-              icon="privacy-tip"
-              iconColor="#6B7280"
-              iconBg="#F3F4F6"
-              title="Privacy Policy"
-              onPress={() => router.push("/privacy-policy" as any)}
-            />
-            <MenuItem
-              icon="description"
-              iconColor="#6B7280"
-              iconBg="#F3F4F6"
-              title="Terms of Service"
-              onPress={() => router.push("/terms-of-service" as any)}
-            />
-          </View>
+         {/* Legal Section */}
+<Text
+  style={{
+    fontSize: 11,
+    color: "#6B7A99",
+    fontWeight: "700",
+    letterSpacing: 1,
+    marginBottom: 8,
+  }}
+>
+  LEGAL
+</Text>
+
+<View
+  style={{
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#E8EEF8",
+  }}
+>
+  <MenuItem
+    icon="privacy-tip"
+    iconColor="#6B7280"
+    iconBg="#F3F4F6"
+    title="Privacy Policy"
+    onPress={() =>
+      router.push("/privacy-policy" as any)
+    }
+  />
+
+  <MenuItem
+    icon="description"
+    iconColor="#6B7280"
+    iconBg="#F3F4F6"
+    title="Terms of Service"
+    onPress={() =>
+      router.push("/terms-of-service" as any)
+    }
+  />
+
+  <MenuItem
+    icon="info-outline"
+    iconColor="#3156D3"
+    iconBg="#EEF3FF"
+    title="About Drive Legal"
+    subtitle="Version, developer and support"
+    onPress={() =>
+      router.push("/about" as any)
+    }
+  />
+</View>
 
           {/* Sign Out */}
           <TouchableOpacity
