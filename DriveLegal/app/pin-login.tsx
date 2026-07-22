@@ -21,7 +21,7 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
-
+import { useAuthContext } from "@/lib/auth-context";
 import {
 
   markPinSessionUnlocked,
