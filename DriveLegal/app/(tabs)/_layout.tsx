@@ -1,76 +1,86 @@
-import { Tabs } from "expo-router";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Text,
+  View,
+} from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import {
+  Redirect,
+  Tabs,
+} from "expo-router";
+
+import { useAuthContext } from "@/lib/auth-context";
+import {
+  hasPin,
+  isPinSessionUnlocked,
+} from "@/lib/pin-security";
+
+type PinGateStatus =
+  | "checking"
+  | "ready"
+  | "required";
 
 export default function TabsLayout() {
-  return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: "#2563EB",
-        tabBarInactiveTintColor: "#9BA8C0",
-        tabBarHideOnKeyboard: true,
-        tabBarStyle: {
-          height: 82,
-          paddingTop: 8,
-          paddingBottom: 12,
-          backgroundColor: "#FFFFFF",
-          borderTopColor: "#E8EEF8",
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: "700",
-        },
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "Dashboard",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="dashboard" size={size} color={color} />
-          ),
-        }}
-      />
+  const { user, loading } = useAuthContext();
 
-      <Tabs.Screen
-        name="history"
-        options={{
-          title: "Logbook",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="menu-book" size={size} color={color} />
-          ),
-        }}
-      />
+  const [pinGateStatus, setPinGateStatus] =
+    useState<PinGateStatus>("checking");
 
-      <Tabs.Screen
-        name="new-entry"
-        options={{
-          title: "New Entry",
-          tabBarIcon: ({ color }) => (
-            <MaterialIcons name="add-circle" size={42} color={color} />
-          ),
-        }}
-      />
+  useEffect(() => {
+    let active = true;
 
-      <Tabs.Screen
-        name="reports"
-        options={{
-          title: "Reports",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="bar-chart" size={size} color={color} />
-          ),
-        }}
-      />
+    async function checkPinAccess() {
+      if (loading) {
+        return;
+      }
 
-      <Tabs.Screen
-        name="more"
-        options={{
-          title: "More",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="more-horiz" size={size} color={color} />
-          ),
-        }}
-      />
-    </Tabs>
-  );
-}
+      if (!user) {
+        if (active) {
+          setPinGateStatus("ready");
+        }
+        return;
+      }
+
+      try {
+        const pinExists = await hasPin();
+
+        if (!active) {
+          return;
+        }
+
+        if (
+          pinExists &&
+          !isPinSessionUnlocked()
+        ) {
+          setPinGateStatus("required");
+          return;
+        }
+
+        setPinGateStatus("ready");
+      } catch (error) {
+        console.error(
+          "[PIN] Unable to check PIN status:",
+          error
+        );
+
+        if (active) {
+          setPinGateStatus("ready");
+        }
+      }
+    }
+
+    void checkPinAccess();
+
+    return () => {
+      active = false;
+    };
+  }, [loading, user]);
+
+  if (
+    loading ||
+    pinGateStatus === "checking"
+  ) {
+    return (
+      <View
+       
