@@ -10,9 +10,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
+import { useAuthContext } from "@/lib/auth-context";
 import {
   markPinSessionUnlocked,
   savePin,
@@ -25,10 +27,8 @@ const COLORS = {
   green: "#54DD83",
   page: "#F5F7FC",
   white: "#FFFFFF",
-  text: "#17365F",
   muted: "#7183A5",
   border: "#D5DFF0",
-  input: "#F8FAFE",
   info: "#EEF3FD",
   error: "#DC2626",
   errorBackground: "#FEF2F2",
@@ -37,9 +37,10 @@ const COLORS = {
 
 export default function SetupPinScreen() {
   const router = useRouter();
+  const { user, logout } = useAuthContext();
 
   const params = useLocalSearchParams<{
-    next?: string;
+    next?: string | string[];
   }>();
 
   const confirmInputRef = useRef<TextInput>(null);
@@ -49,16 +50,21 @@ export default function SetupPinScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const userId = user?.id;
+
   const pinComplete = pin.length === 4;
   const confirmComplete = confirmPin.length === 4;
+  const accountMissing = !userId;
 
   const canSubmit = useMemo(
     () =>
+      Boolean(userId) &&
       pinComplete &&
       confirmComplete &&
       pin === confirmPin &&
       !loading,
     [
+      userId,
       pin,
       confirmPin,
       pinComplete,
@@ -68,17 +74,27 @@ export default function SetupPinScreen() {
   );
 
   const handlePinChange = (value: string) => {
+    if (loading) {
+      return;
+    }
+
     const digitsOnly = value.replace(/\D/g, "").slice(0, 4);
 
     setPin(digitsOnly);
     setError("");
 
     if (digitsOnly.length === 4) {
-      confirmInputRef.current?.focus();
+      setTimeout(() => {
+        confirmInputRef.current?.focus();
+      }, 100);
     }
   };
 
   const handleConfirmPinChange = (value: string) => {
+    if (loading) {
+      return;
+    }
+
     const digitsOnly = value.replace(/\D/g, "").slice(0, 4);
 
     setConfirmPin(digitsOnly);
@@ -86,7 +102,18 @@ export default function SetupPinScreen() {
   };
 
   const handleSubmit = async () => {
+    if (loading) {
+      return;
+    }
+
     setError("");
+
+    if (!userId) {
+      setError(
+        "Your account could not be identified. Please sign in again."
+      );
+      return;
+    }
 
     if (!/^\d{4}$/.test(pin)) {
       setError("Please enter a 4-digit PIN.");
@@ -106,14 +133,22 @@ export default function SetupPinScreen() {
     setLoading(true);
 
     try {
-      await savePin(pin);
-      markPinSessionUnlocked();
+      await savePin(userId, pin);
+      markPinSessionUnlocked(userId);
+
+      const requestedNextRoute = Array.isArray(params.next)
+        ? params.next[0]
+        : params.next;
 
       const nextRoute =
-        typeof params.next === "string" &&
-        params.next.startsWith("/")
-          ? params.next
+        typeof requestedNextRoute === "string" &&
+        requestedNextRoute.startsWith("/") &&
+        !requestedNextRoute.startsWith("//")
+          ? requestedNextRoute
           : "/";
+
+      setPin("");
+      setConfirmPin("");
 
       router.replace(nextRoute as any);
     } catch (e: any) {
@@ -126,7 +161,22 @@ export default function SetupPinScreen() {
     }
   };
 
-  const renderPinDots = (length: number, prefix: string) => (
+  const handleReturnToLogin = async () => {
+    setPin("");
+    setConfirmPin("");
+    setError("");
+
+    try {
+      await logout();
+    } finally {
+      router.replace("/login" as any);
+    }
+  };
+
+  const renderPinDots = (
+    length: number,
+    prefix: string
+  ) => (
     <View style={styles.pinDots}>
       {[0, 1, 2, 3].map((index) => (
         <View
@@ -142,6 +192,7 @@ export default function SetupPinScreen() {
 
   return (
     <ScreenContainer
+      edges={["top", "bottom", "left", "right"]}
       containerClassName="bg-[#3658D8]"
       safeAreaClassName="bg-[#3658D8]"
     >
@@ -153,15 +204,25 @@ export default function SetupPinScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          bounces={false}
         >
           <View style={styles.header}>
             <View style={styles.lockContainer}>
-              <Text style={styles.lockIcon}>🔒</Text>
+              <MaterialIcons
+                name="lock-outline"
+                size={42}
+                color={COLORS.blue}
+              />
             </View>
 
             <Text style={styles.brand}>
-              <Text style={styles.brandWhite}>DRIVE </Text>
-              <Text style={styles.brandGreen}>LEGAL</Text>
+              <Text style={styles.brandWhite}>
+                DRIVE{" "}
+              </Text>
+
+              <Text style={styles.brandGreen}>
+                LEGAL
+              </Text>
             </Text>
 
             <Text style={styles.brandSubtitle}>
@@ -171,24 +232,57 @@ export default function SetupPinScreen() {
 
           <View style={styles.content}>
             <View style={styles.titleSection}>
-              <Text style={styles.title}>Create Your PIN</Text>
+              <Text style={styles.title}>
+                Create Your PIN
+              </Text>
 
               <Text style={styles.subtitle}>
-                Create a secure 4-digit PIN for faster access to
-                your Drive Legal logbook.
+                Create a secure 4-digit PIN for faster access
+                to your Drive Legal logbook.
               </Text>
             </View>
 
+            {accountMissing ? (
+              <View style={styles.errorBox}>
+                <MaterialIcons
+                  name="error-outline"
+                  size={20}
+                  color={COLORS.error}
+                />
+
+                <Text style={styles.errorText}>
+                  Your account could not be identified. Please
+                  return to login and sign in again.
+                </Text>
+              </View>
+            ) : null}
+
             {error ? (
               <View style={styles.errorBox}>
-                <Text style={styles.errorText}>{error}</Text>
+                <MaterialIcons
+                  name="error-outline"
+                  size={20}
+                  color={COLORS.error}
+                />
+
+                <Text style={styles.errorText}>
+                  {error}
+                </Text>
               </View>
             ) : null}
 
             <View style={styles.field}>
-              <Text style={styles.label}>NEW PIN</Text>
+              <Text style={styles.label}>
+                NEW PIN
+              </Text>
 
-              <View style={styles.inputContainer}>
+              <View
+                style={[
+                  styles.inputContainer,
+                  accountMissing &&
+                    styles.inputContainerDisabled,
+                ]}
+              >
                 <TextInput
                   style={styles.hiddenInput}
                   value={pin}
@@ -196,9 +290,11 @@ export default function SetupPinScreen() {
                   keyboardType="number-pad"
                   secureTextEntry
                   maxLength={4}
-                  autoFocus
+                  autoFocus={!accountMissing}
                   textContentType="oneTimeCode"
                   caretHidden
+                  editable={!loading && !accountMissing}
+                  accessibilityLabel="New four digit PIN"
                 />
 
                 {renderPinDots(pin.length, "pin")}
@@ -206,9 +302,17 @@ export default function SetupPinScreen() {
             </View>
 
             <View style={styles.field}>
-              <Text style={styles.label}>CONFIRM PIN</Text>
+              <Text style={styles.label}>
+                CONFIRM PIN
+              </Text>
 
-              <View style={styles.inputContainer}>
+              <View
+                style={[
+                  styles.inputContainer,
+                  accountMissing &&
+                    styles.inputContainerDisabled,
+                ]}
+              >
                 <TextInput
                   ref={confirmInputRef}
                   style={styles.hiddenInput}
@@ -219,8 +323,14 @@ export default function SetupPinScreen() {
                   maxLength={4}
                   textContentType="oneTimeCode"
                   returnKeyType="done"
-                  onSubmitEditing={handleSubmit}
+                  onSubmitEditing={() => {
+                    if (canSubmit) {
+                      void handleSubmit();
+                    }
+                  }}
                   caretHidden
+                  editable={!loading && !accountMissing}
+                  accessibilityLabel="Confirm four digit PIN"
                 />
 
                 {renderPinDots(
@@ -233,14 +343,27 @@ export default function SetupPinScreen() {
             <TouchableOpacity
               style={[
                 styles.saveButton,
-                !canSubmit && styles.saveButtonDisabled,
+                !canSubmit &&
+                  styles.saveButtonDisabled,
               ]}
               disabled={!canSubmit}
-              onPress={handleSubmit}
+              onPress={() => void handleSubmit()}
               activeOpacity={0.85}
             >
               {loading ? (
-                <ActivityIndicator color={COLORS.white} />
+                <>
+                  <ActivityIndicator
+                    color={COLORS.white}
+                  />
+
+                  <Text
+                    style={
+                      styles.saveButtonLoadingText
+                    }
+                  >
+                    Saving PIN...
+                  </Text>
+                </>
               ) : (
                 <Text style={styles.saveButtonText}>
                   Save PIN
@@ -248,14 +371,37 @@ export default function SetupPinScreen() {
               )}
             </TouchableOpacity>
 
+            {accountMissing ? (
+              <TouchableOpacity
+                onPress={() =>
+                  void handleReturnToLogin()
+                }
+                activeOpacity={0.8}
+                style={styles.loginButton}
+              >
+                <MaterialIcons
+                  name="mail-outline"
+                  size={20}
+                  color={COLORS.blue}
+                />
+
+                <Text style={styles.loginButtonText}>
+                  Return to Login
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+
             <View style={styles.infoBox}>
-              <View style={styles.infoIcon}>
-                <Text style={styles.infoIconText}>i</Text>
-              </View>
+              <MaterialIcons
+                name="info-outline"
+                size={22}
+                color={COLORS.blue}
+              />
 
               <Text style={styles.infoText}>
-                Your PIN is securely stored only on this device.
-                Drive Legal will never email or display your PIN.
+                Your PIN is stored securely for this account
+                on this device. It cannot be used to unlock a
+                different Drive Legal account.
               </Text>
             </View>
           </View>
@@ -278,26 +424,22 @@ const styles = StyleSheet.create({
   header: {
     alignItems: "center",
     paddingHorizontal: 24,
-    paddingTop: 30,
-    paddingBottom: 32,
+    paddingTop: 26,
+    paddingBottom: 28,
   },
 
   lockContainer: {
-    width: 74,
-    height: 74,
+    width: 70,
+    height: 70,
     borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: COLORS.white,
-    marginBottom: 18,
-  },
-
-  lockIcon: {
-    fontSize: 34,
+    marginBottom: 16,
   },
 
   brand: {
-    fontSize: 36,
+    fontSize: 34,
     fontWeight: "900",
     letterSpacing: -1,
   },
@@ -313,48 +455,50 @@ const styles = StyleSheet.create({
   brandSubtitle: {
     marginTop: 5,
     color: "#CAD5F8",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
-    letterSpacing: 4,
+    letterSpacing: 3.5,
   },
 
   content: {
     flex: 1,
     backgroundColor: COLORS.page,
-    borderTopLeftRadius: 34,
-    borderTopRightRadius: 34,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
     paddingHorizontal: 24,
-    paddingTop: 32,
-    paddingBottom: 28,
+    paddingTop: 28,
+    paddingBottom: 32,
   },
 
   titleSection: {
     alignItems: "center",
-    marginBottom: 26,
+    marginBottom: 24,
   },
 
   title: {
     color: COLORS.navy,
-    fontSize: 31,
-    lineHeight: 38,
+    fontSize: 30,
+    lineHeight: 37,
     fontWeight: "800",
     textAlign: "center",
   },
 
   subtitle: {
-    maxWidth: 340,
-    marginTop: 10,
+    maxWidth: 350,
+    marginTop: 9,
     color: COLORS.muted,
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 15,
+    lineHeight: 23,
     fontWeight: "500",
     textAlign: "center",
   },
 
   errorBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
     marginBottom: 18,
     paddingHorizontal: 15,
-    paddingVertical: 12,
+    paddingVertical: 13,
     borderWidth: 1,
     borderColor: COLORS.errorBorder,
     borderRadius: 14,
@@ -362,19 +506,20 @@ const styles = StyleSheet.create({
   },
 
   errorText: {
+    flex: 1,
+    marginLeft: 9,
     color: COLORS.error,
     fontSize: 14,
     lineHeight: 20,
     fontWeight: "600",
-    textAlign: "center",
   },
 
   field: {
-    marginBottom: 20,
+    marginBottom: 18,
   },
 
   label: {
-    marginBottom: 9,
+    marginBottom: 8,
     marginLeft: 3,
     color: COLORS.navy,
     fontSize: 13,
@@ -383,7 +528,7 @@ const styles = StyleSheet.create({
   },
 
   inputContainer: {
-    height: 76,
+    height: 72,
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
@@ -391,6 +536,10 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     borderRadius: 18,
     backgroundColor: COLORS.white,
+  },
+
+  inputContainerDisabled: {
+    opacity: 0.55,
   },
 
   hiddenInput: {
@@ -422,6 +571,7 @@ const styles = StyleSheet.create({
 
   saveButton: {
     height: 58,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 18,
@@ -439,36 +589,45 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 
+  saveButtonLoadingText: {
+    marginLeft: 10,
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: "800",
+  },
+
+  loginButton: {
+    height: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 16,
+    borderWidth: 1.5,
+    borderColor: COLORS.blue,
+    borderRadius: 18,
+    backgroundColor: COLORS.white,
+  },
+
+  loginButtonText: {
+    marginLeft: 9,
+    color: COLORS.blue,
+    fontSize: 16,
+    fontWeight: "800",
+  },
+
   infoBox: {
     flexDirection: "row",
     alignItems: "flex-start",
-    marginTop: 22,
+    marginTop: 20,
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 15,
     borderRadius: 18,
     backgroundColor: COLORS.info,
   },
 
-  infoIcon: {
-    width: 24,
-    height: 24,
-    borderWidth: 2,
-    borderColor: COLORS.blue,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 11,
-    marginTop: 1,
-  },
-
-  infoIconText: {
-    color: COLORS.blue,
-    fontSize: 15,
-    fontWeight: "800",
-  },
-
   infoText: {
     flex: 1,
+    marginLeft: 10,
     color: COLORS.muted,
     fontSize: 14,
     lineHeight: 21,
