@@ -19,7 +19,8 @@ import {
 type PinGateStatus =
   | "checking"
   | "ready"
-  | "required";
+  | "setup-required"
+  | "unlock-required";
 
 export default function TabsLayout() {
   const { user, loading } = useAuthContext();
@@ -35,25 +36,32 @@ export default function TabsLayout() {
         return;
       }
 
-      if (!user) {
+      if (!user?.id) {
         if (active) {
           setPinGateStatus("ready");
         }
+
         return;
       }
 
+      if (active) {
+        setPinGateStatus("checking");
+      }
+
       try {
-        const pinExists = await hasPin();
+        const pinExists = await hasPin(user.id);
 
         if (!active) {
           return;
         }
 
-        if (
-          pinExists &&
-          !isPinSessionUnlocked()
-        ) {
-          setPinGateStatus("required");
+        if (!pinExists) {
+          setPinGateStatus("setup-required");
+          return;
+        }
+
+        if (!isPinSessionUnlocked(user.id)) {
+          setPinGateStatus("unlock-required");
           return;
         }
 
@@ -65,7 +73,7 @@ export default function TabsLayout() {
         );
 
         if (active) {
-          setPinGateStatus("ready");
+          setPinGateStatus("setup-required");
         }
       }
     }
@@ -75,7 +83,7 @@ export default function TabsLayout() {
     return () => {
       active = false;
     };
-  }, [loading, user]);
+  }, [loading, user?.id]);
 
   if (
     loading ||
@@ -110,11 +118,21 @@ export default function TabsLayout() {
     );
   }
 
-  if (!user) {
+  if (!user?.id) {
     return <Redirect href="/login" />;
   }
 
-  if (pinGateStatus === "required") {
+  if (pinGateStatus === "setup-required") {
+    return (
+      <Redirect
+        href={
+          "/setup-pin?next=/" as any
+        }
+      />
+    );
+  }
+
+  if (pinGateStatus === "unlock-required") {
     return <Redirect href="/pin-login" />;
   }
 
