@@ -55,12 +55,19 @@ export default function LoginScreen() {
       const result = await login(normalizedEmail, password);
 
      if (result.success) {
-  const pinExists = await hasPin();
+  if (!result.userId) {
+    setError(
+      "Your account could not be loaded. Please try signing in again."
+    );
+    return;
+  }
+
+  const pinExists = await hasPin(result.userId);
 
   if (!pinExists) {
     router.replace("/setup-pin?next=/" as any);
   } else {
-    router.replace("/");
+    router.replace("/pin-login" as any);
   }
 
   return;
