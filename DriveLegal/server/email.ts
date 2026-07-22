@@ -474,14 +474,12 @@ export async function sendPasswordResetEmail(
   baseUrl: string,
   userType: "driver" | "operator"
 ): Promise<boolean> {
-  const resetPath =
-    userType === "operator"
-      ? "/portal/reset-password"
-      : "/reset-password";
+  const encodedToken = encodeURIComponent(resetToken);
 
-  const resetUrl =
-    `${normaliseBaseUrl(baseUrl)}${resetPath}?token=` +
-    encodeURIComponent(resetToken);
+const resetUrl =
+  userType === "operator"
+    ? `${normaliseBaseUrl(baseUrl)}/portal/reset-password?token=${encodedToken}`
+    : `drivelegal://reset-password?token=${encodedToken}`;
 
   const htmlContent =
     buildResetEmailHtml(
