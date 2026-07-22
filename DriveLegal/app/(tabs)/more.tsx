@@ -100,7 +100,17 @@ export default function MoreScreen() {
       {/* Header */}
       <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16 }}>
         <Text style={{ color: "#FFFFFF", fontSize: 22, fontWeight: "800" }}>More</Text>
-        <Text style={{ color: "#93C5FD", fontSize: 12, marginTop: 4 }}>Settings & account</Text>
+        <Text
+  style={{
+    color: "#C7D7F4",
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 4,
+    maxWidth: 300,
+  }}
+>
+  Manage your profile, subscription, support and legal information.
+</Text>
       </View>
 
       <View style={{ flex: 1, backgroundColor: "#F0F4FF", borderTopLeftRadius: 28, borderTopRightRadius: 28 }}>
