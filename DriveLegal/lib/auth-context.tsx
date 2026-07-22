@@ -286,8 +286,9 @@ export function AuthProvider({
         });
 
         return {
-          success: true,
-        };
+  success: true,
+  userId: localResult.user.id,
+};
       } catch (error) {
         console.error(
           "[Auth] Login failed:",
