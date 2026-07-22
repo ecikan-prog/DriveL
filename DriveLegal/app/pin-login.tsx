@@ -145,17 +145,15 @@ export default function PinLoginScreen() {
     }
   };
 
-  const handleEmailLogin = async () => {
-    setPin("");
-    setAttempts(0);
-    setError("");
+ const handleEmailLogin = async () => {
+  setPin("");
+  setAttempts(0);
+  setError("");
 
-    try {
-      await logout();
-    } finally {
-      router.replace("/login" as any);
-    }
-  };
+  await logout();
+
+  router.replace("/login?resetPin=true" as any);
+};
 
   const lockedOut = attempts >= MAX_ATTEMPTS;
   const accountMissing = !user?.id;
