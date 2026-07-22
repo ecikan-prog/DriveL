@@ -159,3 +159,6 @@ export default function PrivacyPolicyScreen() {
   {"\n"}
   WhatsApp Support: +64 27 705 0258
 </LegalSection>
+          </LegalPageLayout>
+  );
+}
