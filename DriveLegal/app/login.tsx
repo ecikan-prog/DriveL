@@ -612,29 +612,27 @@ export default function LoginScreen() {
               </TouchableOpacity>
             ) : null}
 
-            {resetPinRequested ? (
-              <TouchableOpacity
-                style={{
-                  alignItems: "center",
-                  paddingVertical: 8,
-                }}
-                onPress={() =>
-                  router.replace(
-                    "/pin-login" as any
-                  )
-                }
-              >
-                <Text
-                  style={{
-                    color: "#3156D3",
-                    fontSize: 15,
-                    fontWeight: "700",
-                  }}
-                >
-                  Back to Enter PIN
-                </Text>
-              </TouchableOpacity>
-            ) : null}
+           {resetPinRequested ? (
+  <TouchableOpacity
+    style={{
+      alignItems: "center",
+      paddingVertical: 8,
+    }}
+    onPress={() =>
+      router.replace("/login" as any)
+    }
+  >
+    <Text
+      style={{
+        color: "#3156D3",
+        fontSize: 15,
+        fontWeight: "700",
+      }}
+    >
+      Cancel PIN Reset
+    </Text>
+  </TouchableOpacity>
+) : null}
 
             {/* Legal links */}
             <View
