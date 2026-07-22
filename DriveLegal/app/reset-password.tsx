@@ -50,19 +50,26 @@ export default function ResetPasswordScreen() {
     }
 
     setLoading(true);
-    try {
-      const hash = hashPassword(password);
-      const result = await resetPasswordWithToken(token, hash);
-      if (result.success) {
-        setSuccess(true);
-      } else {
-        setError(result.error || "Failed to reset password.");
-      }
-    } catch (e: any) {
-      setError(e?.message || "Something went wrong. Please try again.");
-    }
-    setLoading(false);
-  };
+
+try {
+  const hash = hashPassword(password);
+  const result = await resetPasswordWithToken(token, hash);
+
+  if (!result.success) {
+    throw new Error(
+      result.error || "Unable to reset your password."
+    );
+  }
+
+  setSuccess(true);
+} catch (e: any) {
+  setError(
+    e?.message ||
+      "Unable to reset your password. Please try again."
+  );
+} finally {
+  setLoading(false);
+}
 
   return (
     <ScreenContainer containerClassName="bg-[#003366]" safeAreaClassName="bg-[#003366]">
