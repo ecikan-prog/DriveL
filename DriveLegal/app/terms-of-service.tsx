@@ -1,127 +1,179 @@
 import React from "react";
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
-import { useRouter } from "expo-router";
-import { ScreenContainer } from "@/components/screen-container";
+
+import {
+  LegalPageLayout,
+  LegalSection,
+} from "@/components/legal-page-layout";
 
 export default function TermsOfServiceScreen() {
-  const router = useRouter();
-
   return (
-    <ScreenContainer containerClassName="bg-[#003366]" safeAreaClassName="bg-[#003366]">
-      {/* Header */}
-      <View className="px-5 pt-2 pb-4 flex-row items-center justify-between">
-        <TouchableOpacity
-          className="px-3 py-2 rounded-full border border-[#4A6AB0]"
-          onPress={() => router.back()}
-        >
-          <Text className="text-white text-sm font-bold">← Back</Text>
-        </TouchableOpacity>
-        <Text className="text-white text-lg font-bold">Terms of Service</Text>
-        <View style={{ width: 60 }} />
-      </View>
+    <LegalPageLayout
+      title="Terms of Service"
+      subtitle="Using Drive Legal"
+      lastUpdated="14 June 2026"
+      icon="description"
+      summaryPoints={[
+        {
+          icon: "check-circle-outline",
+          text: "Acceptance of these terms",
+        },
+        {
+          icon: "assignment-outlined",
+          text: "Your responsibilities",
+        },
+        {
+          icon: "payment",
+          text: "Subscriptions and payments",
+        },
+        {
+          icon: "verified-user",
+          text: "Record integrity and security",
+        },
+        {
+          icon: "gavel",
+          text: "New Zealand governing law",
+        },
+      ]}
+    >
+      <LegalSection number={1} title="Acceptance of Terms">
+        By downloading, installing, or using Drive Legal ("the App"), you agree
+        to be bound by these Terms of Service ("Terms"). If you do not agree to
+        these Terms, do not use the App. Drive Legal is operated by Guided NZ
+        Rentals ("we", "us", "our"), registered in Queenstown, New Zealand.
+      </LegalSection>
 
-      <View className="flex-1 bg-white rounded-t-3xl">
-        <ScrollView
-          contentContainerStyle={{ padding: 20, paddingBottom: 60 }}
-          showsVerticalScrollIndicator={false}
-        >
-          <Text className="text-2xl font-bold text-[#003366] mb-2">Terms of Service</Text>
-          <Text className="text-xs text-[#6B7A99] mb-6">Last updated: 14 June 2026</Text>
+      <LegalSection number={2} title="Service Description">
+        Drive Legal is an electronic driver logbook application designed to
+        help commercial drivers in New Zealand record their work time, driving
+        time, and rest periods in compliance with the Land Transport Rule: Work
+        Time and Logbooks 2007. The App provides:{"\n\n"}
+        • Shift and break time recording{"\n"}
+        • Real-time compliance monitoring and fatigue warnings{"\n"}
+        • Historical log storage and retrieval{"\n"}
+        • PDF and CSV export for enforcement and employer reporting{"\n"}
+        • Tamper-evident record keeping with hash verification
+      </LegalSection>
 
-          <Section title="1. Acceptance of Terms">
-            By downloading, installing, or using Drive Legal ("the App"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, do not use the App. Drive Legal is operated by Guided NZ Rentals ("we", "us", "our"), registered in Queenstown, New Zealand.
-          </Section>
+      <LegalSection number={3} title="User Responsibilities">
+        As a user of Drive Legal, you are responsible for:{"\n\n"}
+        • Providing accurate personal information during registration{"\n"}
+        • Recording all work time, driving time, and rest periods truthfully and
+        completely{"\n"}
+        • Starting and ending shifts at the correct times{"\n"}
+        • Presenting your logbook records to enforcement officers when requested
+        {"\n"}
+        • Supplying copies of your logbook to your TSL holder within the
+        required timeframe{"\n"}
+        • Maintaining your device in working order to preserve logbook records
+        {"\n"}
+        • Complying with all applicable New Zealand transport laws and
+        regulations{"\n\n"}
+        Drive Legal is a recording and compliance-support tool. It does not
+        replace your legal obligation to comply with work-time rules. You remain
+        responsible for ensuring your driving and work hours comply with the
+        law.
+      </LegalSection>
 
-          <Section title="2. Service Description">
-            Drive Legal is an electronic driver logbook application designed to help commercial drivers in New Zealand record their work time, driving time, and rest periods in compliance with the Land Transport Rule: Work Time and Logbooks 2007. The App provides:{"\n\n"}
-            • Shift and break time recording{"\n"}
-            • Real-time compliance monitoring and fatigue warnings{"\n"}
-            • Historical log storage and retrieval{"\n"}
-            • PDF and CSV export for enforcement and employer reporting{"\n"}
-            • Tamper-evident record keeping with hash verification
-          </Section>
+      <LegalSection number={4} title="Subscription and Payment">
+        Drive Legal may offer a free trial. The current trial duration,
+        subscription options, prices, renewal period, and applicable taxes will
+        be displayed before you confirm a subscription.{"\n\n"}
+        Subscriptions purchased through an app store are billed through the
+        payment method connected to your store account and are managed under
+        that store&apos;s subscription rules. Other authorised payment methods
+        may be offered where permitted.{"\n\n"}
+        Unless cancelled before renewal, subscriptions may renew automatically.
+        You can manage or cancel an app-store subscription through your Apple
+        App Store or Google Play account settings.{"\n\n"}
+        Even if your subscription ends, existing logbook records will remain
+        accessible and exportable where required for compliance and legal
+        record-retention purposes.
+      </LegalSection>
 
-          <Section title="3. User Responsibilities">
-            As a user of Drive Legal, you are responsible for:{"\n\n"}
-            • Providing accurate personal information during registration{"\n"}
-            • Recording all work time, driving time, and rest periods truthfully and completely{"\n"}
-            • Starting and ending shifts at the correct times{"\n"}
-            • Presenting your logbook records to enforcement officers when requested{"\n"}
-            • Supplying copies of your logbook to your TSL holder within 14 days{"\n"}
-            • Maintaining your device in working order to preserve logbook records{"\n"}
-            • Complying with all applicable New Zealand transport laws and regulations{"\n\n"}
-            Drive Legal is a recording tool. It does not replace your legal obligation to comply with work time rules. You remain solely responsible for ensuring your driving hours comply with the law.
-          </Section>
+      <LegalSection number={5} title="Data Integrity and Immutability">
+        To support record integrity and compliance requirements:{"\n\n"}
+        • Completed shift records are protected against unauthorised alteration
+        {"\n"}
+        • Records may use SHA-256 cryptographic hash-chain verification{"\n"}
+        • Detected integrity problems may be flagged within the App or exported
+        report{"\n"}
+        • Exported records may include verification information for
+        authenticity{"\n\n"}
+        These measures are intended to improve the reliability and
+        trustworthiness of electronic logbook records.
+      </LegalSection>
 
-          <Section title="4. Subscription and Payment">
-            Drive Legal offers a 14-day free trial with full functionality. After the trial period:{"\n\n"}
-            • Monthly subscription: NZD $4.99/month{"\n"}
-            • Annual subscription: NZD $39.99/year{"\n\n"}
-            Subscriptions are processed through Stripe. By subscribing, you authorise recurring charges to your payment method. You may cancel at any time through the App or by contacting us.{"\n\n"}
-            Important: Even if your subscription lapses, all existing logbook records remain accessible and exportable. We will never delete or restrict access to your compliance records due to payment status.
-          </Section>
+      <LegalSection number={6} title="Limitation of Liability">
+        To the maximum extent permitted by New Zealand law:{"\n\n"}
+        • Drive Legal is provided on an "as available" basis{"\n"}
+        • We do not guarantee uninterrupted or error-free operation{"\n"}
+        • We are not responsible for fines, penalties, or legal consequences
+        arising from inaccurate entries or failure to comply with work-time
+        rules{"\n"}
+        • We are not responsible for data loss caused by device failure, theft,
+        damage, unauthorised access, or failure to maintain appropriate backups
+        {"\n"}
+        • Where legally permitted, our total liability is limited to the amount
+        you paid for Drive Legal during the preceding 12 months{"\n\n"}
+        Nothing in these Terms excludes rights or remedies that cannot legally
+        be excluded, including applicable rights under the Consumer Guarantees
+        Act 1993.
+      </LegalSection>
 
-          <Section title="5. Data Integrity and Immutability">
-            To maintain legal admissibility and compliance with NZTA requirements:{"\n\n"}
-            • All completed shift records are immutable — they cannot be edited or deleted after submission{"\n"}
-            • Each record is protected by a SHA-256 cryptographic hash chain{"\n"}
-            • Any attempt to tamper with records will be detected and flagged{"\n"}
-            • Exported records include verification checksums for authenticity{"\n\n"}
-            This ensures your logbook records are admissible as evidence and trustworthy for enforcement purposes.
-          </Section>
+      <LegalSection number={7} title="Regulatory Approval Status">
+        Drive Legal is designed to support compliance with New Zealand
+        work-time and logbook requirements. Any regulatory approval or
+        recognition status applicable to the App will be displayed within the
+        App or in official Drive Legal documentation.{"\n\n"}
+        You should verify the current approval status before relying on Drive
+        Legal as your sole legally required logbook.
+      </LegalSection>
 
-          <Section title="6. Limitation of Liability">
-            To the maximum extent permitted by New Zealand law:{"\n\n"}
-            • Drive Legal is provided "as is" without warranty of any kind{"\n"}
-            • We do not guarantee uninterrupted or error-free operation{"\n"}
-            • We are not liable for any fines, penalties, or legal consequences arising from your failure to comply with work time rules{"\n"}
-            • We are not liable for data loss due to device failure, theft, or damage{"\n"}
-            • Our total liability is limited to the amount you have paid for the App in the preceding 12 months{"\n\n"}
-            Nothing in these Terms excludes or limits liability that cannot be excluded under New Zealand law, including liability under the Consumer Guarantees Act 1993.
-          </Section>
+      <LegalSection number={8} title="Account Suspension or Termination">
+        We may suspend or terminate an account where:{"\n\n"}
+        • These Terms are materially breached{"\n"}
+        • The App is used for unlawful or fraudulent purposes{"\n"}
+        • A user attempts to tamper with records or circumvent integrity
+        controls{"\n"}
+        • Suspension is reasonably necessary to protect the App, its users, or
+        stored information{"\n\n"}
+        Where legally required, users will be given a reasonable opportunity to
+        access or export existing compliance records.
+      </LegalSection>
 
-          <Section title="7. NZTA Approval Status">
-            Drive Legal is designed to meet the requirements for NZTA approval as an electronic logbook under clause 2.4 of the Land Transport Rule: Work Time and Logbooks 2007. The current approval status is displayed within the App. Users should verify the App's approval status before relying on it as their sole logbook.
-          </Section>
+      <LegalSection number={9} title="Intellectual Property">
+        All intellectual property associated with Drive Legal, including its
+        software, design, branding, content, and documentation, is owned by or
+        licensed to Guided NZ Rentals.{"\n\n"}
+        You are granted a limited, personal, non-exclusive, non-transferable,
+        and revocable licence to use the App for its intended purpose.
+      </LegalSection>
 
-          <Section title="8. Account Termination">
-            We may suspend or terminate your account if:{"\n\n"}
-            • You breach these Terms{"\n"}
-            • You use the App for fraudulent purposes{"\n"}
-            • You attempt to tamper with or circumvent the integrity verification system{"\n\n"}
-            Upon termination, you will retain access to export your existing logbook records for a period of 30 days.
-          </Section>
+      <LegalSection number={10} title="Governing Law">
+        These Terms are governed by the laws of New Zealand. Any dispute arising
+        from these Terms or your use of the App will be subject to the
+        jurisdiction of the New Zealand courts, except where applicable law
+        provides otherwise.
+      </LegalSection>
 
-          <Section title="9. Intellectual Property">
-            All intellectual property in the App, including but not limited to the software, design, branding, and documentation, is owned by Guided NZ Rentals. You are granted a limited, non-exclusive, non-transferable licence to use the App for its intended purpose.
-          </Section>
+      <LegalSection number={11} title="Changes to These Terms">
+        We may update these Terms from time to time. Where a change is material,
+        we will provide reasonable notice through the App, by email, or by
+        another appropriate method.{"\n\n"}
+        Continued use of Drive Legal after updated Terms take effect constitutes
+        acceptance of those updated Terms.
+      </LegalSection>
 
-          <Section title="10. Governing Law">
-            These Terms are governed by the laws of New Zealand. Any disputes arising from these Terms or your use of the App shall be subject to the exclusive jurisdiction of the New Zealand courts.
-          </Section>
-
-          <Section title="11. Changes to Terms">
-            We may update these Terms from time to time. Material changes will be notified via in-app notification or email at least 14 days before taking effect. Continued use after the effective date constitutes acceptance.
-          </Section>
-
-          <Section title="12. Contact">
-            For questions about these Terms:{"\n\n"}
-            Drive Legal (Guided NZ Rentals){"\n"}
-            3/259 Hawthorn Drive, Frankton{"\n"}
-            Queenstown 9300, New Zealand{"\n"}
-            Email: support@drivelegal.app
-          </Section>
-        </ScrollView>
-      </View>
-    </ScreenContainer>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <View className="mb-5">
-      <Text className="text-base font-bold text-[#003366] mb-2">{title}</Text>
-      <Text className="text-sm text-[#4A5568] leading-relaxed">{children}</Text>
-    </View>
+      <LegalSection number={12} title="Drive Legal Support">
+        For questions about these Terms or the Drive Legal service:{"\n\n"}
+        Drive Legal (Guided NZ Rentals){"\n"}
+        2/27 Glenda Drive{"\n"}
+        Frankton{"\n"}
+        Queenstown 9300{"\n"}
+        New Zealand{"\n\n"}
+        Email: support@drivelegal.app{"\n"}
+        WhatsApp Support: +64 27 705 0258
+      </LegalSection>
+    </LegalPageLayout>
   );
 }
