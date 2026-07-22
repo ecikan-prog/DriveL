@@ -366,13 +366,22 @@ export async function syncProfileToCloud(params: {
 /**
  * Request a password reset email for a driver account.
  */
-export async function forgotPasswordRequest(email: string): Promise<void> {
-  const baseUrl = Platform.OS === "web" && typeof window !== "undefined" && window.location
-    ? window.location.origin
-    : LIVE_BACKEND;
-  await trpcCall("driverAuth.forgotPassword", { email, baseUrl });
-}
+export async function forgotPasswordRequest(
+  email: string
+): Promise<void> {
+  const result = await trpcCall("driverAuth.forgotPassword", {
+    email: email.trim().toLowerCase(),
+    baseUrl: "drivelegal://",
+  });
 
+  if (!result?.success) {
+    throw new Error(
+      result?.error ??
+      result?.message ??
+      "Unable to send the password reset email."
+    );
+  }
+}
 /**
  * Reset a driver's password using a valid reset token.
  */
