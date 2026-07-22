@@ -181,6 +181,7 @@ export function AuthProvider({
     ): Promise<LoginResult> => {
       const normalisedEmail =
         normaliseEmail(email);
+      lockPinSession();
 
       const passwordHash =
         LocalAuth.hashPassword(password);
