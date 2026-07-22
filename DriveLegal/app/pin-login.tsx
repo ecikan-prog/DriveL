@@ -35,6 +35,7 @@ const MAX_ATTEMPTS = 5;
 export default function PinLoginScreen() {
 
   const router = useRouter();
+  const { logout } = useAuthContext();
 
   const inputRef = useRef<TextInput>(null);
 
