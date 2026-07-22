@@ -175,18 +175,17 @@ export default function PinLoginScreen() {
 
   };
 
-  const handleEmailLogin = () => {
+  const handleEmailLogin = async () => {
+  setPin("");
+  setAttempts(0);
+  setError("");
 
-    setPin("");
+  await logout();
 
-    setAttempts(0);
+  router.replace("/login" as any);
+};
 
-    setError("");
-
-    router.replace("/login" as any);
-
-  };
-
+    
   return (
 
     <ScreenContainer
