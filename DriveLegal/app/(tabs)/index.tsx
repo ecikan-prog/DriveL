@@ -503,7 +503,7 @@ export default function DashboardScreen() {
     statusColor = "#22C55E";
   }
 
- if (isResting) {
+ } else if (isResting) {
     statusText = restValidation?.restType === "cwp_reset" ? "24-HR REST REQUIRED" : "ON REST BREAK";
     statusColor = "#F59E0B"; // amber
   } else if (isRestComplete) {
