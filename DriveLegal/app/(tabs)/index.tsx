@@ -495,9 +495,7 @@ export default function DashboardScreen() {
   if (isOnBreak) {
     statusText = "ON BREAK";
     statusColor = "#F59E0B";
-  } else if (isOtherWork) {
-    statusText = "OTHER WORK";
-    statusColor = "#14B8A6";
+  
   } else {
     statusText = "DRIVING";
     statusColor = "#22C55E";
