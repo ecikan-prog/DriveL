@@ -154,6 +154,85 @@ export default function NewEntryScreen() {
 
       <View style={{ flex: 1, backgroundColor: "#F0F4FF", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20 }}>
         {/* Current Status */}
+        {/* Active mode banner */}
+{isShiftActive && (
+  <View
+    style={{
+      backgroundColor: isOnBreak
+        ? "#9A6700"
+        : isOtherWork
+          ? "#0E7490"
+          : "#12386E",
+      borderRadius: 16,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      marginBottom: 12,
+      alignItems: "center",
+    }}
+  >
+    <Text
+      style={{
+        color: "#C9D8F0",
+        fontSize: 11,
+        fontWeight: "800",
+        letterSpacing: 1.8,
+      }}
+    >
+      CURRENT STATUS
+    </Text>
+
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        marginTop: 6,
+      }}
+    >
+      <MaterialIcons
+        name={
+          isOnBreak
+            ? "free-breakfast"
+            : isOtherWork
+              ? "build"
+              : "directions-car"
+        }
+        size={24}
+        color="#FFFFFF"
+      />
+
+      <Text
+        style={{
+          color: "#FFFFFF",
+          fontSize: 23,
+          fontWeight: "900",
+          marginLeft: 8,
+        }}
+      >
+        {isOnBreak
+          ? "ON BREAK"
+          : isOtherWork
+            ? "OTHER WORK"
+            : "DRIVING"}
+      </Text>
+    </View>
+
+    <Text
+      style={{
+        color: "#E5EDF8",
+        fontSize: 12,
+        lineHeight: 17,
+        marginTop: 6,
+        textAlign: "center",
+      }}
+    >
+      {isOnBreak
+        ? "Driving and total work time are paused"
+        : isOtherWork
+          ? "Driving paused • Total work time continues"
+          : "Driving and total work time are running"}
+    </Text>
+  </View>
+)}
         {isShiftActive && activeShift && (
           <View style={{ backgroundColor: "#FFFFFF", borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: "#E8EEF8" }}>
             <Text style={{ fontSize: 11, color: "#6B7A99", fontWeight: "600", letterSpacing: 1, marginBottom: 8 }}>ACTIVE SHIFT</Text>
