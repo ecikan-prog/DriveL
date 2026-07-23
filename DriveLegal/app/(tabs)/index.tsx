@@ -491,9 +491,18 @@ export default function DashboardScreen() {
   // Status text — 5 states total
   let statusText: string;
   let statusColor: string;
-  if (isShiftActive) {
-    statusText = isOnBreak ? "ON BREAK" : "DRIVING";
-    statusColor = isOnBreak ? "#F59E0B" : "#22C55E";
+ if (isShiftActive) {
+  if (isOnBreak) {
+    statusText = "ON BREAK";
+    statusColor = "#F59E0B";
+  } else if (isOtherWork) {
+    statusText = "OTHER WORK";
+    statusColor = "#14B8A6";
+  } else {
+    statusText = "DRIVING";
+    statusColor = "#22C55E";
+  }
+}
   } else if (isResting) {
     statusText = restValidation?.restType === "cwp_reset" ? "24-HR REST REQUIRED" : "ON REST BREAK";
     statusColor = "#F59E0B"; // amber
