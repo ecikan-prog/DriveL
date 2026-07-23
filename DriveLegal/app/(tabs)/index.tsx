@@ -267,6 +267,7 @@ export default function DashboardScreen() {
     isOnBreak,
     drivingSeconds,
     consecutiveDrivingSeconds,
+    continuousWorkSeconds,
     workSeconds,
     breakSeconds,
     fortnightlyDrivingSeconds,
