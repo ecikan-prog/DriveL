@@ -502,8 +502,8 @@ export default function DashboardScreen() {
     statusText = "DRIVING";
     statusColor = "#22C55E";
   }
-}
-  } else if (isResting) {
+
+ if (isResting) {
     statusText = restValidation?.restType === "cwp_reset" ? "24-HR REST REQUIRED" : "ON REST BREAK";
     statusColor = "#F59E0B"; // amber
   } else if (isRestComplete) {
