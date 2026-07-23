@@ -13,10 +13,12 @@ import {
   formatDate,
   formatTime,
   formatHoursMinutes,
+  getContinuousWorkLimitSeconds,
+  computeMaxContinuousWorkSecondsFromLog,
+  WORK_TIME_LIMITS,
   type DailyLog,
   type ShiftEvent,
 } from "@/lib/logbook-storage";
-import { getDrivingLimitSeconds } from "@/hooks/use-nzta-compliance";
 
 function EventRow({ event }: { event: ShiftEvent }) {
   const config: Record<string, { icon: string; label: string; color: string }> = {
