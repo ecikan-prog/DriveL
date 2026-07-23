@@ -339,9 +339,12 @@ export default function DashboardScreen() {
   const drivingLimitSeconds = getDrivingLimitSeconds(driverType);
   const dailyRemainingSeconds = Math.max(0, DAILY_WORK_LIMIT_SECONDS - workSeconds);
   const remainingDrivingSeconds = Math.max(
-    0,
-    Math.min(drivingLimitSeconds - consecutiveDrivingSeconds, dailyRemainingSeconds)
-  );
+  0,
+  Math.min(
+    drivingLimitSeconds - continuousWorkSeconds,
+    dailyRemainingSeconds
+  )
+);
 
   // Mandatory break alert — fires once when consecutive driving hits the limit
   // (also fires if the daily cap is hit first, which is the correct NZTA behaviour)
