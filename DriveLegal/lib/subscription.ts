@@ -1,6 +1,6 @@
 /**
  * Subscription management for Drive Legal.
- * Handles 14-day free trial and subscription state via AsyncStorage.
+ * Handles 21-day free trial and subscription state via AsyncStorage.
  * Designed to integrate with Stripe when backend is connected.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -20,7 +20,7 @@ export type SubscriptionState = {
   lastChecked: string; // ISO string
 };
 
-const TRIAL_DAYS = 14;
+const TRIAL_DAYS = 21;
 
 /**
  * Get or initialize subscription state for a user.
