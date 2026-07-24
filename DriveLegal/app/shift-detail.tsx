@@ -102,7 +102,8 @@ export default function ShiftDetailScreen() {
 
   if (!log) {
     return (
-      <ScreenContainer edges={["top", "left", "right"]} containerClassName="bg-[#003366]" safeAreaClassName="bg-[#003366]">
+      <ScreenContainer edges={["top", "left", "right"]} style={{ backgroundColor: "#003366" }}>
+
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <Text style={{ color: "#93C5FD" }}>Loading...</Text>
         </View>
