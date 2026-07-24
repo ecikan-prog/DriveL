@@ -17,7 +17,14 @@ export default function RootLayout() {
 
           <Stack.Screen name="(tabs)" />
 
-          <Stack.Screen name="shift-detail" />
+          <Stack.Screen
+  name="shift-detail"
+  options={{
+    headerShown: false,
+    animation: "none",
+    gestureEnabled: false,
+  }}
+/>
           <Stack.Screen name="enforcement-view" />
           <Stack.Screen name="profile" />
           <Stack.Screen name="paywall" />
