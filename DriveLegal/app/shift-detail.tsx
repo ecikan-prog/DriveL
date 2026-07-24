@@ -14,6 +14,7 @@ import {
   TextInput,
   Alert,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuthContext } from "@/lib/auth-context";
@@ -38,6 +39,7 @@ function isShiftLocked(log: DailyLog): boolean {
 
 export default function ShiftDetailScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuthContext();
   const params = useLocalSearchParams<{ logId: string }>();
   const [log, setLog] = useState<DailyLog | null>(null);
@@ -115,7 +117,7 @@ export default function ShiftDetailScreen() {
   return (
     <ScreenContainer edges={["left", "right"]} containerClassName="bg-[#003366]" safeAreaClassName="bg-[#003366]">
       {/* Header */}
-      <View style={{ paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, flexDirection: "row", alignItems: "center" }}>
+      <View style={{ paddingHorizontal: 20, paddingTop: insets.top + 12, paddingBottom: 16, flexDirection: "row", alignItems: "center" }}>
         <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
           <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
