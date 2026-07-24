@@ -49,7 +49,9 @@ export default function ShiftDetailScreen() {
   useEffect(() => {
     if (!user || !params.logId) return;
     getAllLogs(user.id).then((logs) => {
-      const found = logs.find((l) => l.id === params.logId);
+      const found = logs.find(
+  (l) => String(l.id) === String(params.logId)
+);
       if (found) setLog(found);
     });
   }, [user, params.logId]);
