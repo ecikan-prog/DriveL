@@ -17,10 +17,11 @@ import { useRouter } from "expo-router";
 
 import { ActivityGrid } from "@/components/activity-grid";
 import { ScreenContainer } from "@/components/screen-container";
-import { getDrivingLimitSeconds } from "@/hooks/use-nzta-compliance";
+import { evaluateLogCompliance } from "@/lib/compliance";
 import { isAmended } from "@/lib/amendments";
 import { useAuthContext } from "@/lib/auth-context";
 import { getApiBaseUrl } from "@/lib/api-base-url";
+import type { DriverType } from "@/lib/local-auth";
 import {
   formatDate,
   formatHoursMinutes,
@@ -58,7 +59,7 @@ function LogCard({
 }: {
   log: DailyLog;
   onPress: () => void;
-  driverType?: string;
+  driverType?: DriverType;
 }) {
   const breaks = log.breaks ?? [];
 
@@ -67,13 +68,8 @@ function LogCard({
     0
   );
 
-  const drivingHours = (log.totalDrivingSeconds ?? 0) / 3600;
-  const workHours = (log.totalWorkSeconds ?? 0) / 3600;
-  const drivingLimitHours =
-    getDrivingLimitSeconds(driverType as any) / 3600;
-
-  const isCompliant =
-    drivingHours <= drivingLimitHours && workHours <= 13;
+  const compliance = evaluateLogCompliance(log, driverType);
+  const isCompliant = compliance.isCompliant;
 
   const statusColor = isCompliant ? COLORS.green : COLORS.warning;
   const backgroundColor = isCompliant
@@ -230,9 +226,9 @@ export default function HistoryScreen() {
       );
 
       await generateAndSharePDF({
-  driverId: user.id,
-  logs: getFilteredLogs(),
-  driverName: user.name ?? "Driver",
+        driverId: user.id,
+        logs: getFilteredLogs(),
+        driverName: user.name ?? "Driver",
         licenceNumber: user.licenceNumber,
         vehicleRegistration: user.vehicleRegistration,
         vehicleType: user.vehicleType,
@@ -284,89 +280,87 @@ export default function HistoryScreen() {
       }
 
       const apiBase = getApiBaseUrl();
-      
 
-const response = await fetch(`${apiBase}/api/export/csv`, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    driverId: user.id,
-    logs: filteredLogs,
-    driverName: user.name ?? "Driver",
-    licenceNumber: user.licenceNumber,
-  }),
-});
+      const response = await fetch(`${apiBase}/api/export/csv`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          driverId: user.id,
+          logs: filteredLogs,
+          driverName: user.name ?? "Driver",
+          licenceNumber: user.licenceNumber,
+        }),
+      });
 
-if (!response.ok) {
-  const errorBody = await response
-    .json()
-    .catch(() => ({ error: "Server error" }));
+      if (!response.ok) {
+        const errorBody = await response
+          .json()
+          .catch(() => ({ error: "Server error" }));
 
-  throw new Error(
-    errorBody.error || "Failed to export CSV."
-  );
-}
+        throw new Error(
+          errorBody.error || "Failed to export CSV."
+        );
+      }
 
-const result = await response.json();
-      
+      const result = await response.json();
 
-const returnedUrl = result.downloadUrl ?? result.url;
+      const returnedUrl = result.downloadUrl ?? result.url;
 
-if (
-  typeof returnedUrl !== "string" ||
-  returnedUrl.trim() === ""
-) {
-  throw new Error(
-    "The server did not return a CSV download link."
-  );
-}
+      if (
+        typeof returnedUrl !== "string" ||
+        returnedUrl.trim() === ""
+      ) {
+        throw new Error(
+          "The server did not return a CSV download link."
+        );
+      }
 
-const downloadUrl =
-  returnedUrl.startsWith("http://") ||
-  returnedUrl.startsWith("https://")
-    ? returnedUrl
-    : new URL(returnedUrl, apiBase).toString();
+      const downloadUrl =
+        returnedUrl.startsWith("http://") ||
+        returnedUrl.startsWith("https://")
+          ? returnedUrl
+          : new URL(returnedUrl, apiBase).toString();
 
-const destinationFile = new File(
-  Paths.cache,
-  fileName
-);
+      const destinationFile = new File(
+        Paths.cache,
+        fileName
+      );
 
-if (destinationFile.exists) {
-  destinationFile.delete();
-}
+      if (destinationFile.exists) {
+        destinationFile.delete();
+      }
 
-const downloadedFile =
-  await File.downloadFileAsync(
-    downloadUrl,
-    destinationFile
-  );
+      const downloadedFile =
+        await File.downloadFileAsync(
+          downloadUrl,
+          destinationFile
+        );
 
-if (
-  !downloadedFile.exists ||
-  downloadedFile.size <= 0
-) {
-  throw new Error(
-    "The downloaded CSV file is empty or unavailable."
-  );
-}
+      if (
+        !downloadedFile.exists ||
+        downloadedFile.size <= 0
+      ) {
+        throw new Error(
+          "The downloaded CSV file is empty or unavailable."
+        );
+      }
 
-const sharingAvailable =
-  await Sharing.isAvailableAsync();
+      const sharingAvailable =
+        await Sharing.isAvailableAsync();
 
-if (!sharingAvailable) {
-  throw new Error(
-    "File sharing is not available on this device."
-  );
-}
+      if (!sharingAvailable) {
+        throw new Error(
+          "File sharing is not available on this device."
+        );
+      }
 
-await Sharing.shareAsync(downloadedFile.uri, {
-  mimeType: "text/csv",
-  UTI: "public.comma-separated-values-text",
-  dialogTitle: "Share Drive Legal CSV Export",
-});
+      await Sharing.shareAsync(downloadedFile.uri, {
+        mimeType: "text/csv",
+        UTI: "public.comma-separated-values-text",
+        dialogTitle: "Share Drive Legal CSV Export",
+      });
     } catch (error) {
       console.error("CSV export failed:", error);
       Alert.alert(
@@ -406,21 +400,12 @@ await Sharing.shareAsync(downloadedFile.uri, {
     0
   );
 
-  const driverType =
-    (user as any)?.driverType ?? "small_passenger";
+  const driverType: DriverType =
+    ((user as any)?.driverType as DriverType) ?? "small_passenger";
 
-  const drivingLimitHours =
-    getDrivingLimitSeconds(driverType) / 3600;
-
-  const compliantCount = filteredLogs.filter((log) => {
-    const drivingHours =
-      (log.totalDrivingSeconds ?? 0) / 3600;
-    const workHours = (log.totalWorkSeconds ?? 0) / 3600;
-
-    return (
-      drivingHours <= drivingLimitHours && workHours <= 13
-    );
-  }).length;
+  const compliantCount = filteredLogs.filter(
+    (log) => evaluateLogCompliance(log, driverType).isCompliant
+  ).length;
 
   const summaryTitle =
     filterPeriod === "all"
@@ -679,21 +664,21 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   headerActions: {
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-  marginTop: 12,
-},
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 12,
+  },
   headerButton: {
-  flex: 1,
-  minHeight: 38,
-  paddingHorizontal: 10,
-  borderRadius: 19,
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "center",
-  marginHorizontal: 4,
-},
+    flex: 1,
+    minHeight: 38,
+    paddingHorizontal: 10,
+    borderRadius: 19,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginHorizontal: 4,
+  },
   officerButton: {
     backgroundColor: COLORS.greenDark,
   },
@@ -707,14 +692,14 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   headerButtonIcon: {
-  fontSize: 16,
-  marginRight: 5,
-},
+    fontSize: 16,
+    marginRight: 5,
+  },
   headerButtonText: {
-  color: COLORS.white,
-  fontSize: 14,
-  fontWeight: "700",
-},
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: "700",
+  },
   soleUseNotice: {
     marginHorizontal: 16,
     marginBottom: 10,
