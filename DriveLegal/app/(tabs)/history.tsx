@@ -417,8 +417,8 @@ export default function HistoryScreen() {
       : "This Month";
 
   return (
-    <ScreenContainer style={styles.screen}>
-      <View style={styles.header}>
+    <ScreenContainer edges={["top", "left", "right"]} style={styles.screen}>
+     <View style={styles.header}>
         <View style={styles.brandRow}>
           <Image
             source={require("@/assets/images/icon.png")}
