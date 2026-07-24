@@ -263,7 +263,7 @@ export default function ShiftDetailScreen() {
           {/* Events Timeline */}
           <View style={{ backgroundColor: "#FFFFFF", borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: "#E8EEF8" }}>
             <Text style={{ fontSize: 11, color: "#6B7A99", fontWeight: "700", letterSpacing: 1, marginBottom: 12 }}>EVENTS</Text>
-            {log.events.map((event, i) => {
+            {(log.events ?? []).map((event, i) => {
               const typeLabels: Record<string, string> = {
                 shift_start: "🟢 Shift Start",
                 shift_end: "🔴 Shift End",
