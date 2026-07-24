@@ -9,6 +9,7 @@ import {
   Redirect,
   Tabs,
 } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuthContext } from "@/lib/auth-context";
 import {
@@ -22,8 +23,13 @@ type PinGateStatus =
   | "setup-required"
   | "unlock-required";
 
+// Base tab bar height/padding — before adding the device's safe-area inset.
+const BASE_TAB_BAR_HEIGHT = 82;
+const BASE_TAB_BAR_PADDING_BOTTOM = 12;
+
 export default function TabsLayout() {
   const { user, loading } = useAuthContext();
+  const insets = useSafeAreaInsets();
 
   const [pinGateStatus, setPinGateStatus] =
     useState<PinGateStatus>("checking");
@@ -85,10 +91,7 @@ export default function TabsLayout() {
     };
   }, [loading, user?.id]);
 
-  if (
-    loading ||
-    pinGateStatus === "checking"
-  ) {
+  if (loading || pinGateStatus === "checking") {
     return (
       <View
         style={{
@@ -99,10 +102,7 @@ export default function TabsLayout() {
           paddingHorizontal: 24,
         }}
       >
-        <ActivityIndicator
-          size="large"
-          color="#3156D3"
-        />
+        <ActivityIndicator size="large" color="#3156D3" />
 
         <Text
           style={{
@@ -123,13 +123,7 @@ export default function TabsLayout() {
   }
 
   if (pinGateStatus === "setup-required") {
-    return (
-      <Redirect
-        href={
-          "/setup-pin?next=/" as any
-        }
-      />
-    );
+    return <Redirect href={"/setup-pin?next=/" as any} />;
   }
 
   if (pinGateStatus === "unlock-required") {
@@ -144,9 +138,11 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: "#9BA8C0",
         tabBarHideOnKeyboard: true,
         tabBarStyle: {
-          height: 82,
+          // Reserve space for the iPhone Home Indicator so the bar
+          // is never clipped by the safe area.
+          height: BASE_TAB_BAR_HEIGHT + insets.bottom,
           paddingTop: 8,
-          paddingBottom: 12,
+          paddingBottom: BASE_TAB_BAR_PADDING_BOTTOM + insets.bottom,
           backgroundColor: "#FFFFFF",
           borderTopColor: "#E8EEF8",
         },
@@ -161,11 +157,7 @@ export default function TabsLayout() {
         options={{
           title: "Dashboard",
           tabBarIcon: ({ color, size }) => (
-            <MaterialIcons
-              name="dashboard"
-              size={size}
-              color={color}
-            />
+            <MaterialIcons name="dashboard" size={size} color={color} />
           ),
         }}
       />
@@ -175,11 +167,7 @@ export default function TabsLayout() {
         options={{
           title: "Logbook",
           tabBarIcon: ({ color, size }) => (
-            <MaterialIcons
-              name="menu-book"
-              size={size}
-              color={color}
-            />
+            <MaterialIcons name="menu-book" size={size} color={color} />
           ),
         }}
       />
@@ -189,11 +177,7 @@ export default function TabsLayout() {
         options={{
           title: "New Entry",
           tabBarIcon: ({ color }) => (
-            <MaterialIcons
-              name="add-circle"
-              size={42}
-              color={color}
-            />
+            <MaterialIcons name="add-circle" size={42} color={color} />
           ),
         }}
       />
@@ -203,11 +187,7 @@ export default function TabsLayout() {
         options={{
           title: "Reports",
           tabBarIcon: ({ color, size }) => (
-            <MaterialIcons
-              name="bar-chart"
-              size={size}
-              color={color}
-            />
+            <MaterialIcons name="bar-chart" size={size} color={color} />
           ),
         }}
       />
@@ -217,11 +197,7 @@ export default function TabsLayout() {
         options={{
           title: "More",
           tabBarIcon: ({ color, size }) => (
-            <MaterialIcons
-              name="more-horiz"
-              size={size}
-              color={color}
-            />
+            <MaterialIcons name="more-horiz" size={size} color={color} />
           ),
         }}
       />
