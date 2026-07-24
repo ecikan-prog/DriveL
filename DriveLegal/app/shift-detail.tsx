@@ -113,9 +113,9 @@ export default function ShiftDetailScreen() {
   const locked = isShiftLocked(log);
 
   return (
-    <ScreenContainer edges={["top", "left", "right"]} containerClassName="bg-[#003366]" safeAreaClassName="bg-[#003366]">
+    <ScreenContainer edges={["left", "right"]} containerClassName="bg-[#003366]" safeAreaClassName="bg-[#003366]">
       {/* Header */}
-      <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16, flexDirection: "row", alignItems: "center" }}>
+      <View style={{ paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, flexDirection: "row", alignItems: "center" }}>
         <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
           <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
