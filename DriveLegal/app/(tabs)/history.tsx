@@ -625,9 +625,9 @@ await Sharing.shareAsync(downloadedFile.uri, {
                       driverType={driverType}
                       onPress={() =>
                         router.push({
-                          pathname: "/log-detail",
+                          pathname: "/shift-detail",
                           params: {
-                            logId: log.id,
+                            logId: String(log.id),
                           },
                         } as any)
                       }
