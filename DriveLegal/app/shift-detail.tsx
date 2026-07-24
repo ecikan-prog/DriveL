@@ -273,7 +273,7 @@ export default function ShiftDetailScreen() {
                 other_work_end: "📋 Other Work End",
               };
               return (
-                <View key={i} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 8, borderBottomWidth: i < (log.events?.length ?? 0) - 1 ? 1 : 0 borderBottomColor: "#F0F4FF" }}>
+                <View key={i} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 8, borderBottomWidth: i < (log.events?.length ?? 0) - 1 ? 1 : 0, borderBottomColor: "#F0F4FF" }}>
                   <Text style={{ fontSize: 12, fontWeight: "600", color: "#003366", width: 50 }}>
                     {formatTime(event.timestamp)}
                   </Text>
