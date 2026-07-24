@@ -7,6 +7,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const USERS_KEY = "gnzl_users";
 const CURRENT_USER_KEY = "gnzl_current_user";
+export const TRIAL_DAYS = 21;
+
 
 export type DriverType = "goods" | "large_passenger" | "small_passenger" | "vehicle_recovery";
 
@@ -157,13 +159,15 @@ export async function updateUserProfile(
   return { success: true, user: authUser };
 }
 
-/** Returns days remaining in 14-day trial, or -1 if expired */
+/** Returns days remaining in the trial, or 0 if expired */
 export function getTrialDaysRemaining(trialStartDate: string): number {
   const start = new Date(trialStartDate).getTime();
   const now = Date.now();
   const elapsed = (now - start) / (1000 * 60 * 60 * 24);
-  return Math.max(0, Math.ceil(14 - elapsed));
+  return Math.max(0, Math.ceil(TRIAL_DAYS - elapsed));
 }
+
+
 
 /** Expose the hash function for cloud auth integration */
 export function hashPassword(password: string): string {
