@@ -20,7 +20,6 @@ import { ScreenContainer } from "@/components/screen-container";
 import { evaluateLogCompliance } from "@/lib/compliance";
 import { isAmended } from "@/lib/amendments";
 import { useAuthContext } from "@/lib/auth-context";
-import { getApiBaseUrl } from "@/lib/api-base-url";
 
 import {
   formatDate,
