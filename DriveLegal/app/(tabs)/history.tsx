@@ -375,7 +375,7 @@ export default function HistoryScreen() {
   const groupedLogs = filteredLogs.reduce<
     Record<string, DailyLog[]>
   >((groups, log) => {
-    const date = new Date(log.startTime);
+    const date = new Date(`${log.date}T12:00:00`);
 
     const key = Number.isNaN(date.getTime())
       ? "Unknown date"
