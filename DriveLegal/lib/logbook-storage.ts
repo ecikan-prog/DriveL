@@ -827,7 +827,7 @@ export function buildDailyLog(
   const log: DailyLog = {
     id: `${shift.userId}_${shift.startTime}`,
     userId: shift.userId,
-    date: shift.startTime.split("T")[0],
+    date: getLocalDateKey(shift.startTime),
     workTimeRule: getRule(shift.workTimeRule),
     startTime: shift.startTime,
     endTime: endTimeIso,
