@@ -276,88 +276,38 @@ export default function HistoryScreen() {
         return;
       }
 
-      const apiBase = getApiBaseUrl();
+      const destinationFile = new File(Paths.cache, fileName);
 
-      const response = await fetch(`${apiBase}/api/export/csv`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          driverId: user.id,
-          logs: filteredLogs,
-          driverName: user.name ?? "Driver",
-          licenceNumber: user.licenceNumber,
-        }),
-      });
+if (destinationFile.exists) {
+  destinationFile.delete();
+}
 
-      if (!response.ok) {
-        const errorBody = await response
-          .json()
-          .catch(() => ({ error: "Server error" }));
+destinationFile.create();
+destinationFile.write(`\uFEFF${csv}`);
 
-        throw new Error(
-          errorBody.error || "Failed to export CSV."
-        );
-      }
+if (
+  !destinationFile.exists ||
+  destinationFile.size === null ||
+  destinationFile.size <= 0
+) {
+  throw new Error(
+    "The generated CSV file is empty or unavailable."
+  );
+}
 
-      const result = await response.json();
+const sharingAvailable = await Sharing.isAvailableAsync();
 
-      const returnedUrl = result.downloadUrl ?? result.url;
+if (!sharingAvailable) {
+  throw new Error(
+    "File sharing is not available on this device."
+  );
+}
 
-      if (
-        typeof returnedUrl !== "string" ||
-        returnedUrl.trim() === ""
-      ) {
-        throw new Error(
-          "The server did not return a CSV download link."
-        );
-      }
-
-      const downloadUrl =
-        returnedUrl.startsWith("http://") ||
-        returnedUrl.startsWith("https://")
-          ? returnedUrl
-          : new URL(returnedUrl, apiBase).toString();
-
-      const destinationFile = new File(
-        Paths.cache,
-        fileName
-      );
-
-      if (destinationFile.exists) {
-        destinationFile.delete();
-      }
-
-      const downloadedFile =
-        await File.downloadFileAsync(
-          downloadUrl,
-          destinationFile
-        );
-
-      if (
-        !downloadedFile.exists ||
-        downloadedFile.size <= 0
-      ) {
-        throw new Error(
-          "The downloaded CSV file is empty or unavailable."
-        );
-      }
-
-      const sharingAvailable =
-        await Sharing.isAvailableAsync();
-
-      if (!sharingAvailable) {
-        throw new Error(
-          "File sharing is not available on this device."
-        );
-      }
-
-      await Sharing.shareAsync(downloadedFile.uri, {
-        mimeType: "text/csv",
-        UTI: "public.comma-separated-values-text",
-        dialogTitle: "Share Drive Legal CSV Export",
-      });
+await Sharing.shareAsync(destinationFile.uri, {
+  mimeType: "text/csv",
+  UTI: "public.comma-separated-values-text",
+  dialogTitle: "Share Drive Legal CSV Export",
+});
     } catch (error) {
       console.error("CSV export failed:", error);
       Alert.alert(
