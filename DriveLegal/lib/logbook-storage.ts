@@ -74,6 +74,7 @@ export type ActiveShift = {
   startTime: string;
   events: ShiftEvent[];
   workTimeRule?: WorkTimeRule;
+  driverType?: DriverType;
   vehicleChanges?: VehicleChange[];
   /** Stored when the driver overrides the 10-hour-rest start block. */
   restOverrideNote?: string;
@@ -107,6 +108,7 @@ export type DailyLog = {
   userId: string;
   date: string;
   workTimeRule?: WorkTimeRule;
+  driverType?: DriverType;
   startTime: string;
   endTime: string;
   totalDrivingSeconds: number;
@@ -508,11 +510,12 @@ export async function clearActiveShift(
 export async function startShift(
   userId: string,
   options?: {
-    location?: LogLocation;
-    odometer?: number;
-    restOverrideNote?: string;
-    workTimeRule?: WorkTimeRule;
-  }
+  location?: LogLocation;
+  odometer?: number;
+  restOverrideNote?: string;
+  driverType?: DriverType;
+  workTimeRule?: WorkTimeRule;
+}
 ): Promise<ActiveShift> {
   const now = new Date().toISOString();
 
@@ -829,6 +832,7 @@ export function buildDailyLog(
     userId: shift.userId,
     date: getLocalDateKey(shift.startTime),
     workTimeRule: getRule(shift.workTimeRule),
+    driverType: shift.driverType,
     startTime: shift.startTime,
     endTime: endTimeIso,
     totalDrivingSeconds: totals.drivingSeconds,
