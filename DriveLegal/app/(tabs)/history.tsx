@@ -602,7 +602,7 @@ export default function HistoryScreen() {
                     <LogCard
                       key={log.id}
                       log={log}
-                      driverType={driverType}
+                      
                       onPress={() =>
                         router.push({
                           pathname: "/shift-detail",
