@@ -16,6 +16,7 @@ import PDFDocument from "pdfkit";
 
 type ExportLog = {
   date?: string;
+  driverType?: string;
 
   startTime?: string;
   start_time?: string;
@@ -40,6 +41,7 @@ type ExportLog = {
 
 type NormalizedLog = {
   date: string;
+  driverType: string;
   start: string;
   end: string;
   drivingSeconds: number;
@@ -96,7 +98,20 @@ function formatHoursMinutes(seconds: unknown): string {
 
   return `${hours}h ${minutes}m`;
 }
-
+function formatDriverType(value: unknown): string {
+  switch (value) {
+    case "small_passenger":
+      return "Small Passenger";
+    case "goods":
+      return "Goods Vehicle";
+    case "large_passenger":
+      return "Large Passenger";
+    case "vehicle_recovery":
+      return "Vehicle Recovery";
+    default:
+      return "—";
+  }
+}
 function normalizeLog(log: ExportLog): NormalizedLog {
   const startRaw = log.startTime ?? log.start_time ?? "";
   const endRaw = log.endTime ?? log.end_time ?? "";
