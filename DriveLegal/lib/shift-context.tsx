@@ -260,7 +260,16 @@ export function ShiftProvider({ children }: { children: React.ReactNode }) {
     const loc = await captureLocation();
     setCurrentLocation(loc);
     const locationData = loc ? { latitude: loc.latitude, longitude: loc.longitude, displayName: loc.displayName } : undefined;
-    const shift = await Logbook.startShift(user.id, { location: locationData, odometer, restOverrideNote });
+    const shift = await Logbook.startShift(user.id, {
+  location: locationData,
+  odometer,
+  restOverrideNote,
+  driverType: user.driverType ?? "small_passenger",
+  workTimeRule:
+    user.driverType === "small_passenger"
+      ? "sps_short_fares_7_hour"
+      : "standard_5_5_hour",
+});
     const fortnightly = await loadFortnightly(user.id);
     setActiveShift(shift);
     startTimer(shift, fortnightly);
