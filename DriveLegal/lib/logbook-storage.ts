@@ -1256,6 +1256,7 @@ export async function migrateLogCalculations(
 
       const next: DailyLog = {
         ...log,
+        date: getLocalDateKey(log.startTime),
         workTimeRule: getRule(log.workTimeRule),
         totalDrivingSeconds: totals.drivingSeconds,
         totalWorkSeconds: totals.workSeconds,
