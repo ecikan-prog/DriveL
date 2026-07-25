@@ -138,7 +138,7 @@ export default function ShiftDetailScreen() {
             )}
           </View>
           <Text style={{ color: "#93C5FD", fontSize: 12, marginTop: 2 }}>
-            {formatDate(log.startTime)}
+            {formatDate(`${log.date}T12:00:00`)}
           </Text>
         </View>
       </View>
