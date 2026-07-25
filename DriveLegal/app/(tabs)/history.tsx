@@ -95,7 +95,7 @@ function LogCard({
             </Text>
 
             <Text style={styles.logDate}>
-              {formatDate(log.startTime)}
+              {formatDate(`${log.date}T12:00:00`)}
             </Text>
 
             {isAmended(log) ? (
