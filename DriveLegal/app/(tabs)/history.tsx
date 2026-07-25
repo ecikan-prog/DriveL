@@ -205,7 +205,7 @@ export default function HistoryScreen() {
     }
 
     return logs.filter((log) => {
-      const start = new Date(log.startTime);
+      const start = new Date(`${log.date}T12:00:00`);
       return !Number.isNaN(start.getTime()) && start >= cutoffDate;
     });
   };
