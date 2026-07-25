@@ -540,6 +540,7 @@ export async function startShift(
     startTime: now,
     events: [startEvent],
     workTimeRule: getRule(options?.workTimeRule),
+    driverType: options?.driverType,
   };
 
   if (options?.restOverrideNote?.trim()) {
