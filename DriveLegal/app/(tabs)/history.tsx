@@ -398,11 +398,8 @@ export default function HistoryScreen() {
     0
   );
 
-  const driverType: DriverType =
-    ((user as any)?.driverType as DriverType) ?? "small_passenger";
-
   const compliantCount = filteredLogs.filter(
-    (log) => evaluateLogCompliance(log, driverType).isCompliant
+    (log) => evaluateLogCompliance(log, log.driverType).isCompliant
   ).length;
 
   const summaryTitle =
