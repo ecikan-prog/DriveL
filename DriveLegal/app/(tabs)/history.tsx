@@ -21,7 +21,7 @@ import { evaluateLogCompliance } from "@/lib/compliance";
 import { isAmended } from "@/lib/amendments";
 import { useAuthContext } from "@/lib/auth-context";
 import { getApiBaseUrl } from "@/lib/api-base-url";
-import type { DriverType } from "@/lib/local-auth";
+
 import {
   formatDate,
   formatHoursMinutes,
@@ -55,11 +55,9 @@ type FilterPeriod = "week" | "fortnight" | "month" | "all";
 function LogCard({
   log,
   onPress,
-  driverType,
 }: {
   log: DailyLog;
   onPress: () => void;
-  driverType?: DriverType;
 }) {
   const breaks = log.breaks ?? [];
 
@@ -68,7 +66,7 @@ function LogCard({
     0
   );
 
-  const compliance = evaluateLogCompliance(log, driverType);
+  const compliance = evaluateLogCompliance(log, log.driverType);
   const isCompliant = compliance.isCompliant;
 
   const statusColor = isCompliant ? COLORS.green : COLORS.warning;
