@@ -20,7 +20,7 @@
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
+import type { DriverType } from "@/lib/local-auth";
 const ACTIVE_SHIFT_KEY = "gnzl_active_shift";
 const LOGS_KEY = "gnzl_logs";
 
