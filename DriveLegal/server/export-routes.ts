@@ -17,6 +17,10 @@ import PDFDocument from "pdfkit";
 type ExportLog = {
   date?: string;
   driverType?: string;
+    vehicleType?: string;
+  vehicleRegistration?: string;
+  complianceStatus?: "compliant" | "breach";
+  complianceReason?: string;
 
   startTime?: string;
   start_time?: string;
@@ -42,6 +46,10 @@ type ExportLog = {
 type NormalizedLog = {
   date: string;
   driverType: string;
+  vehicleType: string;
+  vehicleRegistration: string;
+  complianceStatus: string;
+  complianceReason: string;
   start: string;
   end: string;
   drivingSeconds: number;
@@ -137,6 +145,29 @@ function normalizeLog(log: ExportLog): NormalizedLog {
   return {
     date: explicitDate || formatDate(startRaw),
     driverType: formatDriverType(log.driverType),
+    vehicleType:
+  typeof log.vehicleType === "string" && log.vehicleType.trim()
+    ? log.vehicleType.trim()
+    : "—",
+
+vehicleRegistration:
+  typeof log.vehicleRegistration === "string" &&
+  log.vehicleRegistration.trim()
+    ? log.vehicleRegistration.trim().toUpperCase()
+    : "—",
+
+complianceStatus:
+  log.complianceStatus === "compliant"
+    ? "Compliant"
+    : log.complianceStatus === "breach"
+    ? "Breach"
+    : "—",
+
+complianceReason:
+  typeof log.complianceReason === "string" &&
+  log.complianceReason.trim()
+    ? log.complianceReason.trim()
+    : "—",
     start: formatTime(startRaw),
     end: formatTime(endRaw),
     drivingSeconds: parseNumber(
