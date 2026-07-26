@@ -738,6 +738,10 @@ export function exportRouter(app: Express): void {
         const headers = [
           "Date",
           "Driver Type",
+          "Vehicle Type",
+          "Vehicle Registration",
+          "Compliance",
+          "Compliance Reason",
           "Start",
           "End",
           "Driving",
@@ -765,11 +769,15 @@ export function exportRouter(app: Express): void {
 
           sheet.cell(row, 1).value(log.date);
           sheet.cell(row, 2).value(log.driverType);
-          sheet.cell(row, 3).value(log.start);
-          sheet.cell(row, 4).value(log.end);
+          sheet.cell(row, 3).value(log.vehicleType);
+          sheet.cell(row, 4).value(log.vehicleRegistration);
+          sheet.cell(row, 5).value(log.complianceStatus);
+          sheet.cell(row, 6).value(log.complianceReason);
+          sheet.cell(row, 7).value(log.start);
+          sheet.cell(row, 8).value(log.end);
 
           sheet
-            .cell(row, 5)
+            .cell(row, 9)
             .value(
               formatHoursMinutes(
                 log.drivingSeconds
@@ -777,7 +785,7 @@ export function exportRouter(app: Express): void {
             );
 
           sheet
-            .cell(row, 6)
+            .cell(row, 10)
             .value(
               formatHoursMinutes(
                 log.workSeconds
@@ -785,7 +793,7 @@ export function exportRouter(app: Express): void {
             );
 
           sheet
-            .cell(row, 7)
+            .cell(row, 11)
             .value(
               formatHoursMinutes(
                 log.breakSeconds
@@ -793,11 +801,11 @@ export function exportRouter(app: Express): void {
             );
 
           sheet
-            .cell(row, 8)
+            .cell(row, 12)
             .value(log.distanceKm);
 
           sheet
-            .range(row, 1, row, 8)
+            .range(row, 1, row, 12)
             .style({
               border: true,
               verticalAlignment: "center",
@@ -805,21 +813,25 @@ export function exportRouter(app: Express): void {
 
           if (index % 2 === 1) {
             sheet
-              .range(row, 1, row, 8)
+              .range(row, 1, row, 12)
               .style({
                 fill: "F3F6FA",
               });
           }
         });
 
-        sheet.column("A").width(14);
-        sheet.column("B").width(12);
-        sheet.column("C").width(12);
-        sheet.column("D").width(14);
-        sheet.column("E").width(14);
-        sheet.column("F").width(14);
-        sheet.column("G").width(15);
-        sheet.column("H").width(15);
+        sheet.column("A").width(14); // Date
+        sheet.column("B").width(18); // Driver Type
+        sheet.column("C").width(18); // Vehicle Type
+        sheet.column("D").width(18); // Vehicle Registration
+        sheet.column("E").width(14); // Compliance
+        sheet.column("F").width(34); // Compliance Reason
+        sheet.column("G").width(12); // Start
+        sheet.column("H").width(12); // End
+        sheet.column("I").width(14); // Driving
+        sheet.column("J").width(14); // Work
+        sheet.column("K").width(14); // Breaks
+        sheet.column("L").width(15); // Distance
 
         sheet.freezePanes(6, 0);
 
