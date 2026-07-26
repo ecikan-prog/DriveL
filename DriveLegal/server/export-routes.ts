@@ -136,6 +136,7 @@ function normalizeLog(log: ExportLog): NormalizedLog {
 
   return {
     date: explicitDate || formatDate(startRaw),
+    driverType: formatDriverType(log.driverType),
     start: formatTime(startRaw),
     end: formatTime(endRaw),
     drivingSeconds: parseNumber(
@@ -217,6 +218,7 @@ export function exportRouter(app: Express): void {
 
         const header = [
           "Date",
+          "Driver Type",
           "Start",
           "End",
           "Driving",
@@ -230,6 +232,7 @@ export function exportRouter(app: Express): void {
         const rows = logs.map((log) => {
           return [
             log.date,
+            log.driverType,
             log.start,
             log.end,
             formatHoursMinutes(log.drivingSeconds),
@@ -337,6 +340,7 @@ export function exportRouter(app: Express): void {
 
         const columns = [
           { label: "Date", width: 90 },
+          { label: "Driver Type", width: 110 },
           { label: "Start", width: 75 },
           { label: "End", width: 75 },
           { label: "Driving", width: 90 },
