@@ -287,8 +287,33 @@ export function ShiftProvider({ children }: { children: React.ReactNode }) {
     const log = await Logbook.endShift(user.id, { location: locationData, odometer });
     // Add to tamper-evident hash chain
     if (log) {
-      await addToHashChain(log);
-    }
+  const finalCompliance = evaluateLogCompliance(
+    log,
+    log.driverType ?? user.driverType ?? "small_passenger"
+  );
+
+  log.complianceStatus = finalCompliance.isCompliant
+    ? "compliant"
+    : "breach";
+
+  const reasons: string[] = [];
+
+  if (finalCompliance.continuousWorkExceeded) {
+    reasons.push("Continuous work limit exceeded");
+  }
+
+  if (finalCompliance.dailyWorkExceeded) {
+    reasons.push("13-hour daily work limit exceeded");
+  }
+
+  log.complianceReason =
+    reasons.length > 0
+      ? reasons.join("; ")
+      : "Within NZTA work-time limits";
+
+  await Logbook.saveDailyLog(log);
+  await addToHashChain(log);
+}
     setActiveShift(null);
     setCurrentLocation(null);
     setDrivingSeconds(0);
