@@ -628,7 +628,7 @@ export function exportRouter(app: Express): void {
 
         sheet.cell("D2").value("Licence");
         sheet
-          .range("E2:G2")
+          .range("E2:H2")
           .merged(true)
           .value(licenceNumber || "");
 
@@ -647,7 +647,7 @@ export function exportRouter(app: Express): void {
 
         sheet.cell("D3").value("Vehicle type");
         sheet
-          .range("E3:G3")
+          .range("E3:H3")
           .merged(true)
           .value(vehicleType || "");
 
@@ -659,7 +659,7 @@ export function exportRouter(app: Express): void {
 
         sheet.cell("D4").value("Generated");
         sheet
-          .range("E4:G4")
+          .range("E4:H4")
           .merged(true)
           .value(
             new Date().toLocaleString("en-NZ", {
@@ -668,7 +668,7 @@ export function exportRouter(app: Express): void {
           );
 
         sheet
-          .range("A2:G4")
+          .range("A2:H4")
           .style({
             border: true,
             verticalAlignment: "center",
