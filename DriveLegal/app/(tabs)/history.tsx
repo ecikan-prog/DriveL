@@ -65,8 +65,12 @@ function LogCard({
     0
   );
 
-  const compliance = evaluateLogCompliance(log, log.driverType);
-  const isCompliant = compliance.isCompliant;
+  const isCompliant =
+  log.complianceStatus === "compliant"
+    ? true
+    : log.complianceStatus === "breach"
+    ? false
+    : evaluateLogCompliance(log, log.driverType).isCompliant;
 
   const statusColor = isCompliant ? COLORS.green : COLORS.warning;
   const backgroundColor = isCompliant
@@ -347,9 +351,20 @@ await Sharing.shareAsync(destinationFile.uri, {
     0
   );
 
-  const compliantCount = filteredLogs.filter(
-    (log) => evaluateLogCompliance(log, log.driverType).isCompliant
-  ).length;
+  const compliantCount = filteredLogs.filter((log) => {
+  if (log.complianceStatus === "compliant") {
+    return true;
+  }
+
+  if (log.complianceStatus === "breach") {
+    return false;
+  }
+
+  return evaluateLogCompliance(
+    log,
+    log.driverType
+  ).isCompliant;
+}).length;
 
   const summaryTitle =
     filterPeriod === "all"
