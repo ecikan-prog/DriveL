@@ -544,12 +544,14 @@ export async function startShift(
   }
 
   const shift: ActiveShift = {
-    userId,
-    startTime: now,
-    events: [startEvent],
-    workTimeRule: getRule(options?.workTimeRule),
-    driverType: options?.driverType,
-  };
+  userId,
+  startTime: now,
+  events: [startEvent],
+  workTimeRule: getRule(options?.workTimeRule),
+  driverType: options?.driverType,
+  vehicleType: options?.vehicleType,
+  vehicleRegistration: options?.vehicleRegistration,
+};
 
   if (options?.restOverrideNote?.trim()) {
     shift.restOverrideNote = options.restOverrideNote.trim();
@@ -842,6 +844,8 @@ export function buildDailyLog(
     date: getLocalDateKey(shift.startTime),
     workTimeRule: getRule(shift.workTimeRule),
     driverType: shift.driverType,
+    vehicleType: shift.vehicleType,
+    vehicleRegistration: shift.vehicleRegistration,
     startTime: shift.startTime,
     endTime: endTimeIso,
     totalDrivingSeconds: totals.drivingSeconds,
