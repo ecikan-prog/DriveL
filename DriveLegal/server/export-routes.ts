@@ -250,6 +250,10 @@ export function exportRouter(app: Express): void {
         const header = [
           "Date",
           "Driver Type",
+          "Vehicle Type",
+          "Vehicle Registration",
+          "Compliance",
+          "Compliance Reason",
           "Start",
           "End",
           "Driving",
@@ -264,6 +268,10 @@ export function exportRouter(app: Express): void {
           return [
             log.date,
             log.driverType,
+            log.vehicleType,
+            log.vehicleRegistration,
+            log.complianceStatus,
+            log.complianceReason,
             log.start,
             log.end,
             formatHoursMinutes(log.drivingSeconds),
@@ -369,18 +377,22 @@ export function exportRouter(app: Express): void {
           document.page.margins.left -
           document.page.margins.right;
 
-        const columns = [
-          { label: "Date", width: 90 },
-          { label: "Driver Type", width: 110 },
-          { label: "Start", width: 75 },
-          { label: "End", width: 75 },
-          { label: "Driving", width: 90 },
-          { label: "Work", width: 90 },
-          { label: "Breaks", width: 90 },
-          { label: "Distance", width: 90 },
+       const columns = [
+        
+         { label: "Date", width: 58 },
+         { label: "Driver Type", width: 72 },
+         { label: "Vehicle", width: 62 },
+         { label: "Rego", width: 52 },
+         { label: "Status", width: 50 },
+         { label: "Reason", width: 105 },
+         { label: "Start", width: 48 },
+         { label: "End", width: 48 },
+         { label: "Driving", width: 58 },
+         { label: "Work", width: 58 },
+         { label: "Breaks", width: 58 },
+         { label: "Distance", width: 62 },
         ];
-
-        const rowHeight = 24;
+          const rowHeight = 24;
         const tableLeft = document.page.margins.left;
 
         const drawHeader = (): void => {
@@ -540,6 +552,10 @@ export function exportRouter(app: Express): void {
             [
               safeText(log.date),
               safeText(log.driverType),
+              safeText(log.vehicleType),
+              safeText(log.vehicleRegistration),
+              safeText(log.complianceStatus),
+              safeText(log.complianceReason),
               safeText(log.start),
               safeText(log.end),
               formatHoursMinutes(
