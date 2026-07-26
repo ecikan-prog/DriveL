@@ -13,6 +13,8 @@ import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuthContext } from "@/lib/auth-context";
 import { getAllLogs, formatHoursMinutes, DailyLog } from "@/lib/logbook-storage";
+import { evaluateLogCompliance } from "@/lib/compliance";
+
 import { getDrivingLimitSeconds } from "@/hooks/use-nzta-compliance";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
@@ -79,18 +81,14 @@ export default function ReportsScreen() {
     }
   };
 
-  const totalDrivingSeconds = logs.reduce((sum, l) => sum + l.totalDrivingSeconds, 0);
-  const totalWorkSeconds = logs.reduce((sum, l) => sum + l.totalWorkSeconds, 0);
-  const totalShifts = logs.length;
-  const driverType = (user as any)?.driverType ?? "small_passenger";
-  const drivingLimitSec = getDrivingLimitSeconds(driverType);
-  const compliantShifts = logs.filter(
-    (l) => l.totalDrivingSeconds <= drivingLimitSec && l.totalWorkSeconds <= 13 * 3600
-  ).length;
+const totalDrivingSeconds = logs.reduce((sum, l) => sum + l.totalDrivingSeconds, 0);
+const totalWorkSeconds = logs.reduce((sum, l) => sum + l.totalWorkSeconds, 0);
+const totalShifts = logs.length;
+const compliantShifts = logs.filter(
+  (l) => evaluateLogCompliance(l, l.driverType).isCompliant
+).length;
 
-  if (!user) return null;
-
-  return (
+return (
     <ScreenContainer edges={["top", "left", "right"]} containerClassName="bg-[#003366]" safeAreaClassName="bg-[#003366]">
       {/* Header */}
       <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16 }}>
