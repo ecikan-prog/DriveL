@@ -269,6 +269,8 @@ export function ShiftProvider({ children }: { children: React.ReactNode }) {
     user.driverType === "small_passenger"
       ? "sps_short_fares_7_hour"
       : "standard_5_5_hour",
+      vehicleType: user.vehicleType,
+      vehicleRegistration: user.vehicleRegistration,
 });
     const fortnightly = await loadFortnightly(user.id);
     setActiveShift(shift);
