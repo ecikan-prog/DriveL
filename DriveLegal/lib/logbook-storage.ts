@@ -75,6 +75,8 @@ export type ActiveShift = {
   events: ShiftEvent[];
   workTimeRule?: WorkTimeRule;
   driverType?: DriverType;
+  vehicleType?: string;
+  vehicleRegistration?: string;
   vehicleChanges?: VehicleChange[];
   /** Stored when the driver overrides the 10-hour-rest start block. */
   restOverrideNote?: string;
@@ -109,6 +111,10 @@ export type DailyLog = {
   date: string;
   workTimeRule?: WorkTimeRule;
   driverType?: DriverType;
+  vehicleType?: string;
+  vehicleRegistration?: string;
+  complianceStatus?: "compliant" | "breach";
+  complianceReason?: string;
   startTime: string;
   endTime: string;
   totalDrivingSeconds: number;
@@ -515,6 +521,8 @@ export async function startShift(
   restOverrideNote?: string;
   driverType?: DriverType;
   workTimeRule?: WorkTimeRule;
+  vehicleType?: string;
+  vehicleRegistration?: string;
 }
 ): Promise<ActiveShift> {
   const now = new Date().toISOString();
