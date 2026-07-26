@@ -603,7 +603,7 @@ export function exportRouter(app: Express): void {
           .name("Logbook");
 
         sheet
-          .range("A1:G1")
+          .range("A1:H1")
           .merged(true);
 
         sheet
