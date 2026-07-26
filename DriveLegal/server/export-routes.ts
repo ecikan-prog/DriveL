@@ -508,6 +508,7 @@ export function exportRouter(app: Express): void {
           drawRow(
             [
               safeText(log.date),
+              safeText(log.driverType),
               safeText(log.start),
               safeText(log.end),
               formatHoursMinutes(
@@ -689,6 +690,7 @@ export function exportRouter(app: Express): void {
 
         const headers = [
           "Date",
+          "Driver Type",
           "Start",
           "End",
           "Driving",
@@ -715,11 +717,12 @@ export function exportRouter(app: Express): void {
           const row = index + 7;
 
           sheet.cell(row, 1).value(log.date);
-          sheet.cell(row, 2).value(log.start);
-          sheet.cell(row, 3).value(log.end);
+          sheet.cell(row, 2).value(log.driverType);
+          sheet.cell(row, 3).value(log.start);
+          sheet.cell(row, 4).value(log.end);
 
           sheet
-            .cell(row, 4)
+            .cell(row, 5)
             .value(
               formatHoursMinutes(
                 log.drivingSeconds
@@ -727,7 +730,7 @@ export function exportRouter(app: Express): void {
             );
 
           sheet
-            .cell(row, 5)
+            .cell(row, 6)
             .value(
               formatHoursMinutes(
                 log.workSeconds
@@ -735,7 +738,7 @@ export function exportRouter(app: Express): void {
             );
 
           sheet
-            .cell(row, 6)
+            .cell(row, 7)
             .value(
               formatHoursMinutes(
                 log.breakSeconds
@@ -743,11 +746,11 @@ export function exportRouter(app: Express): void {
             );
 
           sheet
-            .cell(row, 7)
+            .cell(row, 8)
             .value(log.distanceKm);
 
           sheet
-            .range(row, 1, row, 7)
+            .range(row, 1, row, 8)
             .style({
               border: true,
               verticalAlignment: "center",
@@ -755,7 +758,7 @@ export function exportRouter(app: Express): void {
 
           if (index % 2 === 1) {
             sheet
-              .range(row, 1, row, 7)
+              .range(row, 1, row, 8)
               .style({
                 fill: "F3F6FA",
               });
@@ -769,6 +772,7 @@ export function exportRouter(app: Express): void {
         sheet.column("E").width(14);
         sheet.column("F").width(14);
         sheet.column("G").width(15);
+        sheet.column("H").width(15);
 
         sheet.freezePanes(6, 0);
 
