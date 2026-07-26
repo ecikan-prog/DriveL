@@ -84,9 +84,20 @@ export default function ReportsScreen() {
 const totalDrivingSeconds = logs.reduce((sum, l) => sum + l.totalDrivingSeconds, 0);
 const totalWorkSeconds = logs.reduce((sum, l) => sum + l.totalWorkSeconds, 0);
 const totalShifts = logs.length;
-const compliantShifts = logs.filter(
-  (l) => evaluateLogCompliance(l, l.driverType).isCompliant
-).length;
+const compliantShifts = logs.filter((log) => {
+  if (log.complianceStatus === "compliant") {
+    return true;
+  }
+
+  if (log.complianceStatus === "breach") {
+    return false;
+  }
+
+  return evaluateLogCompliance(
+    log,
+    log.driverType
+  ).isCompliant;
+}).length;
 
 return (
     <ScreenContainer edges={["top", "left", "right"]} containerClassName="bg-[#003366]" safeAreaClassName="bg-[#003366]">
