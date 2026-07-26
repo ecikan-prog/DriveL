@@ -25,7 +25,7 @@ import { getSubscriptionState, canLogShifts, type SubscriptionState } from "./su
 import { addToHashChain } from "./integrity";
 import { captureLocation, type LocationData } from "./location";
 import { validateRestPeriod, type RestValidationResult } from "./rest-validation";
-
+import { evaluateLogCompliance } from "./compliance";
 
 type ShiftContextValue = {
   activeShift: Logbook.ActiveShift | null;
