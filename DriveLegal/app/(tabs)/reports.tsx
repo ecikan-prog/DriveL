@@ -46,6 +46,7 @@ export default function ReportsScreen() {
   driverName: user.name ?? "",
   licenceNumber: user.licenceNumber ?? "",
   vehicleRego: user.vehicleRegistration ?? "",
+  vehicleType: user.vehicleType ?? "",     
   driverType,
   password: password || undefined,
 });
