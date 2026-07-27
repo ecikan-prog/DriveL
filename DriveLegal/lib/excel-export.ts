@@ -139,6 +139,7 @@ export async function generateAndShareExcel({
         licenceNumber: licenceNumber ?? "",
         vehicleRego: vehicleRego ?? "",
         vehicleRegistration: vehicleRego ?? "",
+        vehicleType: vehicleType ?? "",
         driverType:
           driverType ?? "small_passenger",
         password: safePassword || undefined,
