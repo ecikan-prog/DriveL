@@ -111,7 +111,7 @@ export async function generateAndShareExcel(options: ExcelExportOptions): Promis
       ["Driver Name", driverName],
       ["Licence Number", licenceNumber],
       ["Vehicle Rego", vehicleRego],
-      ["Driver Type", driverType === "goods" ? "Goods Service (5.5hr)" : "Passenger Service (7hr)"],
+      ["Driver Type", formatDriverType(driverType)],
       ["Export Date", new Date().toLocaleDateString("en-NZ")],
       ["Total Shifts", sorted.length.toString()],
       [""],
