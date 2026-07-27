@@ -767,58 +767,117 @@ export function exportRouter(app: Express): void {
         logs.forEach((log, index) => {
           const row = index + 7;
 
-          sheet.cell(row, 1).value(log.date);
-          sheet.cell(row, 2).value(log.driverType);
-          sheet.cell(row, 3).value(log.vehicleType);
-          sheet.cell(row, 4).value(log.vehicleRegistration);
-          sheet.cell(row, 5).value(log.complianceStatus);
-          sheet.cell(row, 6).value(log.complianceReason);
-          sheet.cell(row, 7).value(log.start);
-          sheet.cell(row, 8).value(log.end);
+          logs.forEach((log: any, index: number) => {
+  const row = index + 7;
 
-          sheet
-            .cell(row, 9)
-            .value(
-              formatHoursMinutes(
-                log.drivingSeconds
-              )
-            );
+  const logBreaks = Array.isArray(log.breaks)
+    ? log.breaks
+    : [];
 
-          sheet
-            .cell(row, 10)
-            .value(
-              formatHoursMinutes(
-                log.workSeconds
-              )
-            );
+  const totalBreakSeconds = logBreaks.reduce(
+    (sum: number, entry: any) =>
+      sum +
+      Math.max(
+        0,
+        Number(entry?.durationSeconds) || 0
+      ),
+    0
+  );
 
-          sheet
-            .cell(row, 11)
-            .value(
-              formatHoursMinutes(
-                log.breakSeconds
-              )
-            );
+  const rowDriverType =
+    typeof log.driverType === "string"
+      ? log.driverType
+      : driverType ?? "";
 
-          sheet
-            .cell(row, 12)
-            .value(log.distanceKm);
+  const rowVehicleType =
+    typeof log.vehicleType === "string"
+      ? log.vehicleType
+      : vehicleType ?? "";
 
-          sheet
-            .range(row, 1, row, 12)
-            .style({
-              border: true,
-              verticalAlignment: "center",
-            });
+  const rowVehicleRegistration =
+    typeof log.vehicleRegistration === "string"
+      ? log.vehicleRegistration
+      : vehicleRegistration ??
+        vehicleRego ??
+        "";
 
-          if (index % 2 === 1) {
-            sheet
-              .range(row, 1, row, 12)
-              .style({
-                fill: "F3F6FA",
-              });
-          }
-        });
+  sheet.cell(row, 1).value(log.date ?? "");
+
+  sheet
+    .cell(row, 2)
+    .value(rowDriverType);
+
+  sheet
+    .cell(row, 3)
+    .value(rowVehicleType);
+
+  sheet
+    .cell(row, 4)
+    .value(rowVehicleRegistration);
+
+  sheet
+    .cell(row, 5)
+    .value(log.complianceStatus ?? "");
+
+  sheet
+    .cell(row, 6)
+    .value(log.complianceReason ?? "");
+
+  sheet
+    .cell(row, 7)
+    .value(log.startTime ?? log.start ?? "");
+
+  sheet
+    .cell(row, 8)
+    .value(log.endTime ?? log.end ?? "");
+
+  sheet
+    .cell(row, 9)
+    .value(
+      formatHoursMinutes(
+        Number(
+          log.totalDrivingSeconds ??
+            log.drivingSeconds
+        ) || 0
+      )
+    );
+
+  sheet
+    .cell(row, 10)
+    .value(
+      formatHoursMinutes(
+        Number(
+          log.totalWorkSeconds ??
+            log.workSeconds
+        ) || 0
+      )
+    );
+
+  sheet
+    .cell(row, 11)
+    .value(
+      formatHoursMinutes(
+        totalBreakSeconds ||
+          Number(log.breakSeconds) ||
+          0
+      )
+    );
+
+  sheet
+    .cell(row, 12)
+    .value(
+      Number.isFinite(Number(log.distanceKm))
+        ? Number(log.distanceKm)
+        : 0
+    );
+
+  sheet
+    .range(row, 1, row, 12)
+    .style({
+      border: true,
+      verticalAlignment: "center",
+    });
+
 
         sheet.column("A").width(14); // Date
         sheet.column("B").width(18); // Driver Type
