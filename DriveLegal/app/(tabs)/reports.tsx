@@ -139,7 +139,51 @@ return (
 
       <View style={{ flex: 1, backgroundColor: "#F0F4FF", borderTopLeftRadius: 28, borderTopRightRadius: 28 }}>
         <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-          {/* Summary Stats */}
+          
+           <View
+  style={{
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 16,
+  }}
+>
+  {[
+    { value: "week", label: "This Week" },
+    { value: "fortnight", label: "Fortnight" },
+    { value: "month", label: "Month" },
+    { value: "all", label: "All" },
+  ].map((option) => {
+    const selected = dateRange === option.value;
+
+    return (
+      <TouchableOpacity
+        key={option.value}
+        onPress={() => setDateRange(option.value as typeof dateRange)}
+        style={{
+          flex: 1,
+          paddingVertical: 10,
+          borderRadius: 10,
+          alignItems: "center",
+          backgroundColor: selected ? "#003366" : "#FFFFFF",
+          borderWidth: 1,
+          borderColor: selected ? "#003366" : "#D1DCF0",
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 11,
+            fontWeight: "700",
+            color: selected ? "#FFFFFF" : "#6B7A99",
+          }}
+        >
+          {option.label}
+        </Text>
+      </TouchableOpacity>
+    );
+  })}
+</View> 
+         
+            {/* Summary Stats */}
           <View style={{ backgroundColor: "#FFFFFF", borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: "#E8EEF8" }}>
             <Text style={{ fontSize: 11, color: "#6B7A99", fontWeight: "700", letterSpacing: 1, marginBottom: 12 }}>SUMMARY</Text>
             <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
