@@ -74,7 +74,7 @@ export async function generateAndShareExcel({
   driverName,
   licenceNumber,
   vehicleRego,
-  vehcletype,
+  vehicleType,
   driverType,
   password,
 }: GenerateExcelOptions): Promise<void> {
