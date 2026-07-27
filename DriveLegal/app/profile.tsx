@@ -417,7 +417,16 @@ if (user?.trialStartDate) {
 
   if (!user) return null;
 
-  return (
+const activeDriverType = editing
+  ? form.driverType
+  : ((user as any)?.driverType ?? "small_passenger");
+
+const continuousWorkLimit =
+  activeDriverType === "small_passenger"
+    ? "7 hours"
+    : "5.5 hours";
+
+return (
     <ScreenContainer style={{ backgroundColor: COLORS.navy }}>
       {/* Header */}
       <View style={styles.header}>
