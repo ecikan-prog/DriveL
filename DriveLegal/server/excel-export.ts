@@ -33,13 +33,13 @@ function formatHM(seconds: number): string {
 function formatDriverType(value: DriverType): string {
   switch (value) {
     case "small_passenger":
-      return "Small Passenger Service";
-    case "goods":
-      return "Goods Vehicle";
+      return "Small Passenger Service (7-hour rule)";
     case "large_passenger":
-      return "Large Passenger Service";
+      return "Large Passenger Service (5.5-hour rule)";
+    case "goods":
+      return "Goods Service (5.5-hour rule)";
     case "vehicle_recovery":
-      return "Vehicle Recovery Service";
+      return "Vehicle Recovery Service (5.5-hour rule)";
     default:
       return "Unknown";
   }
