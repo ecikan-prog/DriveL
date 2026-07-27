@@ -23,24 +23,57 @@ export type ExcelExportOptions = {
 function formatHM(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
+
   if (h === 0) return `${m}m`;
   if (m === 0) return `${h}h`;
+
   return `${h}h ${m}m`;
 }
+
+function formatDriverType(value: DriverType): string {
+  switch (value) {
+    case "small_passenger":
+      return "Small Passenger Service";
+    case "goods":
+      return "Goods Vehicle";
+    case "large_passenger":
+      return "Large Passenger Service";
+    case "vehicle_recovery":
+      return "Vehicle Recovery Service";
+    default:
+      return "Unknown";
+  }
+}
+
 function fmtTime(isoString: string): string {
   const d = new Date(isoString);
-  return d.toLocaleTimeString("en-NZ", { hour: "2-digit", minute: "2-digit", hour12: true });
+
+  return d.toLocaleTimeString("en-NZ", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
 }
+
 function computeDrivingSeconds(log: DailyLog): number {
   let ms = 0;
   const events = log.events;
+
   for (let i = 0; i < events.length - 1; i++) {
     const current = events[i];
     const next = events[i + 1];
-    if (current.type === "shift_start" || current.type === "break_end" || current.type === "other_work_end") {
-      ms += new Date(next.timestamp).getTime() - new Date(current.timestamp).getTime();
+
+    if (
+      current.type === "shift_start" ||
+      current.type === "break_end" ||
+      current.type === "other_work_end"
+    ) {
+      ms +=
+        new Date(next.timestamp).getTime() -
+        new Date(current.timestamp).getTime();
     }
   }
+
   return Math.floor(ms / 1000);
 }
 function computeOtherWorkSeconds(log: DailyLog): number {
