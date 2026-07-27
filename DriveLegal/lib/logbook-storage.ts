@@ -1356,10 +1356,44 @@ export function logsToCSV(
   driverName: string,
   licenceNumber: string
 ): string {
+  const formatDriverType = (
+    value?: DriverType
+  ): string => {
+    switch (value) {
+      case "small_passenger":
+        return "Small Passenger Service";
+      case "goods":
+        return "Goods Vehicle";
+      case "large_passenger":
+        return "Large Passenger Service";
+      case "vehicle_recovery":
+        return "Vehicle Recovery Service";
+      default:
+        return "";
+    }
+  };
+
+  const formatWorkTimeRule = (
+    value?: WorkTimeRule
+  ): string => {
+    switch (getRule(value)) {
+      case "sps_short_fares_7_hour":
+        return "7-hour small passenger short-fare rule";
+      case "standard_5_5_hour":
+      default:
+        return "5.5-hour standard continuous-work rule";
+    }
+  };
+
   const header = [
     "Date",
     "Driver Name",
     "Licence Number",
+    "Driver Type",
+    "Vehicle Type",
+    "Vehicle Registration",
+    "Compliance Status",
+    "Compliance Reason",
     "Work Time Rule",
     "Shift Start",
     "Shift End",
@@ -1372,11 +1406,18 @@ export function logsToCSV(
     "End Odometer",
     "Distance Km",
     "Odometer Amendment Required",
-  ].map(csvCell).join(",");
+  ]
+    .map(csvCell)
+    .join(",");
 
   const rows = logs.map((log) => {
-    const totalBreakSeconds = log.breaks.reduce(
-      (sum, entry) => sum + Math.max(0, entry.durationSeconds),
+    const breaks = Array.isArray(log.breaks)
+      ? log.breaks
+      : [];
+
+    const totalBreakSeconds = breaks.reduce(
+      (sum, entry) =>
+        sum + Math.max(0, entry.durationSeconds ?? 0),
       0
     );
 
@@ -1384,19 +1425,28 @@ export function logsToCSV(
       log.date,
       driverName,
       licenceNumber,
-      getRule(log.workTimeRule),
+      formatDriverType(log.driverType),
+      log.vehicleType ?? "",
+      log.vehicleRegistration ?? "",
+      log.complianceStatus ?? "",
+      log.complianceReason ?? "",
+      formatWorkTimeRule(log.workTimeRule),
       formatTime(log.startTime),
       formatTime(log.endTime),
       formatHoursMinutes(log.totalWorkSeconds),
       formatHoursMinutes(log.totalDrivingSeconds),
-      formatHoursMinutes(log.totalOtherWorkSeconds ?? 0),
-      log.breaks.length,
+      formatHoursMinutes(
+        log.totalOtherWorkSeconds ?? 0
+      ),
+      breaks.length,
       formatHoursMinutes(totalBreakSeconds),
       log.startOdometer,
       log.endOdometer,
       log.distanceKm,
       log.odometerInverted ? "YES" : "NO",
-    ].map(csvCell).join(",");
+    ]
+      .map(csvCell)
+      .join(",");
   });
 
   return [header, ...rows].join("\n");
