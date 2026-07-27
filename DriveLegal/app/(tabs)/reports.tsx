@@ -25,14 +25,33 @@ export default function ReportsScreen() {
   const [exporting, setExporting] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [excelPassword, setExcelPassword] = useState("");
+  const [dateRange, setDateRange] = useState<
+  "week" | "fortnight" | "month" | "all"
+>("fortnight");
 
   useEffect(() => {
     if (!user) return;
     getAllLogs(user.id).then(setLogs);
   }, [user]);
+  const filteredLogs = logs.filter((log) => {
+  if (dateRange === "all") return true;
+
+  const shiftDate = new Date(log.date);
+  const cutoff = new Date();
+
+  if (dateRange === "week") {
+    cutoff.setDate(cutoff.getDate() - 7);
+  } else if (dateRange === "fortnight") {
+    cutoff.setDate(cutoff.getDate() - 14);
+  } else {
+    cutoff.setMonth(cutoff.getMonth() - 1);
+  }
+
+  return shiftDate >= cutoff;
+});
 
   const handleExportExcel = async (password?: string) => {
-    if (!user || logs.length === 0) {
+    if (!user || filteredLogs.length === 0) {
       Alert.alert("No Data", "No shift records to export.");
       return;
     }
@@ -42,7 +61,7 @@ export default function ReportsScreen() {
       const { generateAndShareExcel } = await import("@/lib/excel-export");
       await generateAndShareExcel({
   driverId: user.id,
-  logs,
+  logs: filteredLogs,
   driverName: user.name ?? "",
   licenceNumber: user.licenceNumber ?? "",
   vehicleRego: user.vehicleRegistration ?? "",
@@ -58,7 +77,7 @@ export default function ReportsScreen() {
   };
 
   const handleExportPDF = async () => {
-    if (!user || logs.length === 0) {
+    if (!user || filteredLogs.length === 0) {
       Alert.alert("No Data", "No shift records to export.");
       return;
     }
@@ -82,10 +101,19 @@ export default function ReportsScreen() {
     }
   };
 
-const totalDrivingSeconds = logs.reduce((sum, l) => sum + l.totalDrivingSeconds, 0);
-const totalWorkSeconds = logs.reduce((sum, l) => sum + l.totalWorkSeconds, 0);
-const totalShifts = logs.length;
-const compliantShifts = logs.filter((log) => {
+const totalDrivingSeconds = filteredLogs.reduce(
+  (sum, l) => sum + l.totalDrivingSeconds,
+  0
+);
+
+const totalWorkSeconds = filteredLogs.reduce(
+  (sum, l) => sum + l.totalWorkSeconds,
+  0
+);
+
+const totalShifts = filteredLogs.length;
+
+const compliantShifts = filteredLogs.filter((log) => {
   if (log.complianceStatus === "compliant") {
     return true;
   }
@@ -95,9 +123,10 @@ const compliantShifts = logs.filter((log) => {
   }
 
   return evaluateLogCompliance(
-    log,
-    log.driverType
-  ).isCompliant;
+  log,
+  log.driverType
+).isCompliant;
+  
 }).length;
 
 return (
