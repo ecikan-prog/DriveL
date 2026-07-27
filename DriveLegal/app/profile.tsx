@@ -417,15 +417,6 @@ if (user?.trialStartDate) {
 
   if (!user) return null;
 
-const activeDriverType = editing
-  ? form.driverType
-  : ((user as any)?.driverType ?? "small_passenger");
-
-const continuousWorkLimit =
-  activeDriverType === "small_passenger"
-    ? "7 hours"
-    : "5.5 hours";
-
 return (
     <ScreenContainer style={{ backgroundColor: COLORS.navy }}>
       {/* Header */}
@@ -691,8 +682,11 @@ return (
                 <Text style={styles.ruleText}>
                   Maximum{" "}
                   <Text style={styles.ruleTextBold}>
-                    {continuousWorkLimit} driving
-                    </Text>{" "}
+                   {(user as any)?.driverType === "small_passenger"
+                    ? "7 hours"
+                     : "5.5 hours"}{" "}
+                      driving
+                  </Text>{" "}
                   before a 30-minute break
                 </Text>
               </View>
