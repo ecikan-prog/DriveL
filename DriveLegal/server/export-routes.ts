@@ -767,7 +767,8 @@ export function exportRouter(app: Express): void {
         logs.forEach((log, index) => {
           const row = index + 7;
 
-          logs.forEach((log: any, index: number) => {
+          for (let index = 0; index < logs.length; index += 1) {
+  const log: any = logs[index];
   const row = index + 7;
 
   const logBreaks = Array.isArray(log.breaks)
