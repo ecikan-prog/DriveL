@@ -11,6 +11,7 @@ type GenerateExcelOptions = {
   driverName: string;
   licenceNumber: string;
   vehicleRego: string;
+  vehicleType: string;
   driverType: string;
   password?: string;
 };
