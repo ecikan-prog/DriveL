@@ -691,11 +691,8 @@ return (
                 <Text style={styles.ruleText}>
                   Maximum{" "}
                   <Text style={styles.ruleTextBold}>
-                    {(user as any)?.driverType === "goods"
-                      ? "5.5 hours"
-                      : "7 hours"}{" "}
-                    driving
-                  </Text>{" "}
+                    {continuousWorkLimit} driving
+                    </Text>{" "}
                   before a 30-minute break
                 </Text>
               </View>
