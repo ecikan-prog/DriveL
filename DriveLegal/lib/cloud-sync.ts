@@ -300,6 +300,7 @@ export async function registerDriverCloud(params: {
   email: string;
   passwordHash: string;
   name: string;
+  dateOfBirth: string;
   tslNumber?: string;
   operatorName?: string;
   licenceNumber?: string;
