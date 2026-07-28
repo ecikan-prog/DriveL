@@ -352,7 +352,7 @@ if (user?.trialStartDate) {
       const result = await updateUserProfile(user.id, {
         operatorName: form.operatorName.trim() || undefined,
         licenceClass: form.licenceClass.trim() || undefined,
-        licenceExpiry: form.licenceExpiry.trim() || undefined,,
+        licenceExpiry: form.licenceExpiry.trim() || undefined,
         vehicleRegistration: form.vehicleRegistration.trim().toUpperCase(),
         vehicleType: form.vehicleType,
         driverType: form.driverType as DriverType,
