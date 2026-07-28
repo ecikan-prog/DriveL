@@ -145,14 +145,80 @@ export default function NewEntryScreen() {
   if (!user) return null;
 
   return (
-    <ScreenContainer edges={["top", "left", "right"]} containerClassName="bg-[#003366]" safeAreaClassName="bg-[#003366]">
-      {/* Header */}
-      <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16 }}>
-        <Text style={{ color: "#FFFFFF", fontSize: 22, fontWeight: "800" }}>New Entry</Text>
-        <Text style={{ color: "#93C5FD", fontSize: 12, marginTop: 4 }}>Record shift events</Text>
-      </View>
+<ScreenContainer
+  edges={["top", "left", "right"]}
+  containerClassName="bg-[#003366]"
+  safeAreaClassName="bg-[#003366]"
+>
+{/* Header */}
+<View
+  style={{
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 20,
+  }}
+>
+  <View
+    style={{
+      flexDirection: "row",
+      alignItems: "center",
+    }}
+  >
+    <View
+      style={{
+        width: 48,
+        height: 48,
+        borderRadius: 14,
+        backgroundColor: "rgba(255,255,255,0.15)",
+        alignItems: "center",
+        justifyContent: "center",
+        marginRight: 14,
+      }}
+    >
+      <MaterialIcons
+        name="edit-note"
+        size={28}
+        color="#FFFFFF"
+      />
+    </View>
 
-      <View style={{ flex: 1, backgroundColor: "#F0F4FF", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20 }}>
+    <View style={{ flex: 1 }}>
+      <Text
+        style={{
+          color: "#FFFFFF",
+          fontSize: 24,
+          fontWeight: "800",
+        }}
+      >
+        New Entry
+      </Text>
+
+      <Text
+        style={{
+          color: "#D6E7FF",
+          fontSize: 14,
+          marginTop: 2,
+        }}
+      >
+        Record your shift events quickly and accurately
+      </Text>
+    </View>
+  </View>
+</View>
+
+   <ScrollView
+  style={{
+    flex: 1,
+    backgroundColor: "#F0F4FF",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+  }}
+  contentContainerStyle={{
+    padding: 20,
+    paddingBottom: 150,
+  }}
+  showsVerticalScrollIndicator={false}
+>
         {/* Current Status */}
         {/* Active mode banner */}
 {isShiftActive && (
@@ -386,7 +452,7 @@ export default function NewEntryScreen() {
             </Text>
           </View>
         )}
-      </View>
+      </ScrollView>
 
       {/* ─── Rest Override Modal ─────────────────────────────────────────────── */}
       <Modal visible={showRestOverride} transparent animationType="fade" onRequestClose={() => setShowRestOverride(false)}>
