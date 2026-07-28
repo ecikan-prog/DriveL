@@ -66,6 +66,7 @@ export const appRouter = t.router({
           email: z.string().email(),
           passwordHash: z.string().min(1).max(128),
           name: z.string().min(2).max(255),
+          dateOfBirth: z.string().max(10),
 
           tslNumber: z.string().max(64).optional(),
           operatorName: z.string().max(255).optional(),
@@ -119,6 +120,7 @@ export const appRouter = t.router({
               tslNumber,
               licenceClass,
               licenceExpiry,
+              dateOfBirth,
               operatorName,
               emailVerified,
               trialStartDate
@@ -137,6 +139,7 @@ export const appRouter = t.router({
               input.tslNumber?.trim() || null,
               input.licenceClass?.trim() || null,
               input.licenceExpiry?.trim() || null,
+              input.dateOfBirth.trim(),
               input.operatorName?.trim() || null,
               input.trialStartDate || new Date().toISOString(),
             ]
