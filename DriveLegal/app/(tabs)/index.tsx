@@ -336,8 +336,17 @@ export default function DashboardScreen() {
   // work day, regardless of any break reset.
   // The dashboard must show whichever is SMALLER — a break reset can never
   // grant more driving time than the driver has left in their work day.
-  const driverType = (user as any)?.driverType ?? "small_passenger";
-  const drivingLimitSeconds = getDrivingLimitSeconds(driverType);
+  const activeDriverType =
+  activeShift?.driverType ??
+  (user as any)?.driverType ??
+  "small_passenger";
+
+const drivingLimitSeconds =
+  activeShift?.workTimeRule === "sps_short_fares_7_hour"
+    ? 7 * 60 * 60
+    : activeShift?.workTimeRule === "standard_5_5_hour"
+      ? 5.5 * 60 * 60
+      : getDrivingLimitSeconds(activeDriverType);
   const dailyRemainingSeconds = Math.max(0, DAILY_WORK_LIMIT_SECONDS - workSeconds);
   const remainingDrivingSeconds = Math.max(
   0,
