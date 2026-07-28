@@ -25,6 +25,7 @@ export type Driver = {
   operatorName?: string;
   licenceClass?: string;
   licenceExpiry?: string;
+  lastProfileUpdate?: string;
   createdAt: string;
   trialStartDate: string;
 };
@@ -45,7 +46,44 @@ function simpleHash(str: string): string {
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
+function parseStrictDate(value: string): Date | null {
+  const trimmed = value.trim();
 
+  // Accept DD/MM/YYYY
+  const nzMatch = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(trimmed);
+
+  // Accept YYYY-MM-DD
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+
+  let day: number;
+  let month: number;
+  let year: number;
+
+  if (nzMatch) {
+    day = Number(nzMatch[1]);
+    month = Number(nzMatch[2]);
+    year = Number(nzMatch[3]);
+  } else if (isoMatch) {
+    year = Number(isoMatch[1]);
+    month = Number(isoMatch[2]);
+    day = Number(isoMatch[3]);
+  } else {
+    return null;
+  }
+
+  const date = new Date(year, month - 1, day);
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
 async function getAllUsers(): Promise<Driver[]> {
   try {
     const raw = await AsyncStorage.getItem(USERS_KEY);
@@ -145,13 +183,95 @@ export async function logoutUser(): Promise<void> {
 
 export async function updateUserProfile(
   userId: string,
-  updates: Partial<Pick<Driver, "name" | "licenceNumber" | "vehicleRegistration" | "vehicleType" | "driverType" | "operatorName" | "licenceClass" | "licenceExpiry">>
+  updates: Partial<
+  Pick<
+    Driver,
+    | "vehicleRegistration"
+    | "vehicleType"
+    | "driverType"
+    | "operatorName"
+    | "licenceClass"
+    | "licenceExpiry"
+  >
+>
 ): Promise<{ success: true; user: AuthUser } | { success: false; error: string }> {
   const users = await getAllUsers();
   const idx = users.findIndex((u) => u.id === userId);
   if (idx === -1) return { success: false, error: "User not found." };
+  const validDriverTypes: DriverType[] = [
+  "goods",
+  "large_passenger",
+  "small_passenger",
+  "vehicle_recovery",
+];
 
-  users[idx] = { ...users[idx], ...updates };
+if (
+  updates.driverType !== undefined &&
+  !validDriverTypes.includes(updates.driverType)
+) {
+  return {
+    success: false,
+    error: "Invalid driver service type.",
+  };
+}
+if (updates.vehicleRegistration !== undefined) {
+  const rego = updates.vehicleRegistration.trim().toUpperCase();
+
+  if (!rego) {
+    return {
+      success: false,
+      error: "Vehicle registration cannot be empty.",
+    };
+  }
+
+  if (!/^[A-Z0-9-]{2,10}$/.test(rego)) {
+    return {
+      success: false,
+      error: "Enter a valid vehicle registration.",
+    };
+  }
+
+  updates.vehicleRegistration = rego;
+  if (updates.vehicleType !== undefined) {
+  const vehicleType = updates.vehicleType.trim();
+
+  if (!vehicleType) {
+    return {
+      success: false,
+      error: "Please select a vehicle type.",
+    };
+  }
+
+  updates.vehicleType = vehicleType;
+}
+}
+  if (updates.licenceExpiry !== undefined) {
+  const expiry = parseStrictDate(updates.licenceExpiry);
+
+  if (!expiry) {
+    return {
+      success: false,
+      error: "Invalid licence expiry date.",
+    };
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (expiry < today) {
+    return {
+      success: false,
+      error: "Licence has expired.",
+    };
+  }
+
+  updates.licenceExpiry = expiry.toISOString().split("T")[0];
+}
+  users[idx] = {
+  ...users[idx],
+  ...updates,
+  lastProfileUpdate: new Date().toISOString(),
+};
   await saveAllUsers(users);
 
   const { passwordHash: _, ...authUser } = users[idx];
