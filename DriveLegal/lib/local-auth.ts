@@ -110,12 +110,17 @@ export async function registerUser(params: {
   licenceClass?: string;
   licenceExpiry?: string;
 }): Promise<{ success: true; user: AuthUser } | { success: false; error: string }> {
-  const users = await getAllUsers();
-  const emailLower = params.email.toLowerCase().trim();
+  
+  let users = await getAllUsers();
+const emailLower = params.email.toLowerCase().trim();
 
-  if (users.find((u) => u.email.toLowerCase() === emailLower)) {
-    return { success: false, error: "An account with this email already exists." };
-  }
+/*
+ * Remove any stale local account.
+ * The cloud database is the source of truth.
+ */
+users = users.filter(
+  (u) => u.email.toLowerCase().trim() !== emailLower
+);
 
   if (params.password.length < 10) {
     return { success: false, error: "Password must be at least 10 characters." };
