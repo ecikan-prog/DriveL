@@ -98,6 +98,8 @@ async function saveAllUsers(users: Driver[]): Promise<void> {
 }
 
 export async function registerUser(params: {
+  localUserId: string;
+  trialStartDate: string;
   name: string;
   email: string;
   password: string;
@@ -128,7 +130,7 @@ users = users.filter(
 
   const now = new Date().toISOString();
   const driver: Driver = {
-    id: generateId(),
+    id: params.localUserId,
     name: params.name.trim(),
     email: emailLower,
     passwordHash: simpleHash(params.password),
@@ -141,7 +143,7 @@ users = users.filter(
     licenceClass: params.licenceClass?.trim() || undefined,
     licenceExpiry: params.licenceExpiry?.trim() || undefined,
     createdAt: now,
-    trialStartDate: now,
+    trialStartDate: params.trialStartDate,
   };
 
   users.push(driver);
