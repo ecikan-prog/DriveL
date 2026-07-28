@@ -27,7 +27,7 @@ type FieldProps = {
   keyboardType?: "default" | "email-address" | "phone-pad" | "numeric";
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
   returnKeyType?: "next" | "done";
-  optional?: boolean;
+  maxLength?: number;
 };
 
 function FormField({
@@ -41,6 +41,7 @@ function FormField({
   autoCapitalize = "sentences",
   returnKeyType = "next",
   optional = false,
+  maxLength,
 }: FieldProps) {
   return (
     <View style={{ marginBottom: 18 }}>
@@ -106,6 +107,7 @@ function FormField({
           autoCapitalize={autoCapitalize}
           autoCorrect={false}
           returnKeyType={returnKeyType}
+          maxLength={maxLength}
         />
       </View>
     </View>
@@ -392,6 +394,38 @@ if (birthdayNotReached) {
 
 if (age < 18) {
   return "Drivers must be at least 18 years old.";
+}
+    const expiryMatch =
+  /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(
+    licenceExpiry.trim()
+  );
+
+if (!expiryMatch) {
+  return "Please enter the licence expiry date as DD/MM/YYYY.";
+}
+
+const expiryDay = Number(expiryMatch[1]);
+const expiryMonth = Number(expiryMatch[2]);
+const expiryYear = Number(expiryMatch[3]);
+
+const expiryDate = new Date(
+  expiryYear,
+  expiryMonth - 1,
+  expiryDay
+);
+
+if (
+  expiryDate.getFullYear() !== expiryYear ||
+  expiryDate.getMonth() !== expiryMonth - 1 ||
+  expiryDate.getDate() !== expiryDay
+) {
+  return "Please enter a valid licence expiry date.";
+}
+
+expiryDate.setHours(0, 0, 0, 0);
+
+if (expiryDate < today) {
+  return "Your driver licence has expired.";
 }
 
     if (password.length < 10) {
@@ -853,7 +887,7 @@ const dateOfBirthIso =
               icon="event"
               keyboardType="numeric"
               autoCapitalize="none"
-              maxLength={20}
+              maxLength={10}
             />
 
             <SectionHeader
