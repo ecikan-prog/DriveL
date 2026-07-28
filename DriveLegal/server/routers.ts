@@ -66,7 +66,12 @@ export const appRouter = t.router({
           email: z.string().email(),
           passwordHash: z.string().min(1).max(128),
           name: z.string().min(2).max(255),
-          dateOfBirth: z.string().max(10),
+          dateOfBirth: z
+  .string()
+  .regex(
+    /^\d{4}-\d{2}-\d{2}$/,
+    "Date of birth must use YYYY-MM-DD."
+  ),
 
           tslNumber: z.string().max(64).optional(),
           operatorName: z.string().max(255).optional(),
@@ -85,6 +90,42 @@ export const appRouter = t.router({
       )
       .mutation(async ({ input }) => {
         const email = normaliseEmail(input.email);
+        const dateOfBirth = parseIsoDate(input.dateOfBirth);
+
+if (!dateOfBirth) {
+  return {
+    success: false,
+    error: "Please enter a valid date of birth.",
+  };
+}
+
+const today = new Date();
+today.setHours(0, 0, 0, 0);
+
+if (dateOfBirth >= today) {
+  return {
+    success: false,
+    error: "Date of birth cannot be in the future.",
+  };
+}
+
+const age =
+  today.getFullYear() -
+  dateOfBirth.getFullYear() -
+  (
+    today.getMonth() < dateOfBirth.getMonth() ||
+    (today.getMonth() === dateOfBirth.getMonth() &&
+      today.getDate() < dateOfBirth.getDate())
+      ? 1
+      : 0
+  );
+
+if (age < 18) {
+  return {
+    success: false,
+    error: "Drivers must be at least 18 years old.",
+  };
+}
 
         try {
           const existing = await query<any[]>(
