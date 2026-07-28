@@ -15,6 +15,7 @@ export type DriverType = "goods" | "large_passenger" | "small_passenger" | "vehi
 export type Driver = {
   id: string;
   name: string;
+  dateOfBirth: string;
   email: string;
   passwordHash: string;
   tslNumber: string;
@@ -101,6 +102,7 @@ export async function registerUser(params: {
   localUserId: string;
   trialStartDate: string;
   name: string;
+  dateOfBirth: string;
   email: string;
   password: string;
   tslNumber: string;
@@ -132,6 +134,7 @@ users = users.filter(
   const driver: Driver = {
     id: params.localUserId,
     name: params.name.trim(),
+    dateOfBirth: params.dateOfBirth,
     email: emailLower,
     passwordHash: simpleHash(params.password),
     tslNumber: params.tslNumber.trim().toUpperCase(),
