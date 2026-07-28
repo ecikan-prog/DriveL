@@ -330,6 +330,7 @@ export async function loginDriverCloud(email: string, passwordHash: string): Pro
     localUserId: string;
     email: string;
     name: string;
+    dateOfBirth: string | null;
     tslNumber: string | null;
     operatorName: string | null;
     licenceNumber: string | null;
