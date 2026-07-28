@@ -288,6 +288,9 @@ export default function ProfileScreen() {
     vehicleRegistration: user?.vehicleRegistration ?? "",
     vehicleType: user?.vehicleType ?? "",
     driverType: (user as any)?.driverType ?? "small_passenger",
+    operatorName: (user as any)?.operatorName ?? "",
+    licenceClass: (user as any)?.licenceClass ?? "",
+    licenceExpiry: (user as any)?.licenceExpiry ?? "",
   });
   const [stats, setStats] = useState({
     totalShifts: 0,
@@ -302,6 +305,9 @@ export default function ProfileScreen() {
       vehicleRegistration: user.vehicleRegistration ?? "",
       vehicleType: user.vehicleType ?? "",
       driverType: (user as any)?.driverType ?? "small_passenger",
+      operatorName: (user as any)?.operatorName ?? "",
+      licenceClass: (user as any)?.licenceClass ?? "",
+      licenceExpiry: (user as any)?.licenceExpiry ?? "",
     });
 
     Promise.all([
@@ -344,8 +350,9 @@ if (user?.trialStartDate) {
     setSaving(true);
     try {
       const result = await updateUserProfile(user.id, {
-        name: form.name.trim(),
-        licenceNumber: form.licenceNumber.trim().toUpperCase(),
+        operatorName: form.operatorName.trim() || undefined,
+        licenceClass: form.licenceClass.trim() || undefined,
+        licenceExpiry: form.licenceExpiry.trim() || undefined,,
         vehicleRegistration: form.vehicleRegistration.trim().toUpperCase(),
         vehicleType: form.vehicleType,
         driverType: form.driverType as DriverType,
@@ -476,6 +483,9 @@ return (
                     vehicleRegistration: user.vehicleRegistration ?? "",
                     vehicleType: user.vehicleType ?? "",
                     driverType: (user as any)?.driverType ?? "small_passenger",
+                    operatorName: (user as any)?.operatorName ?? "",
+                    licenceClass: (user as any)?.licenceClass ?? "",
+                    licenceExpiry: (user as any)?.licenceExpiry ?? "",
                   });
                 }}
               >
@@ -578,23 +588,47 @@ return (
             <Text style={styles.cardTitle}>👤 Driver Details</Text>
             {editing ? (
               <View style={styles.formStack}>
+                <InfoRow
+                 label="Full Name — Contact support to change"
+                 value={user.name ?? "—"}
+                 icon="🔒"
+               />
+
+                <InfoRow
+                  label="Licence Number — Contact support to change"
+                  value={user.licenceNumber ?? "—"}
+                  icon="🔒"
+                 />
                 <FormField
-                  label="Full Name"
-                  value={form.name}
-                  placeholder="Full name"
-                  autoCapitalize="words"
-                  onChangeText={(v) => setForm((p) => ({ ...p, name: v }))}
-                />
-                <FormField
-                  label="NZ Licence Number"
-                  value={form.licenceNumber}
-                  placeholder="Licence number"
-                  autoCapitalize="characters"
-                  onChangeText={(v) =>
-                    setForm((p) => ({ ...p, licenceNumber: v }))
-                  }
-                />
-                <FormField
+  label="Operator Name"
+  value={form.operatorName}
+  placeholder="Operator name"
+  autoCapitalize="words"
+  onChangeText={(v) =>
+    setForm((p) => ({ ...p, operatorName: v }))
+  }
+/>
+
+<FormField
+  label="Licence Class"
+  value={form.licenceClass}
+  placeholder="Example: Class 2"
+  autoCapitalize="characters"
+  onChangeText={(v) =>
+    setForm((p) => ({ ...p, licenceClass: v }))
+  }
+/>
+
+<FormField
+  label="Licence Expiry"
+  value={form.licenceExpiry}
+  placeholder="DD/MM/YYYY"
+  onChangeText={(v) =>
+    setForm((p) => ({ ...p, licenceExpiry: v }))
+  }
+/>
+              
+                  <FormField
                   label="Vehicle Registration"
                   value={form.vehicleRegistration}
                   placeholder="Vehicle rego"
@@ -632,6 +666,34 @@ return (
                   value={user.licenceNumber ?? "—"}
                   icon="🪪"
                 />
+                <InfoRow
+                  label="Operator Name"
+                  value={(user as any)?.operatorName ?? "—"}
+                  icon="🏢"
+                 />
+
+                <InfoRow
+                  label="Licence Class"
+                  value={(user as any)?.licenceClass ?? "—"}
+                  icon="🪪"
+                />
+
+                <InfoRow
+                 label="Licence Expiry"
+                 value={
+                  (user as any)?.licenceExpiry
+                   ? new Date(`${(user as any).licenceExpiry}T00:00:00`).toLocaleDateString(
+                    "en-NZ",
+                  {
+                 day: "2-digit",
+               month: "2-digit",
+            year: "numeric",
+          }
+       )
+     : "—"
+   }
+                 icon="📅"
+               />
                 <InfoRow
                   label="Vehicle Type"
                   value={user.vehicleType ?? "—"}
