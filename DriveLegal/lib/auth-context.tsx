@@ -47,6 +47,7 @@ type RegisterResult = {
 
 type RegisterParams = {
   name: string;
+  dateOfBirth: string;
   email: string;
   password: string;
   tslNumber: string;
@@ -230,6 +231,7 @@ export function AuthProvider({
               id: driver.localUserId,
               email: driver.email,
               name: driver.name,
+              dateOfBirth: driver.dateOfBirth ?? "",
               passwordHash,
               tslNumber:
                 driver.tslNumber ?? "",
@@ -360,9 +362,11 @@ const trialStartDate =
             email,
             passwordHash,
             name:
-              cleanedParams.name,
+             cleanedParams.name,
+            dateOfBirth:
+             cleanedParams.dateOfBirth,
             tslNumber:
-              cleanedParams.tslNumber,
+             cleanedParams.tslNumber,
             operatorName:
               cleanedParams.operatorName,
             licenceNumber:
