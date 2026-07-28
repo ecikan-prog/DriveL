@@ -309,6 +309,7 @@ export async function createLocalAccountFromCloud(params: {
   id: string;
   email: string;
   name: string;
+  dateOfBirth: string;
   passwordHash: string;
   tslNumber: string;
   licenceNumber: string;
@@ -331,6 +332,7 @@ export async function createLocalAccountFromCloud(params: {
     users[idx] = {
       ...existing,
       name: params.name,
+      dateOfBirth: params.dateOfBirth,
       passwordHash: params.passwordHash,
       tslNumber: params.tslNumber,
       licenceNumber: params.licenceNumber,
@@ -350,6 +352,7 @@ export async function createLocalAccountFromCloud(params: {
   const driver: Driver = {
     id: params.id,
     name: params.name,
+    dateOfBirth: params.dateOfBirth,
     email: emailLower,
     passwordHash: params.passwordHash,
     tslNumber: params.tslNumber,
