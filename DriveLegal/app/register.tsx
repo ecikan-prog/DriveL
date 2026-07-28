@@ -273,6 +273,7 @@ export default function RegisterScreen() {
   const { register } = useAuthContext();
 
   const [name, setName] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [email, setEmail] = useState("");
 
   const [password, setPassword] = useState("");
@@ -306,6 +307,7 @@ export default function RegisterScreen() {
   const requiredFieldsComplete = useMemo(() => {
     return Boolean(
       name.trim() &&
+      dateOfBirth.trim() &&
         normalizedEmail &&
         password &&
         confirmPassword &&
@@ -318,6 +320,7 @@ export default function RegisterScreen() {
     );
   }, [
     name,
+    dateOfBirth,
     normalizedEmail,
     password,
     confirmPassword,
@@ -346,6 +349,50 @@ export default function RegisterScreen() {
     if (!normalizedEmail.includes("@")) {
       return "Please enter a valid email address.";
     }
+    const dobMatch =
+  /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(
+    dateOfBirth.trim()
+  );
+
+if (!dobMatch) {
+  return "Please enter your date of birth as DD/MM/YYYY.";
+}
+
+const day = Number(dobMatch[1]);
+const month = Number(dobMatch[2]);
+const year = Number(dobMatch[3]);
+
+const dob = new Date(year, month - 1, day);
+
+if (
+  dob.getFullYear() !== year ||
+  dob.getMonth() !== month - 1 ||
+  dob.getDate() !== day
+) {
+  return "Please enter a valid date of birth.";
+}
+
+const today = new Date();
+today.setHours(0, 0, 0, 0);
+
+if (dob >= today) {
+  return "Date of birth cannot be today or in the future.";
+}
+
+let age = today.getFullYear() - dob.getFullYear();
+
+const birthdayNotReached =
+  today.getMonth() < dob.getMonth() ||
+  (today.getMonth() === dob.getMonth() &&
+    today.getDate() < dob.getDate());
+
+if (birthdayNotReached) {
+  age -= 1;
+}
+
+if (age < 18) {
+  return "Drivers must be at least 18 years old.";
+}
 
     if (password.length < 10) {
       return "Your password must contain at least 10 characters.";
@@ -375,10 +422,15 @@ export default function RegisterScreen() {
     }
 
     setLoading(true);
+    const [day, month, year] =
+  dateOfBirth.trim().split("/");
 
+const dateOfBirthIso =
+  `${year}-${month}-${day}`;
     try {
       const result = await register({
         name: name.trim(),
+        dateOfBirth: dateOfBirthIso,
         email: normalizedEmail,
         password,
         tslNumber: tslNumber.trim().toUpperCase(),
@@ -556,6 +608,29 @@ export default function RegisterScreen() {
               icon="person-outline"
               autoCapitalize="words"
             />
+            <FormField
+  label="Date of birth"
+  value={dateOfBirth}
+  onChangeText={(value) => {
+    const digits = value.replace(/\D/g, "").slice(0, 8);
+
+    let formatted = digits;
+
+    if (digits.length > 2) {
+      formatted = `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    }
+
+    if (digits.length > 4) {
+      formatted = `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+    }
+
+    setDateOfBirth(formatted);
+  }}
+  placeholder="DD/MM/YYYY"
+  icon="cake"
+  keyboardType="numeric"
+  autoCapitalize="none"
+/>
 
             <FormField
               label="Email address"
