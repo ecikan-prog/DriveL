@@ -42,6 +42,8 @@ export const drivers = mysqlTable("drivers", {
   licenceClass: varchar("licenceClass", { length: 16 }),
   /** Licence expiry date (YYYY-MM-DD) */
   licenceExpiry: varchar("licenceExpiry", { length: 10 }),
+  /** Driver date of birth (YYYY-MM-DD) */
+ dateOfBirth: varchar("dateOfBirth", { length: 10 }),
   /** Operator/Company name (TSL holder — may differ from driver name) */
   operatorName: varchar("operatorName", { length: 255 }),
   /** Whether the driver has verified their email address */
