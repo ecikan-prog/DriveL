@@ -341,23 +341,12 @@ export function AuthProvider({
           params.driverType ??
           "small_passenger",
       };
+      const localUserId =
+  Date.now().toString(36) +
+  Math.random().toString(36).slice(2);
 
-      const localResult =
-        await LocalAuth.registerUser(
-          cleanedParams
-        );
-
-      if (
-        !localResult.success ||
-        !localResult.user
-      ) {
-        return {
-          success: false,
-          error:
-            localResult.error ??
-            "Unable to create your account.",
-        };
-      }
+const trialStartDate =
+  new Date().toISOString();
 
       const passwordHash =
         LocalAuth.hashPassword(
@@ -367,8 +356,7 @@ export function AuthProvider({
       try {
         const cloudResult =
           await registerDriverCloud({
-            localUserId:
-              localResult.user.id,
+            localUserId,
             email,
             passwordHash,
             name:
@@ -390,10 +378,7 @@ export function AuthProvider({
             driverType:
               cleanedParams.driverType ??
               "small_passenger",
-            trialStartDate:
-              localResult.user
-                .trialStartDate ??
-              new Date().toISOString(),
+            trialStartDate,
             baseUrl:
               getVerificationBaseUrl(),
           });
@@ -408,6 +393,22 @@ export function AuthProvider({
               "Unable to register your account with the Drive Legal server.",
           };
         }
+        const localResult =
+  await LocalAuth.registerUser(
+    cleanedParams
+  );
+
+if (
+  !localResult.success ||
+  !localResult.user
+) {
+  return {
+    success: false,
+    error:
+      localResult.error ??
+      "Your account was registered, but it could not be saved on this device.",
+  };
+}
 
         /*
          * Registration succeeded, but the user must verify their email
