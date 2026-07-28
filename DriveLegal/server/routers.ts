@@ -22,6 +22,30 @@ const driverTypeSchema = z.enum(DRIVER_TYPES);
 function normaliseEmail(email: string): string {
   return email.trim().toLowerCase();
 }
+function parseIsoDate(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  const date = new Date(year, month - 1, day);
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
 
 function createSecureToken(): string {
   return crypto.randomBytes(32).toString("hex");
@@ -166,7 +190,7 @@ if (age < 18) {
               emailVerified,
               trialStartDate
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, ?)
             `,
             [
               input.localUserId,
@@ -269,6 +293,7 @@ if (age < 18) {
               email,
               passwordHash,
               name,
+              dateOfBirth,
               tslNumber,
               operatorName,
               licenceNumber,
@@ -317,6 +342,7 @@ if (age < 18) {
               localUserId: driver.localUserId,
               email: driver.email,
               name: driver.name,
+              dateOfBirth: driver.dateOfBirth,
               tslNumber: driver.tslNumber,
               operatorName: driver.operatorName,
               licenceNumber: driver.licenceNumber,
