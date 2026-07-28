@@ -394,9 +394,11 @@ const trialStartDate =
           };
         }
         const localResult =
-  await LocalAuth.registerUser(
-    cleanedParams
-  );
+  await LocalAuth.registerUser({
+    ...cleanedParams,
+    localUserId,
+    trialStartDate,
+  });
 
 if (
   !localResult.success ||
