@@ -158,8 +158,18 @@ export function ShiftProvider({ children }: { children: React.ReactNode }) {
       // warnings — matching the same value now driving the dashboard
       // countdown — and total fortnightly (base + current shift total) for CWP.
       const totalFortnightly = fortnightlyBase + driving;
-      const driverType = user?.driverType || "small_passenger";
-      const newCompliance = evaluateCompliance(continuousWork, work, totalFortnightly, driverType);
+
+const shiftDriverType =
+  shift.driverType ??
+  user?.driverType ??
+  "small_passenger";
+
+const newCompliance = evaluateCompliance(
+  continuousWork,
+  work,
+  totalFortnightly,
+  shiftDriverType
+);
       setCompliance(newCompliance);
 
       // Fire notifications for new warnings
@@ -170,7 +180,7 @@ export function ShiftProvider({ children }: { children: React.ReactNode }) {
         }
       }
     },
-    [sendWarningNotification, user]
+    [sendWarningNotification, user?.driverType]
   );
 
   const startTimer = useCallback(
