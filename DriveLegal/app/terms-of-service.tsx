@@ -147,7 +147,7 @@ export default function TermsOfServiceScreen() {
         {"\n\n"}
         The applicable subscription price, trial conditions and billing period
         will be displayed in the application and App Store before purchase. The
-        intended annual price at the date of these Terms is NZ$64.99.
+        intended annual price at the date of these Terms is NZ$69.99,
         {"\n\n"}
         Prices and subscription availability may change. Any applicable price
         will be shown before you confirm a purchase or renewal.
