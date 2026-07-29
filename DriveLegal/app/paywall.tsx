@@ -169,7 +169,7 @@ export default function PaywallScreen() {
               ⏰ Free Trial Ended
             </Text>
             <Text style={{ color: "#D1D5DB", fontSize: 12, textAlign: "center", lineHeight: 18 }}>
-              Your 14-day free trial has expired. Subscribe to continue logging your driving hours and meet NZTA work time requirements.
+              Your 21-day free trial has expired. Subscribe to continue logging your driving hours and meet NZTA work time requirements.
             </Text>
           </View>
         </View>
