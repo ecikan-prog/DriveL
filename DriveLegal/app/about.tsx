@@ -1,4 +1,5 @@
 import React from "react";
+
 import {
   LegalPageLayout,
   LegalSection,
@@ -8,8 +9,8 @@ export default function AboutScreen() {
   return (
     <LegalPageLayout
       title="About Drive Legal"
-      subtitle="Driver Logbook"
-      lastUpdated="Build 41"
+      subtitle="Digital Work-Time Logbook"
+      lastUpdated="Build 61"
       icon="info"
       summaryPoints={[
         {
@@ -18,7 +19,7 @@ export default function AboutScreen() {
         },
         {
           icon: "support-agent",
-          text: "Local New Zealand Support",
+          text: "New Zealand Support",
         },
         {
           icon: "security",
@@ -26,40 +27,48 @@ export default function AboutScreen() {
         },
         {
           icon: "gavel",
-          text: "Built for NZ Compliance",
+          text: "Built for NZ Work-Time Recording",
         },
       ]}
     >
       <LegalSection number={1} title="Application">
-        Drive Legal is a professional electronic driver logbook designed for
-        commercial drivers operating in New Zealand.
+        Drive Legal is a digital work-time and logbook application designed to
+        assist commercial drivers operating in New Zealand with recording
+        shifts, work time, driving periods, breaks, vehicles and related
+        logbook information.
       </LegalSection>
 
       <LegalSection number={2} title="Version">
         Version 1.0.0{"\n"}
-        Build 41
+        Build 61
       </LegalSection>
 
-      <LegalSection number={3} title="Developer">
-        Guided NZ Rentals
+      <LegalSection number={3} title="Service">
+        Drive Legal
       </LegalSection>
 
-      <LegalSection number={4} title="Office">
-        2/27 Glenda Drive{"\n"}
-        Frankton{"\n"}
-        Queenstown 9300{"\n"}
+      <LegalSection number={4} title="Location">
+        Queenstown{"\n"}
         New Zealand
       </LegalSection>
 
       <LegalSection number={5} title="Support">
         Email: support@drivelegal.app{"\n"}
-        WhatsApp: +64 27 705 0258{"\n"}
-        Website: www.drivelegal.app
+        Website: https://drivelegal.app
       </LegalSection>
 
-      <LegalSection number={6} title="Copyright">
-        © 2026 Guided NZ Rentals{"\n"}
-        All Rights Reserved.
+      <LegalSection number={6} title="Important Information">
+        Drive Legal is a record-keeping and compliance-support tool. It is not
+        represented as being approved, certified or endorsed by Waka Kotahi New
+        Zealand Transport Agency unless expressly confirmed in writing.
+        {"\n\n"}
+        Drivers and transport operators remain responsible for understanding
+        and complying with all applicable legal requirements.
+      </LegalSection>
+
+      <LegalSection number={7} title="Copyright">
+        © 2026 Drive Legal{"\n"}
+        All rights reserved.
       </LegalSection>
     </LegalPageLayout>
   );
