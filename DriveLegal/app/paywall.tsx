@@ -1,5 +1,5 @@
 /**
- * Paywall Screen — shown when the 14-day trial expires.
+ * Paywall Screen — shown when the 21-day trial expires.
  * Offers subscription options and handles Stripe checkout.
  */
 import React, { useState } from "react";
@@ -38,9 +38,9 @@ const PLANS: PlanOption[] = [
   {
     id: "annual",
     name: "Annual",
-    price: "NZD $59.99",
+    price: "NZD $69.99",
     period: "/year",
-    savings: "Save 29%",
+    savings: "Save NZ$13.89",
     popular: true,
   },
 ];
