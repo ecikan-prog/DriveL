@@ -10,7 +10,7 @@ export default function PrivacyPolicyScreen() {
     <LegalPageLayout
       title="Privacy Policy"
       subtitle="Protecting Your Privacy"
-      lastUpdated="14 June 2026"
+      lastUpdated="29 July 2026"
       icon="shield"
       summaryPoints={[
         {
@@ -35,130 +35,179 @@ export default function PrivacyPolicyScreen() {
         },
       ]}
     >
-      <LegalSection number={1} title="Introduction">
-        Drive Legal ("we", "us", "our") is committed to protecting the privacy
-        of our users ("you", "driver"). This Privacy Policy explains how we
-        collect, use, store, and share your personal information in compliance
-        with the New Zealand Privacy Act 2020 and the Information Privacy
-        Principles (IPPs).
+      <LegalSection number={1} title="About Drive Legal">
+        Drive Legal is a New Zealand-based digital service operated under the
+        Drive Legal name. In this Privacy Policy, “Drive Legal”, “we”, “us” and
+        “our” refer to the operator of the Drive Legal service.
+        {"\n\n"}
+        This Privacy Policy explains how we collect, use, store, disclose and
+        protect personal information when you use the Drive Legal website,
+        mobile application and related services.
       </LegalSection>
 
       <LegalSection number={2} title="Information We Collect">
-        We collect the following personal information when you register and use
-        Drive Legal:{"\n\n"}
-        • Full name{"\n"}
-        • Email address{"\n"}
-        • NZ driver licence number{"\n"}
-        • Vehicle registration number{"\n"}
-        • Vehicle type{"\n"}
-        • Shift start/end times and dates{"\n"}
-        • Break start/end times and durations{"\n"}
-        • Cumulative driving and work hours{"\n"}
-        • Device information (for app functionality only)
+        We may collect information you provide when creating or managing an
+        account, including your name, email address, telephone number, driver
+        licence details, driver type, transport operator details and account
+        credentials.
+        {"\n\n"}
+        We may collect vehicle information, vehicle registration numbers,
+        odometer readings, work-time records, driving periods, other-work
+        periods, rest periods, shift information, amendments, amendment
+        reasons, notes, timestamps, reports, exports and other records
+        generated through your use of Drive Legal.
+        {"\n\n"}
+        We may also collect technical information such as device type,
+        operating system, application version, IP address, diagnostic
+        information, error reports, login activity and security events.
       </LegalSection>
 
-      <LegalSection number={3} title="Purpose of Collection">
-        Your information is collected for the following purposes:{"\n\n"}
-        • To maintain an electronic driver logbook designed to meet NZTA work
-        time requirements{"\n"}
-        • To calculate and enforce work time limits under the Land Transport
-        Rule: Work Time and Logbooks 2007{"\n"}
-        • To generate work time reports for enforcement agencies{"\n"}
-        • To provide fatigue management warnings and alerts{"\n"}
-        • To enable you to export records for your employer (TSL holder){"\n"}
-        • To manage your subscription and account
+      <LegalSection number={3} title="Location Information">
+        Drive Legal may collect location information when relevant work-time,
+        shift or logbook features are being used and location permission has
+        been granted on the device.
+        {"\n\n"}
+        Location information may be used to support record accuracy,
+        auditability, security, shift records and compliance-related
+        functionality.
+        {"\n\n"}
+        You can manage location permissions through your device settings.
+        Disabling location access may prevent some Drive Legal features from
+        working correctly.
       </LegalSection>
 
-      <LegalSection number={4} title="Data Storage and Security">
-        Your logbook data is stored locally on your device using encrypted
-        storage. We implement the following security measures:{"\n\n"}
-        • SHA-256 hash chain verification on all completed shift records to
-        detect tampering{"\n"}
-        • Immutable log entries — once a shift is ended, it cannot be edited or
-        deleted{"\n"}
-        • Local device encryption via the operating system's secure storage
+      <LegalSection number={4} title="How We Use Your Information">
+        We may use personal information to provide, maintain and secure Drive
+        Legal, authenticate users, manage accounts, record work time, generate
+        reports and exports, display reminders and compliance indicators,
+        administer subscriptions and respond to customer-support requests.
+        {"\n\n"}
+        We may also use information to investigate errors, maintain audit
+        trails, prevent fraud or misuse, improve reliability, enforce our Terms
+        of Service, comply with legal or regulatory obligations and protect the
+        rights, safety and security of Drive Legal, its users and the public.
+      </LegalSection>
+
+      <LegalSection number={5} title="Sharing and Disclosure">
+        We do not sell personal information.
+        {"\n\n"}
+        We may share personal information with trusted service providers that
+        help us operate Drive Legal, including hosting, database,
+        authentication, email, security, analytics, payment, subscription and
+        technical-support providers.
+        {"\n\n"}
+        Information may be shared with an authorised transport operator
+        connected to your account where you have authorised that connection or
+        where the disclosure is otherwise permitted by law.
+        {"\n\n"}
+        We may disclose information where required or permitted by law, in
+        response to a lawful request, to investigate suspected fraud or misuse,
+        or where reasonably necessary to protect users, the public or the
+        security and integrity of Drive Legal.
+      </LegalSection>
+
+      <LegalSection number={6} title="Overseas Storage and Processing">
+        Personal information may be stored or processed by trusted cloud and
+        technology service providers located in New Zealand or overseas.
+        {"\n\n"}
+        Where personal information is disclosed outside New Zealand, we take
+        reasonable steps to ensure that it is protected by safeguards that are
+        appropriate under applicable New Zealand privacy law.
+      </LegalSection>
+
+      <LegalSection number={7} title="Storage and Security">
+        We use reasonable technical and organisational safeguards designed to
+        protect personal information against unauthorised access, disclosure,
+        alteration, loss, misuse or destruction.
+        {"\n\n"}
+        These safeguards may include authentication controls, access
+        restrictions, secure communications, audit information and
+        infrastructure security measures.
+        {"\n\n"}
+        No electronic transmission or storage method can be guaranteed to be
+        completely secure. You are also responsible for protecting your
+        password, PIN, device and account access.
+      </LegalSection>
+
+      <LegalSection number={8} title="Record Retention">
+        We retain personal information and work-time records for as long as
+        reasonably necessary to provide Drive Legal, maintain account and
+        record integrity, resolve disputes and meet legal, regulatory,
+        security, fraud-prevention and audit requirements.
+        {"\n\n"}
+        Drive Legal is designed to keep work-time and logbook records available
+        for at least 12 months, reflecting the standard retention period
+        applying to relevant driver logbook records under New Zealand land
+        transport requirements.
+        {"\n\n"}
+        Some records may be retained after an account is closed where retention
+        is required or permitted by law or reasonably necessary for regulatory,
+        security, audit, fraud-prevention or dispute-resolution purposes.
+      </LegalSection>
+
+      <LegalSection number={9} title="Account Deletion and Closure">
+        You may initiate deletion of your Drive Legal account through the
+        account-deletion option available within the mobile application.
+        {"\n\n"}
+        You may also contact support@drivelegal.app for assistance with an
+        account-deletion request.
+        {"\n\n"}
+        Cancelling a subscription or deleting the Drive Legal application from
+        a device does not automatically delete your Drive Legal account or
+        stored information.
+        {"\n\n"}
+        After any necessary identity verification, an account-deletion request
+        will be completed within 14 days, except where additional time is
+        reasonably required by law or where certain information must be
+        retained for legal, regulatory, security, fraud-prevention, audit or
+        dispute-resolution purposes.
+        {"\n\n"}
+        Account deletion may permanently remove access to stored records,
+        reports, exports and related services. You should download any records
+        you require before requesting deletion.
+      </LegalSection>
+
+      <LegalSection number={10} title="Access and Correction">
+        You may request access to personal information we hold about you or ask
+        us to correct information that is inaccurate or incomplete.
+        {"\n\n"}
+        We may need to verify your identity before responding to an access or
+        correction request.
+      </LegalSection>
+
+      <LegalSection number={11} title="Children’s Privacy">
+        Drive Legal is intended for commercial drivers and authorised
+        transport-industry users. It is not directed to children.
+        {"\n\n"}
+        We do not knowingly collect personal information from children who are
+        not legally permitted to use the service.
+      </LegalSection>
+
+      <LegalSection number={12} title="Changes to This Privacy Policy">
+        We may update this Privacy Policy from time to time. The current version
+        and its latest update date will be published on this page.
+        {"\n\n"}
+        Where appropriate, we may also notify users of significant changes
+        through the application or by another reasonable method.
+      </LegalSection>
+
+      <LegalSection number={13} title="Privacy Questions and Complaints">
+        You may contact us about a privacy question, access request, correction
+        request, account-deletion request or complaint.
+        {"\n\n"}
+        You may also have the right to make a complaint to the New Zealand
+        Office of the Privacy Commissioner.
+      </LegalSection>
+
+      <LegalSection number={14} title="Contact Us">
+        Privacy enquiries and account-deletion requests can be sent to:
+        {"\n\n"}
+        Drive Legal
         {"\n"}
-        • No third-party access to your raw logbook data without your explicit
-        consent{"\n\n"}
-        Data is retained on your device for a minimum of 12 months as required
-        by the Land Transport Rule: Work Time and Logbooks 2007. We recommend
-        retaining records for 6 years to comply with employment law
-        requirements.
-      </LegalSection>
-
-      <LegalSection number={5} title="Who Can Access Your Data">
-        Your logbook data may be accessed by:{"\n\n"}
-        • You (the driver) — full access at all times{"\n"}
-        • NZ Transport Agency enforcement officers — upon request during
-        roadside inspections, you are required to present your logbook records
+        Queenstown, New Zealand
         {"\n"}
-        • NZ Police — as part of a lawful enforcement action{"\n"}
-        • Your employer / TSL holder — you are required to supply copies within
-        14 days of recording a shift{"\n\n"}
-        We do not sell, rent, or share your personal information with any third
-        parties for marketing or commercial purposes.
+        Email: support@drivelegal.app
       </LegalSection>
-
-      <LegalSection number={6} title="Data Retention">
-        • Active logbook records: Retained indefinitely on your device while
-        the app is installed{"\n"}
-        • Minimum retention: 12 months from the date of each shift entry (NZTA
-        requirement){"\n"}
-        • Recommended retention: 6 years (employment law best practice){"\n"}
-        • Account deletion: You may request deletion of your account and all
-        associated data by contacting us at support@drivelegal.app. We will
-        process deletion requests within 20 working days as required by the
-        Privacy Act 2020.
-      </LegalSection>
-
-      <LegalSection
-        number={7}
-        title="Your Rights Under the Privacy Act 2020"
-      >
-        Under the New Zealand Privacy Act 2020, you have the right to:{"\n\n"}
-        • Access your personal information held by us{"\n"}
-        • Request correction of inaccurate information{"\n"}
-        • Request deletion of your personal information (subject to legal
-        retention requirements){"\n"}
-        • Complain to the Office of the Privacy Commissioner if you believe
-        your privacy has been breached{"\n\n"}
-        To exercise these rights, contact us at support@drivelegal.app.
-      </LegalSection>
-
-      <LegalSection number={8} title="Third-Party Services">
-        Drive Legal uses the following third-party services:{"\n\n"}
-        • Stripe — for subscription payment processing (Stripe's privacy policy
-        applies to payment data){"\n"}
-        • Apple App Store / Google Play Store — for app distribution{"\n\n"}
-        We do not use analytics tracking, advertising networks, or social media
-        trackers.
-      </LegalSection>
-
-      <LegalSection number={9} title="Changes to This Policy">
-        We may update this Privacy Policy from time to time. We will notify you
-        of any material changes via in-app notification or email. Continued use
-        of Drive Legal after changes constitutes acceptance of the updated
-        policy.
-      </LegalSection>
-
-      <LegalSection number={10} title="Drive Legal Support">
-  If you have questions about this Privacy Policy or your personal information:
-
-  {"\n\n"}
-
-  Drive Legal (Guided NZ Rentals)
-  {"\n"}
-  2/27 Glenda Drive
-  {"\n"}
-  Frankton
-  {"\n"}
-  Queenstown 9300
-  {"\n\n"}
-
-  Email: support@drivelegal.app
-  {"\n"}
-  WhatsApp Support: +64 27 705 0258
-</LegalSection>
-          </LegalPageLayout>
+    </LegalPageLayout>
   );
 }
