@@ -229,6 +229,12 @@ const newCompliance = evaluateCompliance(
     }
 
     setActiveShift(shift);
+    saveActiveShiftToCloud(shift).catch((error) => {
+  console.error(
+    "[Shift] Active shift cloud save failed:",
+    error
+  );
+});
     startTimer(shift, fortnightly);
   }
 
