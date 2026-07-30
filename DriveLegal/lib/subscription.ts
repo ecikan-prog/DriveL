@@ -29,10 +29,30 @@ export async function getSubscriptionState(userId: string, trialStartDate: strin
   try {
     const raw = await AsyncStorage.getItem(`${SUBSCRIPTION_KEY}_${userId}`);
     if (raw) {
-      const state: SubscriptionState = JSON.parse(raw);
-      // Recalculate status based on dates
-      return recalculateStatus(state);
-    }
+      
+  const state: SubscriptionState = JSON.parse(raw);
+
+  // Keep paid subscriptions unchanged.
+  if (state.status === "active") {
+    const updatedState = recalculateStatus(state);
+    await saveSubscriptionState(updatedState);
+    return updatedState;
+  }
+
+  // Rebuild the trial dates using the current 21-day rule.
+  // This corrects older saved states that were created with a 14-day trial.
+  const trialStart = new Date(trialStartDate);
+  const trialEnd = new Date(
+    trialStart.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000
+  );
+
+  state.trialStartDate = trialStart.toISOString();
+  state.trialEndDate = trialEnd.toISOString();
+  state.status = Date.now() > trialEnd.getTime() ? "expired" : "trial";
+
+  await saveSubscriptionState(state);
+  return state;
+}
   } catch {
     // Fall through to create new state
   }
