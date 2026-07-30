@@ -323,6 +323,7 @@ export async function createLocalAccountFromCloud(params: {
   licenceClass?: string;
   licenceExpiry?: string;
   trialStartDate: string;
+  createdAt?: string;
 }): Promise<{ success: true; user: AuthUser } | { success: false; error: string }> {
   const users = await getAllUsers();
   const emailLower = params.email.toLowerCase().trim();
@@ -345,6 +346,7 @@ export async function createLocalAccountFromCloud(params: {
       operatorName: params.operatorName || existing.operatorName,
       licenceClass: params.licenceClass || existing.licenceClass,
       licenceExpiry: params.licenceExpiry || existing.licenceExpiry,
+      createdAt: params.createdAt ?? existing.createdAt,
     };
     await saveAllUsers(users);
     const { passwordHash: _, ...authUser } = users[idx];
@@ -366,7 +368,10 @@ export async function createLocalAccountFromCloud(params: {
     operatorName: params.operatorName || undefined,
     licenceClass: params.licenceClass || undefined,
     licenceExpiry: params.licenceExpiry || undefined,
-    createdAt: new Date().toISOString(),
+    createdAt:
+    params.createdAt ??
+    params.trialStartDate ??
+    new Date().toISOString(),
     trialStartDate: params.trialStartDate,
   };
 
