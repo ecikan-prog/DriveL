@@ -13,6 +13,11 @@ import React, {
 import * as Logbook from "./logbook-storage";
 import { evaluateCompliance, type ComplianceStatus } from "@/hooks/use-nzta-compliance";
 import { useAuthContext } from "./auth-context";
+import {
+  saveActiveShiftToCloud,
+  pullActiveShiftFromCloud,
+  clearActiveShiftFromCloud,
+} from "./cloud-sync";
 // Notifications is used defensively — if the module fails to load, we skip notifications
 let Notifications: any = null;
 try {
