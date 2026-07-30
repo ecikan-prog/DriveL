@@ -1,7 +1,7 @@
 /**
  * Subscription management for Drive Legal.
- * Handles 21-day free trial and subscription state via AsyncStorage.
- * Designed to integrate with Stripe when backend is connected.
+ * Server (Railway/MySQL) is the source of truth for subscription status.
+ * AsyncStorage is a local cache, refreshed from the server on every login.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -12,61 +12,50 @@ export type SubscriptionStatus = "trial" | "active" | "expired" | "cancelled";
 export type SubscriptionState = {
   userId: string;
   status: SubscriptionStatus;
-  trialStartDate: string; // ISO string
-  trialEndDate: string; // ISO string
-  subscriptionId?: string; // Stripe subscription ID
-  currentPeriodEnd?: string; // ISO string - when current billing period ends
+  trialStartDate: string;
+  trialEndDate: string;
+  subscriptionId?: string;
+  currentPeriodEnd?: string;
   plan?: "monthly" | "annual";
-  lastChecked: string; // ISO string
+  lastChecked: string;
+  lastServerSync?: string; // set only by syncSubscriptionFromServer
 };
 
 const TRIAL_DAYS = 21;
 
 /**
- * Get or initialize subscription state for a user.
+ * THE ONLY place subscription status should be set from an authoritative source.
+ * Call this right after login/register, using the driver fields returned by the server.
+ * This always wins over whatever was cached locally.
  */
-export async function getSubscriptionState(userId: string, trialStartDate: string): Promise<SubscriptionState> {
-  try {
-    const raw = await AsyncStorage.getItem(`${SUBSCRIPTION_KEY}_${userId}`);
-    if (raw) {
-      
-  const state: SubscriptionState = JSON.parse(raw);
+export async function syncSubscriptionFromServer(params: {
+  userId: string;
+  status: SubscriptionStatus;
+  trialStartDate?: string | null;
+  trialEndDate?: string | null;
+  subscriptionId?: string | null;
+  currentPeriodEnd?: string | null;
+  plan?: "monthly" | "annual" | null;
+}): Promise<SubscriptionState> {
+  const trialStartDate =
+    params.trialStartDate ?? new Date().toISOString();
 
-  // Keep paid subscriptions unchanged.
-  if (state.status === "active") {
-    const updatedState = recalculateStatus(state);
-    await saveSubscriptionState(updatedState);
-    return updatedState;
-  }
-
-  // Rebuild the trial dates using the current 21-day rule.
-  // This corrects older saved states that were created with a 14-day trial.
-  const trialStart = new Date(trialStartDate);
-  const trialEnd = new Date(
-    trialStart.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000
-  );
-
-  state.trialStartDate = trialStart.toISOString();
-  state.trialEndDate = trialEnd.toISOString();
-  state.status = Date.now() > trialEnd.getTime() ? "expired" : "trial";
-
-  await saveSubscriptionState(state);
-  return state;
-}
-  } catch {
-    // Fall through to create new state
-  }
-
-  // Initialize new subscription state
-  const trialStart = new Date(trialStartDate);
-  const trialEnd = new Date(trialStart.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+  const trialEndDate =
+    params.trialEndDate ??
+    new Date(
+      new Date(trialStartDate).getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000
+    ).toISOString();
 
   const state: SubscriptionState = {
-    userId,
-    status: "trial",
+    userId: params.userId,
+    status: params.status,
     trialStartDate,
-    trialEndDate: trialEnd.toISOString(),
+    trialEndDate,
+    subscriptionId: params.subscriptionId ?? undefined,
+    currentPeriodEnd: params.currentPeriodEnd ?? undefined,
+    plan: params.plan ?? undefined,
     lastChecked: new Date().toISOString(),
+    lastServerSync: new Date().toISOString(),
   };
 
   await saveSubscriptionState(state);
@@ -74,32 +63,70 @@ export async function getSubscriptionState(userId: string, trialStartDate: strin
 }
 
 /**
- * Recalculate subscription status based on current time.
+ * Read subscription state for display / gating decisions.
+ * Does NOT resync dates or re-derive status from scratch — it only ever
+ * applies a one-way expiry downgrade (trial/active -> expired) based on
+ * the dates that were already set by syncSubscriptionFromServer.
+ * If nothing is cached yet (first-ever run, offline), falls back to a
+ * short-lived local trial so the app remains usable until the next login.
  */
-function recalculateStatus(state: SubscriptionState): SubscriptionState {
+export async function getSubscriptionState(userId: string): Promise<SubscriptionState> {
+  try {
+    const raw = await AsyncStorage.getItem(`${SUBSCRIPTION_KEY}_${userId}`);
+    if (raw) {
+      const state: SubscriptionState = JSON.parse(raw);
+      const updated = applyExpiryCheck(state);
+      if (updated.status !== state.status) {
+        await saveSubscriptionState(updated);
+      }
+      return updated;
+    }
+  } catch {
+    // fall through to offline default
+  }
+
+  // No cached state at all (should be rare — only before first server sync).
+  const trialStart = new Date().toISOString();
+  const trialEnd = new Date(
+    Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000
+  ).toISOString();
+
+  const fallback: SubscriptionState = {
+    userId,
+    status: "trial",
+    trialStartDate: trialStart,
+    trialEndDate: trialEnd,
+    lastChecked: new Date().toISOString(),
+  };
+
+  await saveSubscriptionState(fallback);
+  return fallback;
+}
+
+/**
+ * One-way downgrade only: trial -> expired, active -> expired.
+ * Never upgrades or resets dates. Never touches cancelled.
+ */
+function applyExpiryCheck(state: SubscriptionState): SubscriptionState {
   const now = Date.now();
 
-  // If actively subscribed, check if period is still valid
   if (state.status === "active" && state.currentPeriodEnd) {
     if (now > new Date(state.currentPeriodEnd).getTime()) {
-      state.status = "expired";
+      return { ...state, status: "expired" };
     }
     return state;
   }
 
-  // If on trial, check if trial has expired
   if (state.status === "trial") {
     if (now > new Date(state.trialEndDate).getTime()) {
-      state.status = "expired";
+      return { ...state, status: "expired" };
     }
+    return state;
   }
 
   return state;
 }
 
-/**
- * Save subscription state to AsyncStorage.
- */
 export async function saveSubscriptionState(state: SubscriptionState): Promise<void> {
   state.lastChecked = new Date().toISOString();
   await AsyncStorage.setItem(`${SUBSCRIPTION_KEY}_${state.userId}`, JSON.stringify(state));
@@ -107,6 +134,8 @@ export async function saveSubscriptionState(state: SubscriptionState): Promise<v
 
 /**
  * Activate a subscription (called after successful Stripe payment).
+ * Local-first; a follow-up server call/webhook should also update the drivers table
+ * so other devices and future logins see it too.
  */
 export async function activateSubscription(
   userId: string,
@@ -119,6 +148,7 @@ export async function activateSubscription(
     ? JSON.parse(raw)
     : {
         userId,
+        status: "trial",
         trialStartDate: new Date().toISOString(),
         trialEndDate: new Date().toISOString(),
         lastChecked: new Date().toISOString(),
@@ -128,48 +158,33 @@ export async function activateSubscription(
   state.plan = plan;
   state.subscriptionId = subscriptionId;
   state.currentPeriodEnd = currentPeriodEnd;
-  state.lastChecked = new Date().toISOString();
 
   await saveSubscriptionState(state);
   return state;
 }
 
-/**
- * Cancel subscription (reverts to expired after current period).
- */
 export async function cancelSubscription(userId: string): Promise<SubscriptionState> {
   const raw = await AsyncStorage.getItem(`${SUBSCRIPTION_KEY}_${userId}`);
   if (!raw) throw new Error("No subscription found");
 
   const state: SubscriptionState = JSON.parse(raw);
   state.status = "cancelled";
-  state.lastChecked = new Date().toISOString();
 
   await saveSubscriptionState(state);
   return state;
 }
 
-/**
- * Check if the user can log shifts (trial active or subscription active).
- */
 export function canLogShifts(state: SubscriptionState): boolean {
   return state.status === "trial" || state.status === "active";
 }
 
-/**
- * Get trial days remaining (0 if expired).
- */
 export function getTrialDaysLeft(state: SubscriptionState): number {
   if (state.status !== "trial") return 0;
   const end = new Date(state.trialEndDate).getTime();
-  const now = Date.now();
-  const daysLeft = Math.ceil((end - now) / (1000 * 60 * 60 * 24));
+  const daysLeft = Math.ceil((end - Date.now()) / (1000 * 60 * 60 * 24));
   return Math.max(0, daysLeft);
 }
 
-/**
- * Get subscription display info for UI.
- */
 export function getSubscriptionDisplayInfo(state: SubscriptionState): {
   title: string;
   subtitle: string;
