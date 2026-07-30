@@ -304,6 +304,12 @@ const newCompliance = evaluateCompliance(
 });
     const fortnightly = await loadFortnightly(user.id);
     setActiveShift(shift);
+    saveActiveShiftToCloud(shift).catch((error) => {
+  console.error(
+    "[Shift] Active shift cloud save failed:",
+    error
+  );
+});
     startTimer(shift, fortnightly);
     return { success: true };
   }, [user, loadFortnightly, startTimer]);
@@ -315,6 +321,12 @@ const newCompliance = evaluateCompliance(
     const loc = await captureLocation();
     const locationData = loc ? { latitude: loc.latitude, longitude: loc.longitude, displayName: loc.displayName } : undefined;
     const log = await Logbook.endShift(user.id, { location: locationData, odometer });
+    clearActiveShiftFromCloud(user.id).catch((error) => {
+  console.error(
+    "[Shift] Active shift cloud clear failed:",
+    error
+  );
+});
     // Add to tamper-evident hash chain
     if (log) {
   const finalCompliance = evaluateLogCompliance(
