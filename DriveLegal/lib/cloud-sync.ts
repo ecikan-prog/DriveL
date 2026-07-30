@@ -9,7 +9,10 @@
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
-import { DailyLog } from "./logbook-storage";
+import {
+  DailyLog,
+  type ActiveShift,
+} from "./logbook-storage";
 import type { DriverType } from "@/lib/local-auth";
 
 const SYNC_STATUS_KEY = "dl_sync_status";
@@ -418,4 +421,47 @@ export async function verifyEmailToken(token: string): Promise<{ success: boolea
   const result = await trpcCall("driverAuth.verifyEmail", { token });
   if (!result) return { success: false, error: "Network error." };
   return result;
+}
+export async function saveActiveShiftToCloud(
+  shift: ActiveShift
+): Promise<{ success: boolean }> {
+  const result = await trpcCall("sync.saveActiveShift", {
+    driverLocalUserId: shift.userId,
+    shiftData: shift,
+    startTime: shift.startTime,
+  });
+
+  return {
+    success: result?.success === true,
+  };
+}
+
+export async function pullActiveShiftFromCloud(
+  userId: string
+): Promise<ActiveShift | null> {
+  const result = await trpcCall(
+    "sync.pullActiveShift",
+    {
+      driverLocalUserId: userId,
+    },
+    "query"
+  );
+
+  if (!result?.success || !result.shift) {
+    return null;
+  }
+
+  return result.shift as ActiveShift;
+}
+
+export async function clearActiveShiftFromCloud(
+  userId: string
+): Promise<{ success: boolean }> {
+  const result = await trpcCall("sync.clearActiveShift", {
+    driverLocalUserId: userId,
+  });
+
+  return {
+    success: result?.success === true,
+  };
 }
