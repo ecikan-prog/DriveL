@@ -170,7 +170,14 @@ if (age < 18) {
               error: "An account already exists with this email address.",
             };
           }
+          const trialStartDate =
+          input.trialStartDate ??
+          new Date().toISOString();
 
+          const trialEndDate = new Date(
+          new Date(trialStartDate).getTime() +
+           21 * 24 * 60 * 60 * 1000
+          ).toISOString();
           await query(
             `
             INSERT INTO drivers (
@@ -188,9 +195,11 @@ if (age < 18) {
               dateOfBirth,
               operatorName,
               emailVerified,
-              trialStartDate
+              trialStartDate,
+              trialEndDate,
+              subscriptionStatus
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, ?, ?, ?)
             `,
             [
               input.localUserId,
@@ -206,7 +215,9 @@ if (age < 18) {
               input.licenceExpiry?.trim() || null,
               input.dateOfBirth.trim(),
               input.operatorName?.trim() || null,
-              input.trialStartDate || new Date().toISOString(),
+              trialStartDate,
+              trialEndDate,
+                    "trial",
             ]
           );
 
