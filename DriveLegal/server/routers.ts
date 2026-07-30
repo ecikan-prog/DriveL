@@ -303,7 +303,8 @@ if (age < 18) {
               vehicleType,
               driverType,
               trialStartDate,
-              emailVerified
+              createdAt,
+            emailVerified
             FROM drivers
             WHERE email = ?
             LIMIT 1
@@ -352,6 +353,7 @@ if (age < 18) {
               vehicleType: driver.vehicleType,
               driverType: driver.driverType,
               trialStartDate: driver.trialStartDate,
+              createdAt: driver.createdAt,
             },
           };
         } catch (error) {
