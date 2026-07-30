@@ -948,6 +948,8 @@ if (age < 18) {
           return {
             success: true,
             logs: rows.map((row) => ({
+          
+         
               ...row,
               logData:
                 typeof row.logData === "string"
@@ -964,6 +966,121 @@ if (age < 18) {
           };
         }
       }),
+        saveActiveShift: t.procedure
+      .input(
+        z.object({
+          driverLocalUserId: z.string().min(1),
+          shiftData: z.any(),
+          startTime: z.string().min(1),
+        })
+      )
+      .mutation(async ({ input }) => {
+        try {
+          await query(
+            `
+            INSERT INTO active_shifts (
+              driverLocalUserId,
+              shiftData,
+              startTime
+            )
+            VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+              shiftData = VALUES(shiftData),
+              startTime = VALUES(startTime),
+              updatedAt = CURRENT_TIMESTAMP
+            `,
+            [
+              input.driverLocalUserId,
+              JSON.stringify(input.shiftData),
+              input.startTime,
+            ]
+          );
+
+          return { success: true };
+        } catch (error) {
+          console.error(
+            "[Sync] Save active shift failed:",
+            error
+          );
+
+          return { success: false };
+        }
+      }),
+  }),
+  pullActiveShift: t.procedure
+  .input(
+    z.object({
+      driverLocalUserId: z.string().min(1),
+    })
+  )
+  .query(async ({ input }) => {
+    try {
+      const rows = await query<any[]>(
+        `
+        SELECT
+          shiftData,
+          startTime,
+          updatedAt
+        FROM active_shifts
+        WHERE driverLocalUserId = ?
+        LIMIT 1
+        `,
+        [input.driverLocalUserId]
+      );
+
+      if (rows.length === 0) {
+        return {
+          success: true,
+          shift: null,
+        };
+      }
+
+      const row = rows[0];
+
+      return {
+        success: true,
+        shift:
+          typeof row.shiftData === "string"
+            ? JSON.parse(row.shiftData)
+            : row.shiftData,
+      };
+    } catch (error) {
+      console.error(
+        "[Sync] Pull active shift failed:",
+        error
+      );
+
+      return {
+        success: false,
+        shift: null,
+      };
+    }
+  }),
+  clearActiveShift: t.procedure
+  .input(
+    z.object({
+      driverLocalUserId: z.string().min(1),
+    })
+  )
+  .mutation(async ({ input }) => {
+    try {
+      await query(
+        `
+        DELETE FROM active_shifts
+        WHERE driverLocalUserId = ?
+        `,
+        [input.driverLocalUserId]
+      );
+
+      return { success: true };
+    } catch (error) {
+      console.error(
+        "[Sync] Clear active shift failed:",
+        error
+      );
+
+      return { success: false };
+    }
   }),
 });
 
