@@ -304,6 +304,11 @@ if (age < 18) {
               driverType,
               trialStartDate,
               createdAt,
+              trialEndDate,
+              subscriptionStatus,
+              subscriptionPlan,
+              subscriptionId,
+              currentPeriodEnd,
             emailVerified
             FROM drivers
             WHERE email = ?
@@ -354,6 +359,11 @@ if (age < 18) {
               driverType: driver.driverType,
               trialStartDate: driver.trialStartDate,
               createdAt: driver.createdAt,
+              trialEndDate: driver.trialEndDate,
+              subscriptionStatus: driver.subscriptionStatus,
+              subscriptionPlan: driver.subscriptionPlan,
+              subscriptionId: driver.subscriptionId,
+              currentPeriodEnd: driver.currentPeriodEnd,
             },
           };
         } catch (error) {
