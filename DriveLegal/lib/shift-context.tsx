@@ -382,6 +382,12 @@ const newCompliance = evaluateCompliance(
     const updated = await Logbook.startBreak(user.id, { location: locationData });
     if (updated) {
       setActiveShift(updated);
+      saveActiveShiftToCloud(updated).catch((error) => {
+  console.error(
+    "[Shift] Active shift cloud save failed:",
+    error
+  );
+});
       stopTimer();
       startTimer(updated, fortnightlyDrivingSeconds);
     }
@@ -394,6 +400,12 @@ const newCompliance = evaluateCompliance(
     const updated = await Logbook.endBreak(user.id, { location: locationData });
     if (updated) {
       setActiveShift(updated);
+      saveActiveShiftToCloud(updated).catch((error) => {
+  console.error(
+    "[Shift] Active shift cloud save failed:",
+    error
+  );
+});
       stopTimer();
       startTimer(updated, fortnightlyDrivingSeconds);
     }
@@ -406,6 +418,12 @@ const newCompliance = evaluateCompliance(
     const updated = await Logbook.startOtherWork(user.id, { location: locationData, note });
     if (updated) {
       setActiveShift(updated);
+      saveActiveShiftToCloud(updated).catch((error) => {
+  console.error(
+    "[Shift] Active shift cloud save failed:",
+    error
+  );
+});
       stopTimer();
       startTimer(updated, fortnightlyDrivingSeconds);
     }
@@ -418,6 +436,12 @@ const newCompliance = evaluateCompliance(
     const updated = await Logbook.endOtherWork(user.id, { location: locationData });
     if (updated) {
       setActiveShift(updated);
+      saveActiveShiftToCloud(updated).catch((error) => {
+  console.error(
+    "[Shift] Active shift cloud save failed:",
+    error
+  );
+});
       stopTimer();
       startTimer(updated, fortnightlyDrivingSeconds);
     }
