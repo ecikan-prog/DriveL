@@ -250,7 +250,8 @@ const newCompliance = evaluateCompliance(
       setSubscriptionState(null);
       return;
     }
-    getSubscriptionState(user.id, user.trialStartDate).then(setSubscriptionState);
+    getSubscriptionState(user.id).then(setSubscriptionState);
+
   }, [user]);
 
   const isTrialExpired = subscriptionState ? !canLogShifts(subscriptionState) : false;
@@ -269,7 +270,8 @@ const newCompliance = evaluateCompliance(
   const startShift = useCallback(async (odometer?: number, restOverrideNote?: string): Promise<{ success: boolean; error?: string }> => {
     if (!user) return { success: false, error: "Not logged in." };
     // Refresh subscription state before allowing shift start
-    const subState = await getSubscriptionState(user.id, user.trialStartDate);
+   const subState = await getSubscriptionState(user.id);
+
     setSubscriptionState(subState);
     if (!canLogShifts(subState)) {
       // Trial expired and no subscription — block
