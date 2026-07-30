@@ -2,7 +2,7 @@
  * Paywall Screen — shown when the 21-day trial expires.
  * Offers subscription options and handles Stripe checkout.
  */
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -17,7 +17,11 @@ import {
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuthContext } from "@/lib/auth-context";
-import { activateSubscription } from "@/lib/subscription";
+import {
+  activateSubscription,
+  getSubscriptionState,
+  getTrialDaysLeft,
+} from "@/lib/subscription";
 
 type PlanOption = {
   id: "monthly" | "annual";
@@ -50,7 +54,49 @@ export default function PaywallScreen() {
   const { user } = useAuthContext();
   const [selectedPlan, setSelectedPlan] = useState<"monthly" | "annual">("annual");
   const [loading, setLoading] = useState(false);
+  const [subscriptionState, setSubscriptionState] =
+  useState<Awaited<ReturnType<typeof getSubscriptionState>> | null>(null);
 
+const [subscriptionLoading, setSubscriptionLoading] = useState(true);
+  useEffect(() => {
+  let isMounted = true;
+
+  const loadSubscription = async () => {
+    if (!user) {
+      setSubscriptionState(null);
+      setSubscriptionLoading(false);
+      return;
+    }
+
+    setSubscriptionLoading(true);
+
+    try {
+      const state = await getSubscriptionState(user.id);
+
+      if (isMounted) {
+        setSubscriptionState(state);
+      }
+    } catch (error) {
+      console.error(
+        "[Paywall] Failed to load subscription state:",
+        error
+      );
+    } finally {
+      if (isMounted) {
+        setSubscriptionLoading(false);
+      }
+    }
+  };
+
+  loadSubscription();
+
+  return () => {
+    isMounted = false;
+  };
+}, [user?.id]);
+  const trialDaysLeft = subscriptionState
+  ? getTrialDaysLeft(subscriptionState)
+  : 0;
   const handleSubscribe = async () => {
     if (!user) return;
     setLoading(true);
