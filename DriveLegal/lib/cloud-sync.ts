@@ -341,6 +341,11 @@ export async function loginDriverCloud(email: string, passwordHash: string): Pro
     driverType: DriverType;
     trialStartDate: string | null;
     createdAt: string | null;
+    trialEndDate: string | null;
+    subscriptionStatus: "trial" | "active" | "expired" | "cancelled";
+    subscriptionPlan: "monthly" | "annual" | null;
+    subscriptionId: string | null;
+    currentPeriodEnd: string | null;
   };
 }> {
   const result = await trpcCall("driverAuth.login", { email, passwordHash });
