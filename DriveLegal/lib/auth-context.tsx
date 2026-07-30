@@ -252,11 +252,13 @@ export function AuthProvider({
                 driver.driverType,
               trialStartDate:
                 driver.trialStartDate ??
-                new Date().toISOString(),
-              createdAt:
-                 driver.createdAt ??
-                 driver.trialStartDate ??
-                new Date().toISOString(),
+                driver.createdAt ??
+                undefined,
+
+                createdAt:
+                driver.createdAt ??
+                driver.trialStartDate ??
+                undefined,
             }
           );
 
