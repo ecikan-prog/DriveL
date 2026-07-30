@@ -215,16 +215,25 @@ const newCompliance = evaluateCompliance(
 
     setLoading(true);
     Promise.all([
-      Logbook.getActiveShift(user.id),
-      Logbook.getFortnightlyDrivingSeconds(user.id),
-    ]).then(([shift, fortnightly]) => {
-      setFortnightlyDrivingSeconds(fortnightly);
-      if (shift) {
-        setActiveShift(shift);
-        startTimer(shift, fortnightly);
-      }
-      setLoading(false);
-    });
+  Logbook.getActiveShift(user.id),
+  pullActiveShiftFromCloud(user.id),
+  Logbook.getFortnightlyDrivingSeconds(user.id),
+]).then(async ([localShift, cloudShift, fortnightly]) => {
+  setFortnightlyDrivingSeconds(fortnightly);
+
+  const shift = localShift ?? cloudShift;
+
+  if (shift) {
+    if (!localShift && cloudShift) {
+      await Logbook.saveActiveShift(cloudShift);
+    }
+
+    setActiveShift(shift);
+    startTimer(shift, fortnightly);
+  }
+
+  setLoading(false);
+});
 
     return () => stopTimer();
   }, [user, startTimer, stopTimer]);
