@@ -27,7 +27,8 @@ import {
 
 import { migrateLogCalculations } from "./logbook-storage";
 import { lockPinSession } from "./pin-security";
-import { saveSubscriptionState } from "./subscription";
+import { syncSubscriptionFromServer } from "./subscription";
+
 const LIVE_BACKEND =
   "https://drivel-production.up.railway.app";
 
@@ -274,35 +275,21 @@ export function AuthProvider({
               "Your account was verified, but it could not be restored on this device.",
           };
         }
-        await saveSubscriptionState({
+        await syncSubscriptionFromServer({
   userId: driver.localUserId,
   status: driver.subscriptionStatus,
   trialStartDate:
-  driver.trialStartDate ??
-  driver.createdAt ??
-  localResult.user.trialStartDate ??
-  localResult.user.createdAt,
-  trialEndDate:
-    driver.trialEndDate ??
-    new Date(
-      new Date(
-        driver.trialStartDate ??
-        driver.createdAt ??
-        localResult.user.trialStartDate ??
-        localResult.user.createdAt
-      ).getTime() +
-        21 * 24 * 60 * 60 * 1000
-    ).toISOString(),
-  subscriptionId:
-    driver.subscriptionId ?? undefined,
-  currentPeriodEnd:
-    driver.currentPeriodEnd ?? undefined,
-  plan:
-    driver.subscriptionPlan ?? undefined,
-  lastChecked: new Date().toISOString(),
+    driver.trialStartDate ??
+    driver.createdAt ??
+    localResult.user.trialStartDate ??
+    localResult.user.createdAt,
+  trialEndDate: driver.trialEndDate,
+  subscriptionId: driver.subscriptionId,
+  currentPeriodEnd: driver.currentPeriodEnd,
+  plan: driver.subscriptionPlan,
 });
 
-        setUser(localResult.user);
+ setUser(localResult.user);
 
         pullLogsFromCloud(
           driver.localUserId
