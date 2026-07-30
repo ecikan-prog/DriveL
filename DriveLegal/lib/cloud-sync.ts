@@ -340,6 +340,7 @@ export async function loginDriverCloud(email: string, passwordHash: string): Pro
     vehicleType: string | null;
     driverType: DriverType;
     trialStartDate: string | null;
+    createdAt: string | null;
   };
 }> {
   const result = await trpcCall("driverAuth.login", { email, passwordHash });
