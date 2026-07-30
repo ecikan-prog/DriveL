@@ -97,6 +97,11 @@ const [subscriptionLoading, setSubscriptionLoading] = useState(true);
   const trialDaysLeft = subscriptionState
   ? getTrialDaysLeft(subscriptionState)
   : 0;
+  const isTrial = subscriptionState?.status === "trial";
+const isActive = subscriptionState?.status === "active";
+const isExpired =
+  subscriptionState?.status === "expired" ||
+  subscriptionState?.status === "cancelled";
   const handleSubscribe = async () => {
     if (!user) return;
     setLoading(true);
@@ -208,18 +213,106 @@ const [subscriptionLoading, setSubscriptionLoading] = useState(true);
           </Text>
         </View>
 
-        {/* Trial Expired Message */}
-        <View style={{ paddingHorizontal: 24, marginBottom: 24 }}>
-          <View style={{ backgroundColor: "rgba(239, 68, 68, 0.15)", borderRadius: 12, padding: 16, borderWidth: 1, borderColor: "rgba(239, 68, 68, 0.3)" }}>
-            <Text style={{ color: "#FCA5A5", fontSize: 14, fontWeight: "700", textAlign: "center", marginBottom: 4 }}>
-              ⏰ Free Trial Ended
-            </Text>
-            <Text style={{ color: "#D1D5DB", fontSize: 12, textAlign: "center", lineHeight: 18 }}>
-              Your 21-day free trial has expired. Subscribe to continue logging your driving hours and meet NZTA work time requirements.
-            </Text>
-          </View>
-        </View>
-
+        {/* Subscription Status Message */}
+<View style={{ paddingHorizontal: 24, marginBottom: 24 }}>
+  {subscriptionLoading ? (
+    <View
+      style={{
+        backgroundColor: "rgba(255, 255, 255, 0.08)",
+        borderRadius: 12,
+        padding: 16,
+        alignItems: "center",
+      }}
+    >
+      <ActivityIndicator color="#FFFFFF" />
+    </View>
+  ) : isTrial ? (
+    <View
+      style={{
+        backgroundColor: "rgba(34, 197, 94, 0.15)",
+        borderRadius: 12,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: "rgba(34, 197, 94, 0.3)",
+      }}
+    >
+      <Text
+        style={{
+          color: "#86EFAC",
+          fontSize: 14,
+          fontWeight: "700",
+          textAlign: "center",
+          marginBottom: 4,
+        }}
+      >
+        ✓ Free Trial Active
+      </Text>
+      <Text
+        style={{
+          color: "#D1D5DB",
+          fontSize: 12,
+          textAlign: "center",
+          lineHeight: 18,
+        }}
+      >
+        You have {trialDaysLeft} day{trialDaysLeft !== 1 ? "s" : ""} remaining in your 21-day free trial.
+      </Text>
+    </View>
+  ) : isActive ? (
+    <View
+      style={{
+        backgroundColor: "rgba(34, 197, 94, 0.15)",
+        borderRadius: 12,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: "rgba(34, 197, 94, 0.3)",
+      }}
+    >
+      <Text
+        style={{
+          color: "#86EFAC",
+          fontSize: 14,
+          fontWeight: "700",
+          textAlign: "center",
+        }}
+      >
+        ✓ Subscription Active
+      </Text>
+    </View>
+  ) : isExpired ? (
+    <View
+      style={{
+        backgroundColor: "rgba(239, 68, 68, 0.15)",
+        borderRadius: 12,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: "rgba(239, 68, 68, 0.3)",
+      }}
+    >
+      <Text
+        style={{
+          color: "#FCA5A5",
+          fontSize: 14,
+          fontWeight: "700",
+          textAlign: "center",
+          marginBottom: 4,
+        }}
+      >
+        ⏰ Free Trial Ended
+      </Text>
+      <Text
+        style={{
+          color: "#D1D5DB",
+          fontSize: 12,
+          textAlign: "center",
+          lineHeight: 18,
+        }}
+      >
+        Your free trial has expired. Subscribe to continue logging your driving hours.
+      </Text>
+    </View>
+  ) : null}
+</View>
         {/* Plan Options */}
         <View style={{ paddingHorizontal: 24, marginBottom: 24 }}>
           <Text style={{ color: "#FFFFFF", fontSize: 18, fontWeight: "700", marginBottom: 16, textAlign: "center" }}>
