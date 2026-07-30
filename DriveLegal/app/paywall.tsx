@@ -202,7 +202,15 @@ export default function PaywallScreen() {
                     <Text style={{ color: "#003366", fontSize: 10, fontWeight: "800" }}>BEST VALUE</Text>
                   </View>
                 )}
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <View
+                  style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  width: "100%",
+                 }}
+                >
+                 
                   <View>
                     <Text style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "700" }}>{plan.name}</Text>
                     {plan.savings && (
@@ -211,8 +219,26 @@ export default function PaywallScreen() {
                       </Text>
                     )}
                   </View>
-                  <View style={{ alignItems: "flex-end" }}>
-                    <Text style={{ color: "#FFFFFF", fontSize: 20, fontWeight: "800" }}>{plan.price}</Text>
+                  <View
+                     style={{
+                     alignItems: "flex-end",
+                     flexShrink: 1,
+                     marginLeft: 12,
+                   }}
+                  >
+                    <Text
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.8}
+                      style={{
+                      color: "#FFFFFF",
+                      fontSize: 18,
+                      fontWeight: "800",
+                      textAlign: "right",
+                     }}
+                    >
+                    {plan.price}
+                   </Text>
                     <Text style={{ color: "#8AACDA", fontSize: 11 }}>{plan.period}</Text>
                   </View>
                 </View>
