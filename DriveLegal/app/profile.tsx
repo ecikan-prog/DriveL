@@ -16,6 +16,7 @@ import {
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuthContext } from "@/lib/auth-context";
+import { useShiftContext } from "@/lib/shift-context";
 import {
   getTrialDaysRemaining,
   updateUserProfile,
