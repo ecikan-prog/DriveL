@@ -278,6 +278,7 @@ function SelectorField({
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, logout, refreshUser } = useAuthContext();
+  const { activeShift } = useShiftContext();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showVehiclePicker, setShowVehiclePicker] = useState(false);
