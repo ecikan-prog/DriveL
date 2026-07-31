@@ -1006,8 +1006,7 @@ if (age < 18) {
           return { success: false };
         }
       }),
-  }),
-  pullActiveShift: t.procedure
+    pullActiveShift: t.procedure
   .input(
     z.object({
       driverLocalUserId: z.string().min(1),
@@ -1082,6 +1081,7 @@ if (age < 18) {
       return { success: false };
     }
   }),
+}),
 });
 
 export type AppRouter = typeof appRouter;
