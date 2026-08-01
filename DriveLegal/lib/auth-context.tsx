@@ -289,25 +289,18 @@ export function AuthProvider({
   plan: driver.subscriptionPlan,
 });
 
- setUser(localResult.user);
+ await syncSubscriptionFromServer(...);
 
-        pullLogsFromCloud(
-          driver.localUserId
-        ).catch((error) => {
-          console.error(
-            "[Auth] Pull logs failed:",
-            error
-          );
-        });
+await pullLogsFromCloud(driver.localUserId);
 
-        migrateLogCalculations(
-          driver.localUserId
-        ).catch((error) => {
-          console.error(
-            "[Auth] Log migration failed:",
-            error
-          );
-        });
+await migrateLogCalculations(driver.localUserId);
+
+setUser(localResult.user);
+
+return {
+  success: true,
+  userId: localResult.user.id,
+};
 
         return {
   success: true,
