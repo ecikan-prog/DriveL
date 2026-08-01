@@ -29,6 +29,7 @@
  */
 
 import type { DriverType } from "@/lib/local-auth";
+import type { WorkTimeRule } from "@/lib/logbook-storage";
 
 export type ComplianceWarning = {
   id: string;
