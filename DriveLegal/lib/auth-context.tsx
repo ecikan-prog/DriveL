@@ -314,11 +314,7 @@ return {
   userId: localResult.user.id,
 };
 
-        return {
-  success: true,
-  userId: localResult.user.id,
-};
-      } catch (error) {
+         } catch (error) {
         console.error(
           "[Auth] Login failed:",
           error
