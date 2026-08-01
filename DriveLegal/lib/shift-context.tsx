@@ -180,16 +180,11 @@ export function ShiftProvider({ children }: { children: React.ReactNode }) {
       // countdown — and total fortnightly (base + current shift total) for CWP.
       const totalFortnightly = fortnightlyBase + work;
 
-const shiftDriverType =
-  shift.driverType ??
-  user?.driverType ??
-  "small_passenger";
-
 const newCompliance = evaluateCompliance(
   continuousWork,
   work,
   totalFortnightly,
-  shiftDriverType
+  shift.workTimeRule ?? "standard_5_5_hour"
 );
       setCompliance(newCompliance);
 
@@ -201,7 +196,7 @@ const newCompliance = evaluateCompliance(
         }
       }
     },
-    [sendWarningNotification, user?.driverType]
+    [sendWarningNotification]
   );
 
   const startTimer = useCallback(
