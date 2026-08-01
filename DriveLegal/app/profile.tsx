@@ -652,7 +652,17 @@ return (
                       ?.label ?? ""
                   }
                   placeholder="Select driver type"
-                  onPress={() => setShowDriverTypePicker(true)}
+                  onPress={() => {
+  if (activeShift) {
+    Alert.alert(
+      "Active Shift",
+      "Please end your shift before changing driver type."
+    );
+    return;
+  }
+
+  setShowDriverTypePicker(true);
+}}
                 />
               </View>
             ) : (
