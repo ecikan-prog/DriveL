@@ -178,8 +178,7 @@ function toMs(value: string | number): number | null {
 function nonNegativeSeconds(startMs: number, endMs: number): number {
   return Math.max(0, Math.floor((endMs - startMs) / 1000));
 }
-export function getLocalDateKey(isoString: string): string {
-
+function getLocalDateKey(isoString: string): string {
   const date = new Date(isoString);
 
   const year = date.getFullYear();
@@ -1182,32 +1181,6 @@ export async function getFortnightlyDrivingSeconds(
   userId: string
 ): Promise<number> {
   return getCompletedCumulativeWorkPeriodSeconds(userId);
-}
-/**
- * Completed work logged on the current local calendar date.
- * The active shift is intentionally excluded.
- */
-export async function getTodayWorkSeconds(
-  userId: string,
-  nowMs: number = Date.now()
-): Promise<number> {
-  const logs = await getAllLogs(userId);
-  const todayKey = getLocalDateKey(
-    new Date(nowMs).toISOString()
-  );
-
-  return logs.reduce((total, log) => {
-    const logDateKey = getLocalDateKey(log.startTime);
-
-    if (logDateKey !== todayKey) {
-      return total;
-    }
-
-    return total + Math.max(
-      0,
-      Number(log.totalWorkSeconds) || 0
-    );
-  }, 0);
 }
 
 export async function getComplianceSnapshot(
