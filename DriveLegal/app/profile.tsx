@@ -348,6 +348,17 @@ if (user?.trialStartDate) {
       Alert.alert("Error", "Please select a vehicle type.");
       return;
     }
+    if (
+  activeShift &&
+  form.driverType !==
+    ((user as any)?.driverType ?? "small_passenger")
+) {
+  Alert.alert(
+    "Active Shift",
+    "Please end your shift before changing driver type."
+  );
+  return;
+}
 
     setSaving(true);
     try {
