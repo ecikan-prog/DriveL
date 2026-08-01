@@ -289,7 +289,19 @@ export function AuthProvider({
   plan: driver.subscriptionPlan,
 });
 
- await syncSubscriptionFromServer(...);
+ await syncSubscriptionFromServer({
+  userId: driver.localUserId,
+  status: driver.subscriptionStatus,
+  trialStartDate:
+    driver.trialStartDate ??
+    driver.createdAt ??
+    localResult.user.trialStartDate ??
+    localResult.user.createdAt,
+  trialEndDate: driver.trialEndDate,
+  subscriptionId: driver.subscriptionId,
+  currentPeriodEnd: driver.currentPeriodEnd,
+  plan: driver.subscriptionPlan,
+});
 
 await pullLogsFromCloud(driver.localUserId);
 
