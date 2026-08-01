@@ -886,7 +886,17 @@ return (
           label: dt.label,
           sublabel: dt.sublabel,
         }))}
-        onSelect={(value) => setForm((p) => ({ ...p, driverType: value }))}
+        onSelect={(value) => {
+  if (activeShift) {
+    Alert.alert(
+      "Active Shift",
+      "Please end your shift before changing driver type."
+    );
+    return;
+  }
+
+  setForm((p) => ({ ...p, driverType: value }));
+}}
         onClose={() => setShowDriverTypePicker(false)}
       />
     </ScreenContainer>
