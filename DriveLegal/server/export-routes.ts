@@ -127,7 +127,7 @@ const REPORT_SLOGAN =
 
 const LOGO_PATH = path.resolve(
   process.cwd(),
-  "assets/images/drive-legal-logo.png"
+  "assets/images/icon.png"
 );
 function normalizeLog(log: ExportLog): NormalizedLog {
   const startRaw = log.startTime ?? log.start_time ?? "";
