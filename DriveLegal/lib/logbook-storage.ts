@@ -1183,6 +1183,32 @@ export async function getFortnightlyDrivingSeconds(
 ): Promise<number> {
   return getCompletedCumulativeWorkPeriodSeconds(userId);
 }
+/**
+ * Completed work logged on the current local calendar date.
+ * The active shift is intentionally excluded.
+ */
+export async function getTodayWorkSeconds(
+  userId: string,
+  nowMs: number = Date.now()
+): Promise<number> {
+  const logs = await getAllLogs(userId);
+  const todayKey = getLocalDateKey(
+    new Date(nowMs).toISOString()
+  );
+
+  return logs.reduce((total, log) => {
+    const logDateKey = getLocalDateKey(log.startTime);
+
+    if (logDateKey !== todayKey) {
+      return total;
+    }
+
+    return total + Math.max(
+      0,
+      Number(log.totalWorkSeconds) || 0
+    );
+  }, 0);
+}
 
 export async function getComplianceSnapshot(
   userId: string,
