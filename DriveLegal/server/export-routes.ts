@@ -2,6 +2,8 @@ import type { Express, Request, Response } from "express";
 import { storagePut } from "./storage";
 import XlsxPopulate from "xlsx-populate";
 import PDFDocument from "pdfkit";
+import fs from "node:fs";
+import path from "node:path";
 
 /**
  * DRIVE LEGAL EXPORT ROUTES
@@ -120,6 +122,13 @@ function formatDriverType(value: unknown): string {
       return "—";
   }
 }
+const REPORT_SLOGAN =
+  "Stay compliant. Drive with confidence.";
+
+const LOGO_PATH = path.resolve(
+  process.cwd(),
+  "assets/images/drive-legal-logo.png"
+);
 function normalizeLog(log: ExportLog): NormalizedLog {
   const startRaw = log.startTime ?? log.start_time ?? "";
   const endRaw = log.endTime ?? log.end_time ?? "";
@@ -246,8 +255,37 @@ export function exportRouter(app: Express): void {
         if (!logs) {
           return;
         }
+        const {
+  driverName,
+  licenceNumber,
+  vehicleRegistration,
+  vehicleRego,
+  vehicleType,
+  driverType,
+} = req.body ?? {};
 
-        const header = [
+const generatedAt = new Date().toLocaleString("en-NZ", {
+  timeZone: "Pacific/Auckland",
+});
+        const metadataRows = [
+  ["Drive Legal Logbook Report"],
+  [REPORT_SLOGAN],
+  [],
+  ["Driver", safeText(driverName)],
+  ["Licence", safeText(licenceNumber)],
+  [
+    "Vehicle registration",
+    safeText(vehicleRegistration ?? vehicleRego),
+  ],
+  ["Vehicle type", safeText(vehicleType)],
+  ["Driver type", formatDriverType(driverType)],
+  ["Generated", generatedAt],
+  [],
+];
+
+const header = [
+
+        
           "Date",
           "Driver Type",
           "Vehicle Type",
@@ -283,7 +321,13 @@ export function exportRouter(app: Express): void {
             .join(",");
         });
 
-        const csv = `\uFEFF${[header, ...rows].join("\r\n")}`;
+        const metadataCsv = metadataRows
+  .map((row) => row.map(escapeCsv).join(","))
+  .join("\r\n");
+
+const csv =
+  `\uFEFF${metadataCsv}\r\n` +
+  `${[header, ...rows].join("\r\n")}`;
 
         const fileName = `exports/drive-legal-logbook-${Date.now()}.csv`;
 
@@ -396,15 +440,53 @@ export function exportRouter(app: Express): void {
         const tableLeft = document.page.margins.left;
 
         const drawHeader = (): void => {
+          const headerTop = document.y;
+          const logoWidth = 95;
+          const logoHeight = 42;
           document
-            .fillColor("#003366")
-            .font("Helvetica-Bold")
-            .fontSize(22)
-            .text("Drive Legal Logbook Report", {
-              align: "left",
-            });
+  .fillColor("#003366")
+  .font("Helvetica-Bold")
+  .fontSize(22)
+  .text(
+    "Drive Legal Logbook Report",
+    tableLeft,
+    headerTop,
+    {
+      width: pageWidth - logoWidth - 20,
+      align: "left",
+    }
+  );
 
-          document.moveDown(0.3);
+          document
+  .fillColor("#4A5568")
+  .font("Helvetica-Oblique")
+  .fontSize(10)
+  .text(
+    REPORT_SLOGAN,
+    tableLeft,
+    headerTop + 28,
+    {
+      width: pageWidth - logoWidth - 20,
+    }
+  );
+          if (fs.existsSync(LOGO_PATH)) {
+  document.image(
+    LOGO_PATH,
+    tableLeft + pageWidth - logoWidth,
+    headerTop,
+    {
+      fit: [logoWidth, logoHeight],
+      align: "right",
+      valign: "top",
+    }
+  );
+} else {
+  console.warn(
+    `[PDF EXPORT] Logo not found: ${LOGO_PATH}`
+  );
+}
+
+document.y = headerTop + 55;
 
           document
             .fillColor("#4A5568")
@@ -430,7 +512,7 @@ export function exportRouter(app: Express): void {
           );
 
           document.text(
-            `Driver type: ${safeText(driverType)}`
+            `Driver type: ${formatDriverType(driverType)}`
           );
 
           document.text(
@@ -650,7 +732,7 @@ export function exportRouter(app: Express): void {
           .name("Logbook");
 
         sheet
-          .range("A1:H1")
+          .range("A1:L1")
           .merged(true);
 
         sheet
