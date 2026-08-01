@@ -347,7 +347,7 @@ const drivingLimitSeconds =
     ? 7 * 60 * 60
     : activeShift?.workTimeRule === "standard_5_5_hour"
       ? 5.5 * 60 * 60
-      : getDrivingLimitSeconds(activeDriverType);
+      : 5.5 * 60 * 60;
   const dailyRemainingSeconds = Math.max(0, DAILY_WORK_LIMIT_SECONDS - workSeconds);
   const remainingDrivingSeconds = Math.max(
   0,
