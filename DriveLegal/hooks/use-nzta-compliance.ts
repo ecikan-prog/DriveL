@@ -83,14 +83,20 @@ const BREAK_DUE_5MIN_SECONDS_PASS   = PASSENGER_DRIVING_WARNING_SECONDS -  5 * 6
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-export function getDrivingLimitSeconds(driverType: DriverType = "small_passenger"): number {
-  return driverType === "small_passenger"
+export function getDrivingLimitSeconds(
+  workTimeRule: WorkTimeRule = "standard_5_5_hour"
+): number {
+  return workTimeRule === "sps_short_fares_7_hour"
     ? PASSENGER_DRIVING_WARNING_SECONDS
     : GOODS_DRIVING_WARNING_SECONDS;
 }
 
-export function getDrivingLimitHours(driverType: DriverType = "small_passenger"): string {
-  return driverType === "small_passenger" ? "7" : "5.5";
+export function getDrivingLimitHours(
+  workTimeRule: WorkTimeRule = "standard_5_5_hour"
+): string {
+  return workTimeRule === "sps_short_fares_7_hour"
+    ? "7"
+    : "5.5";
 }
 
 // ─── Core evaluation ─────────────────────────────────────────────────────────
@@ -110,10 +116,27 @@ export function evaluateCompliance(
   consecutiveDrivingSeconds: number,
   workSeconds: number,
   fortnightlyDrivingSeconds: number,
-  driverType: DriverType = "small_passenger"
+  workTimeRule: WorkTimeRule = "standard_5_5_hour"
 ): ComplianceStatus {
   const warnings: ComplianceWarning[] = [];
-  const drivingLimitSeconds = getDrivingLimitSeconds(driverType);
+
+  const isSevenHourRule =
+    workTimeRule === "sps_short_fares_7_hour";
+
+  const drivingLimitSeconds =
+    getDrivingLimitSeconds(workTimeRule);
+
+  const drivingLimitLabel = isSevenHourRule
+    ? "7 hours"
+    : "5 hours 30 minutes";
+    workTimeRule === "sps_short_fares_7_hour";
+
+  const drivingLimitSeconds =
+    getDrivingLimitSeconds(workTimeRule);
+
+  const drivingLimitLabel = isSevenHourRule
+    ? "7 hours"
+    : "5 hours 30 minutes";
   const drivingLimitLabel = driverType === "small_passenger" ? "7 hours" : "5 hours 30 minutes";
 
   const isDrivingWarning = consecutiveDrivingSeconds >= drivingLimitSeconds;
