@@ -178,7 +178,7 @@ export function ShiftProvider({ children }: { children: React.ReactNode }) {
       // Compliance uses continuous WORK (driving + other work) for break
       // warnings — matching the same value now driving the dashboard
       // countdown — and total fortnightly (base + current shift total) for CWP.
-      const totalFortnightly = fortnightlyBase + driving;
+      const totalFortnightly = fortnightlyBase + work;
 
 const shiftDriverType =
   shift.driverType ??
