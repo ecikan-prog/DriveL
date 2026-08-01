@@ -447,11 +447,14 @@ const drivingLimitSeconds =
   const todayWorkHours =
   (todayWorkSeconds + (isShiftActive ? workSeconds : 0)) / 3600;
   const todayWorkLimit = 13;
-  // Fortnightly driving vs 70h CWP limit
-  // fortnightlyDrivingSeconds = completed shifts in last 14 days (from storage)
-  // drivingSeconds = total driving in the CURRENT active shift
-  // Together they give the live fortnightly total
-  const fortnightlyHours = (fortnightlyDrivingSeconds + (isShiftActive ? drivingSeconds : 0)) / 3600;
+  // Fortnightly work vs 70h cumulative work-period limit
+// fortnightlyDrivingSeconds is the legacy name, but now contains
+// completed WORK time in the current cumulative work period.
+// Add current shift workSeconds for the live total.
+  const fortnightlyHours =
+  (fortnightlyDrivingSeconds +
+    (isShiftActive ? workSeconds : 0)) /
+  3600;
   const fortnightlyLimit = 70;
 
   const todayWorkPercent = (todayWorkHours / todayWorkLimit) * 100;
