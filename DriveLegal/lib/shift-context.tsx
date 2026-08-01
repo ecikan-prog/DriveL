@@ -55,15 +55,6 @@ type ShiftContextValue = {
   workSeconds: number;
   breakSeconds: number;
   fortnightlyDrivingSeconds: number;
-  /**
-   * Completed work TODAY (local date), from finished shifts only.
-   * Add the live workSeconds on top (when isShiftActive) to get the true
-   * running total for today — this is what the Dashboard "Today Work" tile
-   * should use, not workSeconds alone, which resets to 0 whenever there's
-   * no active shift (e.g. right after ending a shift, or after a fresh
-   * reinstall while on a rest break).
-   */
-  todayWorkSeconds: number;
   compliance: ComplianceStatus;
   startShift: (odometer?: number, restOverrideNote?: string) => Promise<{ success: boolean; error?: string }>;
   endShift: (odometer?: number) => Promise<Logbook.DailyLog | null>;
@@ -104,7 +95,6 @@ export function ShiftProvider({ children }: { children: React.ReactNode }) {
   const [workSeconds, setWorkSeconds] = useState(0);
   const [breakSeconds, setBreakSeconds] = useState(0);
   const [fortnightlyDrivingSeconds, setFortnightlyDrivingSeconds] = useState(0);
-  const [todayWorkSeconds, setTodayWorkSeconds] = useState(0);
   const [compliance, setCompliance] = useState<ComplianceStatus>(NULL_COMPLIANCE);
   const [loading, setLoading] = useState(true);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -151,12 +141,6 @@ export function ShiftProvider({ children }: { children: React.ReactNode }) {
     return seconds;
   }, []);
 
-  const loadTodayWork = useCallback(async (userId: string) => {
-    const seconds = await Logbook.getTodayWorkSeconds(userId);
-    setTodayWorkSeconds(seconds);
-    return seconds;
-  }, []);
-
   const tick = useCallback(
     (shift: Logbook.ActiveShift, fortnightlyBase: number) => {
       const now = Date.now();
@@ -178,13 +162,18 @@ export function ShiftProvider({ children }: { children: React.ReactNode }) {
       // Compliance uses continuous WORK (driving + other work) for break
       // warnings — matching the same value now driving the dashboard
       // countdown — and total fortnightly (base + current shift total) for CWP.
-      const totalFortnightly = fortnightlyBase + work;
+      const totalFortnightly = fortnightlyBase + driving;
+
+const shiftDriverType =
+  shift.driverType ??
+  user?.driverType ??
+  "small_passenger";
 
 const newCompliance = evaluateCompliance(
   continuousWork,
   work,
   totalFortnightly,
-  shift.workTimeRule ?? "standard_5_5_hour"
+  shiftDriverType
 );
       setCompliance(newCompliance);
 
@@ -196,7 +185,7 @@ const newCompliance = evaluateCompliance(
         }
       }
     },
-    [sendWarningNotification]
+    [sendWarningNotification, user?.driverType]
   );
 
   const startTimer = useCallback(
@@ -229,10 +218,8 @@ const newCompliance = evaluateCompliance(
   Logbook.getActiveShift(user.id),
   pullActiveShiftFromCloud(user.id),
   Logbook.getFortnightlyDrivingSeconds(user.id),
-  Logbook.getTodayWorkSeconds(user.id),
-]).then(async ([localShift, cloudShift, fortnightly, todayWork]) => {
+]).then(async ([localShift, cloudShift, fortnightly]) => {
   setFortnightlyDrivingSeconds(fortnightly);
-  setTodayWorkSeconds(todayWork);
 
   const shift = localShift ?? cloudShift;
 
@@ -311,14 +298,13 @@ const newCompliance = evaluateCompliance(
   restOverrideNote,
   driverType: user.driverType ?? "small_passenger",
   workTimeRule:
-  user.driverType === "small_passenger"
-    ? "sps_short_fares_7_hour"
-    : "standard_5_5_hour",
+    user.driverType === "small_passenger"
+      ? "sps_short_fares_7_hour"
+      : "standard_5_5_hour",
       vehicleType: user.vehicleType,
       vehicleRegistration: user.vehicleRegistration,
 });
     const fortnightly = await loadFortnightly(user.id);
-    await loadTodayWork(user.id);
     setActiveShift(shift);
     saveActiveShiftToCloud(shift).catch((error) => {
   console.error(
@@ -328,7 +314,7 @@ const newCompliance = evaluateCompliance(
 });
     startTimer(shift, fortnightly);
     return { success: true };
-  }, [user, loadFortnightly, loadTodayWork, startTimer]);
+  }, [user, loadFortnightly, startTimer]);
 
   const endShift = useCallback(async (odometer?: number): Promise<Logbook.DailyLog | null> => {
     if (!user) return null;
@@ -382,7 +368,6 @@ const newCompliance = evaluateCompliance(
     setCompliance(NULL_COMPLIANCE);
     prevWarningsRef.current = new Set();
     await loadFortnightly(user.id);
-    await loadTodayWork(user.id);
     // Background: push completed shift to cloud
     if (log) {
       import("./cloud-sync").then(({ pushLogsToCloud }) => {
@@ -390,7 +375,7 @@ const newCompliance = evaluateCompliance(
       }).catch(() => {});
     }
     return log;
-  }, [user, stopTimer, loadFortnightly, loadTodayWork]);
+  }, [user, stopTimer, loadFortnightly]);
 
   const startBreak = useCallback(async () => {
     if (!user || !activeShift) return;
@@ -489,7 +474,6 @@ const newCompliance = evaluateCompliance(
         workSeconds,
         breakSeconds,
         fortnightlyDrivingSeconds,
-        todayWorkSeconds,
         compliance,
         startShift,
         endShift,
