@@ -271,7 +271,6 @@ export default function DashboardScreen() {
     workSeconds,
     breakSeconds,
     fortnightlyDrivingSeconds,
-    todayWorkSeconds,
     compliance,
     startShift,
     endShift,
@@ -347,7 +346,7 @@ const drivingLimitSeconds =
     ? 7 * 60 * 60
     : activeShift?.workTimeRule === "standard_5_5_hour"
       ? 5.5 * 60 * 60
-      : 5.5 * 60 * 60;
+      : getDrivingLimitSeconds(activeDriverType);
   const dailyRemainingSeconds = Math.max(0, DAILY_WORK_LIMIT_SECONDS - workSeconds);
   const remainingDrivingSeconds = Math.max(
   0,
@@ -444,17 +443,13 @@ const drivingLimitSeconds =
 
   // Stats calculations — NZTA correct limits
   // Today's work time vs 13h max work per shift
-  const todayWorkHours =
-  (todayWorkSeconds + (isShiftActive ? workSeconds : 0)) / 3600;
+  const todayWorkHours = isShiftActive ? workSeconds / 3600 : 0;
   const todayWorkLimit = 13;
-  // Fortnightly work vs 70h cumulative work-period limit
-// fortnightlyDrivingSeconds is the legacy name, but now contains
-// completed WORK time in the current cumulative work period.
-// Add current shift workSeconds for the live total.
-  const fortnightlyHours =
-  (fortnightlyDrivingSeconds +
-    (isShiftActive ? workSeconds : 0)) /
-  3600;
+  // Fortnightly driving vs 70h CWP limit
+  // fortnightlyDrivingSeconds = completed shifts in last 14 days (from storage)
+  // drivingSeconds = total driving in the CURRENT active shift
+  // Together they give the live fortnightly total
+  const fortnightlyHours = (fortnightlyDrivingSeconds + (isShiftActive ? drivingSeconds : 0)) / 3600;
   const fortnightlyLimit = 70;
 
   const todayWorkPercent = (todayWorkHours / todayWorkLimit) * 100;
