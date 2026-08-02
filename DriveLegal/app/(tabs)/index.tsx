@@ -271,6 +271,7 @@ export default function DashboardScreen() {
     workSeconds,
     breakSeconds,
     fortnightlyDrivingSeconds,
+    todayWorkSeconds,
     compliance,
     startShift,
     endShift,
@@ -443,7 +444,7 @@ const drivingLimitSeconds =
 
   // Stats calculations — NZTA correct limits
   // Today's work time vs 13h max work per shift
-  const todayWorkHours = isShiftActive ? workSeconds / 3600 : 0;
+  const todayWorkHours = (todayWorkSeconds + (isShiftActive ? workSeconds : 0)) / 3600;
   const todayWorkLimit = 13;
   // Fortnightly driving vs 70h CWP limit
   // fortnightlyDrivingSeconds = completed shifts in last 14 days (from storage)
