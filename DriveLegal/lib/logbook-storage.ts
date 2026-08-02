@@ -1183,6 +1183,22 @@ export async function getFortnightlyDrivingSeconds(
 ): Promise<number> {
   return getCompletedCumulativeWorkPeriodSeconds(userId);
 }
+/**
+ * Completed work today (local date), excluding any active shift.
+ * The active shift's live workSeconds is added on top by the caller
+ * (shift-context.tsx) to get the true running total for today.
+ */
+export async function getTodayWorkSeconds(
+  userId: string
+): Promise<number> {
+  const logs = await getAllLogs(userId);
+  const todayKey = getLocalDateKey(new Date().toISOString());
+
+  return logs
+    .filter((log) => log.date === todayKey)
+    .reduce((sum, log) => sum + Math.max(0, log.totalWorkSeconds || 0), 0);
+}
+
 
 export async function getComplianceSnapshot(
   userId: string,
