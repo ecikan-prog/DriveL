@@ -65,7 +65,7 @@ type ShiftContextValue = {
    */
   todayWorkSeconds: number;
   compliance: ComplianceStatus;
-  startShift: (odometer?: number, restOverrideNote?: string) => Promise<{ success: boolean; error?: string }>;
+  startShift: (odometer?: number, restOverrideNote?: string, driverType?: "goods" | "large_passenger" | "small_passenger" | "vehicle_recovery") => Promise<{ success: boolean; error?: string }>;
   endShift: (odometer?: number) => Promise<Logbook.DailyLog | null>;
   startBreak: () => Promise<void>;
   endBreak: () => Promise<void>;
@@ -285,7 +285,7 @@ const newCompliance = evaluateCompliance(
     return result;
   }, [user]);
 
-  const startShift = useCallback(async (odometer?: number, restOverrideNote?: string): Promise<{ success: boolean; error?: string }> => {
+  const startShift = useCallback(async (odometer?: number, restOverrideNote?: string, driverType?: "goods" | "large_passenger" | "small_passenger" | "vehicle_recovery"): Promise<{ success: boolean; error?: string }> => {
     if (!user) return { success: false, error: "Not logged in." };
     // Refresh subscription state before allowing shift start
    const subState = await getSubscriptionState(user.id);
@@ -310,18 +310,20 @@ const newCompliance = evaluateCompliance(
     const loc = await captureLocation();
     setCurrentLocation(loc);
     const locationData = loc ? { latitude: loc.latitude, longitude: loc.longitude, displayName: loc.displayName } : undefined;
+    // Resolve driver type: modal selection → profile default → fallback
+    const resolvedDriverType = driverType ?? user.driverType ?? "small_passenger";
+    const workTimeRule = resolvedDriverType === "small_passenger"
+      ? "sps_short_fares_7_hour" as const
+      : "standard_5_5_hour" as const;
     const shift = await Logbook.startShift(user.id, {
-  location: locationData,
-  odometer,
-  restOverrideNote,
-  driverType: user.driverType ?? "small_passenger",
-  workTimeRule:
-    user.driverType === "small_passenger"
-      ? "sps_short_fares_7_hour"
-      : "standard_5_5_hour",
+      location: locationData,
+      odometer,
+      restOverrideNote,
+      driverType: resolvedDriverType,
+      workTimeRule,
       vehicleType: user.vehicleType,
       vehicleRegistration: user.vehicleRegistration,
-});
+    });
     const fortnightly = await loadFortnightly(user.id);
     await loadTodayWork(user.id);
     setActiveShift(shift);

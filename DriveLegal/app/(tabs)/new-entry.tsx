@@ -15,6 +15,7 @@ import { useShiftContext } from "@/lib/shift-context";
 import { formatDuration, formatTime } from "@/lib/logbook-storage";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
+import type { DriverType } from "@/lib/local-auth";
 
 export default function NewEntryScreen() {
   const router = useRouter();
@@ -41,6 +42,8 @@ export default function NewEntryScreen() {
   } = useShiftContext();
 
   const [showStartOdometer, setShowStartOdometer] = useState(false);
+  const [startShiftStep, setStartShiftStep] = useState<"driver-type" | "odometer">("driver-type");
+  const [selectedDriverType, setSelectedDriverType] = useState<DriverType>("small_passenger");
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showVehicleChange, setShowVehicleChange] = useState(false);
   const [showRestOverride, setShowRestOverride] = useState(false);
@@ -84,6 +87,8 @@ export default function NewEntryScreen() {
       return;
     }
     setStartShiftError(null);
+    setSelectedDriverType((user as any)?.driverType ?? "small_passenger");
+    setStartShiftStep("driver-type");
     setShowStartOdometer(true);
   };
 
@@ -95,8 +100,10 @@ export default function NewEntryScreen() {
     }
     setRestOverrideError(null);
     setShowRestOverride(false);
-    // Proceed to odometer modal, carrying the override note
+    // Proceed to driver-type step, carrying the override note
     setStartShiftError(null);
+    setSelectedDriverType((user as any)?.driverType ?? "small_passenger");
+    setStartShiftStep("driver-type");
     setShowStartOdometer(true);
   };
 
@@ -105,7 +112,7 @@ export default function NewEntryScreen() {
     const odo = odometerInput.trim() ? parseInt(odometerInput.trim(), 10) : undefined;
     // Pass override note if one was entered (may be empty string for normal starts)
     const overrideNote = restOverrideNote.trim() || undefined;
-    const result = await startShift(isNaN(odo as number) ? undefined : odo, overrideNote);
+    const result = await startShift(isNaN(odo as number) ? undefined : odo, overrideNote, selectedDriverType);
     if (!result.success) {
       setStartShiftError(result.error ?? "Could not start shift. Please try again.");
       return;
@@ -527,55 +534,113 @@ export default function NewEntryScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* ─── Start Shift Odometer Modal ──────────────────────────────────────── */}
-      <Modal visible={showStartOdometer} transparent animationType="fade" onRequestClose={() => setShowStartOdometer(false)}>
+      {/* ─── Start Shift Modal — Step 1: Driver Type / Step 2: Odometer ──────── */}
+      <Modal
+        visible={showStartOdometer}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setShowStartOdometer(false); setOdometerInput(""); setStartShiftError(null); setRestOverrideNote(""); setStartShiftStep("driver-type"); }}
+      >
         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
           <View style={{ backgroundColor: "#FFFFFF", borderRadius: 24, padding: 24, width: "100%", maxWidth: 360 }}>
-            <Text style={{ fontSize: 20, fontWeight: "700", color: "#003366", marginBottom: 8 }}>Start Shift</Text>
-            {/* Show override notice if this is an override start */}
-            {restOverrideNote.trim().length > 0 && (
-              <View style={{ backgroundColor: "#FEF3C7", borderRadius: 10, padding: 10, marginBottom: 12, borderWidth: 1, borderColor: "#FCD34D" }}>
-                <Text style={{ fontSize: 11, color: "#92400E", fontWeight: "700" }}>⚠️ Override recorded</Text>
-                <Text style={{ fontSize: 11, color: "#78350F", marginTop: 2 }} numberOfLines={2}>{restOverrideNote.trim()}</Text>
-              </View>
+            {startShiftStep === "driver-type" ? (
+              <>
+                <Text style={{ fontSize: 20, fontWeight: "700", color: "#003366", marginBottom: 4 }}>Start Shift</Text>
+                {restOverrideNote.trim().length > 0 && (
+                  <View style={{ backgroundColor: "#FEF3C7", borderRadius: 10, padding: 10, marginBottom: 12, borderWidth: 1, borderColor: "#FCD34D" }}>
+                    <Text style={{ fontSize: 11, color: "#92400E", fontWeight: "700" }}>⚠️ Override recorded</Text>
+                    <Text style={{ fontSize: 11, color: "#78350F", marginTop: 2 }} numberOfLines={2}>{restOverrideNote.trim()}</Text>
+                  </View>
+                )}
+                <Text style={{ fontSize: 13, color: "#6B7A99", marginBottom: 16 }}>Select your driver type for this shift.</Text>
+                {([
+                  { value: "small_passenger" as DriverType, label: "Small Passenger", sublabel: "7-hour limit" },
+                  { value: "large_passenger" as DriverType, label: "Large Passenger", sublabel: "5.5-hour limit" },
+                  { value: "goods" as DriverType, label: "Large Vehicle", sublabel: "5.5-hour limit" },
+                  { value: "vehicle_recovery" as DriverType, label: "Other", sublabel: "5.5-hour limit" },
+                ]).map((opt) => {
+                  const sel = selectedDriverType === opt.value;
+                  return (
+                    <TouchableOpacity
+                      key={opt.value}
+                      onPress={() => setSelectedDriverType(opt.value)}
+                      style={{ flexDirection: "row", alignItems: "center", borderWidth: 1.5, borderColor: sel ? "#003366" : "#D1DCF0", borderRadius: 12, padding: 14, marginBottom: 10, backgroundColor: sel ? "#EEF2FF" : "#FAFBFF" }}
+                    >
+                      <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: sel ? "#003366" : "#9BA8C0", backgroundColor: sel ? "#003366" : "transparent", marginRight: 14, alignItems: "center", justifyContent: "center" }}>
+                        {sel && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#FFFFFF" }} />}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 15, fontWeight: "700", color: "#003366" }}>{opt.label}</Text>
+                        <Text style={{ fontSize: 12, color: "#6B7A99", marginTop: 1 }}>{opt.sublabel}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+                <View style={{ flexDirection: "row", gap: 12, marginTop: 4 }}>
+                  <TouchableOpacity
+                    style={{ flex: 1, borderWidth: 1, borderColor: "#D1DCF0", borderRadius: 12, paddingVertical: 14, alignItems: "center" }}
+                    onPress={() => { setShowStartOdometer(false); setStartShiftError(null); setRestOverrideNote(""); setStartShiftStep("driver-type"); }}
+                  >
+                    <Text style={{ color: "#6B7A99", fontWeight: "600" }}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: "#003366", borderRadius: 12, paddingVertical: 14, alignItems: "center" }}
+                    onPress={() => setStartShiftStep("odometer")}
+                  >
+                    <Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Next →</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={{ fontSize: 20, fontWeight: "700", color: "#003366", marginBottom: 4 }}>Start Shift</Text>
+                {restOverrideNote.trim().length > 0 && (
+                  <View style={{ backgroundColor: "#FEF3C7", borderRadius: 10, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: "#FCD34D" }}>
+                    <Text style={{ fontSize: 11, color: "#92400E", fontWeight: "700" }}>⚠️ Override recorded</Text>
+                    <Text style={{ fontSize: 11, color: "#78350F", marginTop: 2 }} numberOfLines={2}>{restOverrideNote.trim()}</Text>
+                  </View>
+                )}
+                <View style={{ backgroundColor: "#EEF2FF", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, alignSelf: "flex-start", marginBottom: 12 }}>
+                  <Text style={{ fontSize: 11, color: "#003366", fontWeight: "700" }}>
+                    {selectedDriverType === "small_passenger" ? "🚕 Small Passenger · 7 h" :
+                     selectedDriverType === "large_passenger" ? "🚌 Large Passenger · 5.5 h" :
+                     selectedDriverType === "goods" ? "🚛 Large Vehicle · 5.5 h" : "🚗 Other · 5.5 h"}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 13, color: "#6B7A99", marginBottom: 16 }}>Enter your odometer reading (optional).</Text>
+                {startShiftError && (
+                  <View style={{ backgroundColor: "#FEF2F2", borderWidth: 1, borderColor: "#FECACA", borderRadius: 10, padding: 12, marginBottom: 12 }}>
+                    <Text style={{ color: "#B91C1C", fontSize: 12, fontWeight: "600", lineHeight: 18 }}>{startShiftError}</Text>
+                  </View>
+                )}
+                <View style={{ backgroundColor: "#F0F4FF", borderRadius: 12, padding: 12, marginBottom: 16 }}>
+                  <Text style={{ fontSize: 10, color: "#6B7A99", marginBottom: 4, fontWeight: "600" }}>ODOMETER (km)</Text>
+                  <TextInput
+                    style={{ fontSize: 18, fontWeight: "700", color: "#003366", paddingVertical: 8 }}
+                    placeholder="e.g. 125430"
+                    placeholderTextColor="#9BA8C0"
+                    keyboardType="numeric"
+                    value={odometerInput}
+                    onChangeText={setOdometerInput}
+                    returnKeyType="done"
+                  />
+                </View>
+                <View style={{ flexDirection: "row", gap: 12 }}>
+                  <TouchableOpacity
+                    style={{ flex: 1, borderWidth: 1, borderColor: "#D1DCF0", borderRadius: 12, paddingVertical: 14, alignItems: "center" }}
+                    onPress={() => setStartShiftStep("driver-type")}
+                  >
+                    <Text style={{ color: "#6B7A99", fontWeight: "600" }}>← Back</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: "#003366", borderRadius: 12, paddingVertical: 14, alignItems: "center" }}
+                    onPress={confirmStartShift}
+                  >
+                    <Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Start</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
             )}
-            <Text style={{ fontSize: 13, color: "#6B7A99", marginBottom: 16 }}>Enter your odometer reading (optional).</Text>
-            {startShiftError && (
-              <View style={{ backgroundColor: "#FEF2F2", borderWidth: 1, borderColor: "#FECACA", borderRadius: 10, padding: 12, marginBottom: 12 }}>
-                <Text style={{ color: "#B91C1C", fontSize: 12, fontWeight: "600", lineHeight: 18 }}>{startShiftError}</Text>
-              </View>
-            )}
-            <View style={{ backgroundColor: "#F0F4FF", borderRadius: 12, padding: 12, marginBottom: 16 }}>
-              <Text style={{ fontSize: 10, color: "#6B7A99", marginBottom: 4, fontWeight: "600" }}>ODOMETER (km)</Text>
-              <TextInput
-                style={{ fontSize: 18, fontWeight: "700", color: "#003366", paddingVertical: 8 }}
-                placeholder="e.g. 125430"
-                placeholderTextColor="#9BA8C0"
-                keyboardType="numeric"
-                value={odometerInput}
-                onChangeText={setOdometerInput}
-                returnKeyType="done"
-              />
-            </View>
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              <TouchableOpacity
-                style={{ flex: 1, borderWidth: 1, borderColor: "#D1DCF0", borderRadius: 12, paddingVertical: 14, alignItems: "center" }}
-                onPress={() => {
-                  setShowStartOdometer(false);
-                  setOdometerInput("");
-                  setStartShiftError(null);
-                  setRestOverrideNote("");
-                }}
-              >
-                <Text style={{ color: "#6B7A99", fontWeight: "600" }}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={{ flex: 1, backgroundColor: "#003366", borderRadius: 12, paddingVertical: 14, alignItems: "center" }}
-                onPress={confirmStartShift}
-              >
-                <Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Start</Text>
-              </TouchableOpacity>
-            </View>
           </View>
         </View>
       </Modal>
