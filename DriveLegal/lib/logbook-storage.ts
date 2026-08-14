@@ -569,10 +569,10 @@ export async function startBreak(
   const shift = await getActiveShift(userId);
   if (!shift) return null;
 
-  if (
-    isCurrentlyOnBreak(shift) ||
-    isCurrentlyOtherWork(shift)
-  ) {
+  // Only block if a break is already running — Other Work must not prevent
+  // a break from starting (calculateActivityTotals already auto-closes an
+  // open Other Work period when it sees a break_start event).
+  if (isCurrentlyOnBreak(shift)) {
     return shift;
   }
 

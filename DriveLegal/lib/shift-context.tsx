@@ -185,11 +185,20 @@ const shiftDriverType =
   user?.driverType ??
   "small_passenger";
 
+// evaluateCompliance() expects a WorkTimeRule, not a driver type string.
+// Resolve the rule from the persisted shift field first; derive from
+// driver type only as a fallback so SPS drivers get the 7-hour threshold.
+const shiftWorkTimeRule =
+  shift.workTimeRule ??
+  (shiftDriverType === "small_passenger"
+    ? "sps_short_fares_7_hour"
+    : "standard_5_5_hour");
+
 const newCompliance = evaluateCompliance(
   continuousWork,
   work,
   totalFortnightly,
-  shiftDriverType
+  shiftWorkTimeRule
 );
       setCompliance(newCompliance);
 
