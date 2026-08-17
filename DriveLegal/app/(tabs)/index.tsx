@@ -747,7 +747,7 @@ const drivingLimitSeconds =
             />
             <StatCard
               icon="📅"
-              label="FORTNIGHTLY"
+              label="CUMULATIVE WORK PERIOD"
               value={fortnightlyHours.toFixed(0)}
               unit="hrs"
               limit="/ 70 HRS"
