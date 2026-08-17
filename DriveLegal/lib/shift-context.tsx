@@ -85,6 +85,7 @@ const ShiftContext = createContext<ShiftContextValue | null>(null);
 const NULL_COMPLIANCE: ComplianceStatus = {
   warnings: [],
   isDrivingWarning: false,
+  isDrivingWarning30Min: false,
   isDrivingWarning15Min: false,
   isDrivingWarning5Min: false,
   isWorkWarning: false,

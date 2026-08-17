@@ -25,6 +25,9 @@ export type ComplianceStatus = {
   /** Continuous-work limit has been reached. */
   isDrivingWarning: boolean;
 
+  /** Continuous-work limit is between 30 and 15 minutes away. */
+  isDrivingWarning30Min: boolean;
+
   /** Continuous-work limit is between 15 and 5 minutes away. */
   isDrivingWarning15Min: boolean;
 
@@ -125,6 +128,9 @@ export function evaluateCompliance(
   const continuousWorkLimitLabel =
     getContinuousWorkLimitLabel(workTimeRule);
 
+  const breakDue30MinSeconds =
+    continuousWorkLimitSeconds - 30 * 60;
+
   const breakDue15MinSeconds =
     continuousWorkLimitSeconds - 15 * 60;
 
@@ -133,6 +139,10 @@ export function evaluateCompliance(
 
   const isDrivingWarning =
     continuousWorkSeconds >= continuousWorkLimitSeconds;
+
+  const isDrivingWarning30Min =
+    continuousWorkSeconds >= breakDue30MinSeconds &&
+    continuousWorkSeconds < breakDue15MinSeconds;
 
   const isDrivingWarning15Min =
     continuousWorkSeconds >= breakDue15MinSeconds &&
@@ -189,6 +199,15 @@ export function evaluateCompliance(
       title: "Rest Break Due in 15 Minutes",
       message:
         `You are approaching the ${continuousWorkLimitLabel} ` +
+        "continuous-work limit. Plan your qualifying 30-minute rest break.",
+    });
+  } else if (isDrivingWarning30Min) {
+    warnings.push({
+      id: "continuous_work_30min_warning",
+      level: "warning",
+      title: "Rest Break Due in 30 Minutes",
+      message:
+        `You have 30 minutes remaining of your ${continuousWorkLimitLabel} ` +
         "continuous-work limit. Plan your qualifying 30-minute rest break.",
     });
   }
@@ -249,6 +268,7 @@ export function evaluateCompliance(
   return {
     warnings,
     isDrivingWarning,
+    isDrivingWarning30Min,
     isDrivingWarning15Min,
     isDrivingWarning5Min,
     isWorkWarning,
