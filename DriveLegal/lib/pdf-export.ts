@@ -10,6 +10,7 @@ type GeneratePDFOptions = {
   logs: DailyLog[];
   driverName: string;
   licenceNumber: string;
+  tclNumber?: string;
   vehicleRegistration: string;
   vehicleType: string;
   driverType: string;
@@ -47,6 +48,7 @@ export async function generateAndSharePDF({
   logs,
   driverName,
   licenceNumber,
+  tclNumber,
   vehicleRegistration,
   vehicleType,
   driverType,
@@ -101,6 +103,7 @@ export async function generateAndSharePDF({
         logs: safeLogs,
         driverName: driverName ?? "",
         licenceNumber: licenceNumber ?? "",
+        tclNumber: tclNumber ?? "",
         vehicleRegistration:
           vehicleRegistration ?? "",
         vehicleRego:
