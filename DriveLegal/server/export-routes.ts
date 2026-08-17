@@ -97,7 +97,7 @@ function formatTime(value: unknown): string {
 
 function formatHoursMinutes(seconds: unknown): string {
   const totalSeconds = Math.max(0, parseNumber(seconds));
-  const totalMinutes = Math.floor(totalSeconds / 60);
+  const totalMinutes = Math.round(totalSeconds / 60);
 
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
@@ -120,6 +120,17 @@ function formatDriverType(value: unknown): string {
       return "Vehicle Recovery";
     default:
       return "—";
+  }
+}
+
+/** Short codes for narrow PDF table column. */
+function abbrevDriverType(longForm: string): string {
+  switch (longForm) {
+    case "Small Passenger": return "SPS";
+    case "Goods Vehicle":   return "Goods";
+    case "Large Passenger": return "Lge Pass";
+    case "Vehicle Recovery": return "Recovery";
+    default: return longForm || "—";
   }
 }
 const REPORT_SLOGAN =
@@ -512,10 +523,6 @@ document.y = headerTop + 55;
           );
 
           document.text(
-            `Driver type: ${formatDriverType(driverType)}`
-          );
-
-          document.text(
             `Generated: ${new Date().toLocaleString(
               "en-NZ",
               {
@@ -633,7 +640,7 @@ document.y = headerTop + 55;
           drawRow(
             [
               safeText(log.date),
-              safeText(log.driverType),
+              abbrevDriverType(log.driverType),
               safeText(log.vehicleType),
               safeText(log.vehicleRegistration),
               safeText(log.complianceStatus),
