@@ -302,6 +302,9 @@ export default function DashboardScreen() {
   } | null>(null);
   const [showMandatoryBreakAlert, setShowMandatoryBreakAlert] = useState(false);
   const [startShiftError, setStartShiftError] = useState<string | null>(null);
+  const [useDefaultVehicle, setUseDefaultVehicle] = useState(true);
+  const [shiftVehicleType, setShiftVehicleType] = useState("");
+  const [shiftVehicleRego, setShiftVehicleRego] = useState("");
   useEffect(() => {
     if (isShiftActive) {
       setDismissedWarnings(new Set());
@@ -410,19 +413,20 @@ const drivingLimitSeconds =
   const confirmStartShift = async () => {
     setStartShiftError(null);
     const odo = odometerInput.trim() ? parseInt(odometerInput.trim(), 10) : undefined;
-    // startShift now returns a result — use it to show inline errors instead of
-    // relying on Alert.alert (which is a no-op on web)
-    const result = await startShift(isNaN(odo as number) ? undefined : odo, undefined, selectedDriverType);
+    const vType = useDefaultVehicle ? undefined : shiftVehicleType.trim() || undefined;
+    const vRego = useDefaultVehicle ? undefined : shiftVehicleRego.trim().toUpperCase() || undefined;
+    const result = await startShift(isNaN(odo as number) ? undefined : odo, undefined, selectedDriverType, vType, vRego);
     if (!result.success) {
-      // Keep modal open and show error inline
       setStartShiftError(result.error ?? "Could not start shift. Please try again.");
       return;
     }
-    // Success — close modal and reset
     setShowStartOdometer(false);
     setLastLogSummary(null);
     setOdometerInput("");
     setStartShiftStep("driver-type");
+    setUseDefaultVehicle(true);
+    setShiftVehicleType("");
+    setShiftVehicleRego("");
   };
 
   const handleEndShift = async () => {
@@ -865,11 +869,47 @@ const drivingLimitSeconds =
                      selectedDriverType === "goods" ? "🚛 Large Vehicle · 5.5 h" : "🚗 Other · 5.5 h"}
                   </Text>
                 </View>
-                <Text style={{ fontSize: 13, color: "#6B7A99", marginBottom: 16 }}>
-                  Enter your odometer reading (optional, for RUC-liable vehicles).
-                </Text>
-                <View style={{ backgroundColor: "#F0F4FF", borderRadius: 12, padding: 12, marginBottom: 16 }}>
-                  <Text style={{ fontSize: 10, color: "#6B7A99", marginBottom: 4, fontWeight: "600" }}>ODOMETER (km)</Text>
+
+                {/* ── Vehicle section ── */}
+                <View style={{ backgroundColor: "#F0F4FF", borderRadius: 12, padding: 12, marginBottom: 12 }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <Text style={{ fontSize: 10, color: "#6B7A99", fontWeight: "600" }}>VEHICLE</Text>
+                    <TouchableOpacity onPress={() => { setUseDefaultVehicle(!useDefaultVehicle); setShiftVehicleType(""); setShiftVehicleRego(""); }}>
+                      <Text style={{ fontSize: 11, color: "#003366", fontWeight: "700" }}>{useDefaultVehicle ? "Change vehicle →" : "Use default ←"}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {useDefaultVehicle ? (
+                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#1F2937" }}>
+                      {(user as any)?.vehicleRegistration || "No default vehicle set"}{(user as any)?.vehicleType ? `  ·  ${(user as any).vehicleType}` : ""}
+                    </Text>
+                  ) : (
+                    <>
+                      <TextInput
+                        style={{ fontSize: 13, fontWeight: "600", color: "#003366", borderBottomWidth: 1, borderBottomColor: "#CBD5E1", paddingVertical: 4, marginBottom: 8 }}
+                        placeholder="Vehicle type (e.g. Van, Sedan, Bus)"
+                        placeholderTextColor="#9BA8C0"
+                        value={shiftVehicleType}
+                        onChangeText={setShiftVehicleType}
+                        returnKeyType="next"
+                      />
+                      <TextInput
+                        style={{ fontSize: 13, fontWeight: "600", color: "#003366", borderBottomWidth: 1, borderBottomColor: "#CBD5E1", paddingVertical: 4 }}
+                        placeholder="Registration (e.g. ABC123)"
+                        placeholderTextColor="#9BA8C0"
+                        autoCapitalize="characters"
+                        value={shiftVehicleRego}
+                        onChangeText={setShiftVehicleRego}
+                        returnKeyType="next"
+                      />
+                    </>
+                  )}
+                </View>
+
+                {/* ── Odometer / starting mileage ── */}
+                <View style={{ backgroundColor: "#F0F4FF", borderRadius: 12, padding: 12, marginBottom: 12 }}>
+                  <Text style={{ fontSize: 10, color: "#6B7A99", marginBottom: 4, fontWeight: "600" }}>
+                    {useDefaultVehicle ? "ODOMETER (km)" : "STARTING MILEAGE FOR THIS VEHICLE (km)"}
+                  </Text>
                   <TextInput
                     style={{ fontSize: 18, fontWeight: "700", color: "#003366", paddingVertical: 8 }}
                     placeholder="e.g. 125430"
@@ -880,7 +920,7 @@ const drivingLimitSeconds =
                     returnKeyType="done"
                   />
                 </View>
-                <Text style={{ fontSize: 11, color: "#9BA8C0", marginBottom: 16 }}>📍 GPS location will be captured automatically.</Text>
+                <Text style={{ fontSize: 11, color: "#9BA8C0", marginBottom: 12 }}>📍 GPS location will be captured automatically.</Text>
                 {startShiftError && (
                   <View style={{ backgroundColor: "#FEF2F2", borderWidth: 1, borderColor: "#FECACA", borderRadius: 10, padding: 12, marginBottom: 12 }}>
                     <Text style={{ color: "#B91C1C", fontSize: 12, fontWeight: "600", lineHeight: 18 }}>{startShiftError}</Text>

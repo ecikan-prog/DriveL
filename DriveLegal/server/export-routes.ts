@@ -123,6 +123,15 @@ function formatDriverType(value: unknown): string {
   }
 }
 
+/** Date range label derived from the normalized log records. */
+function getReportingPeriod(logs: NormalizedLog[]): string {
+  const dates = logs.map((l) => l.date).filter(Boolean).sort();
+  if (dates.length === 0) return "—";
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  return first === last ? first : `${first} – ${last}`;
+}
+
 /** Short codes for narrow PDF table column. */
 function abbrevDriverType(longForm: string): string {
   switch (longForm) {
@@ -286,10 +295,7 @@ const generatedAt = new Date().toLocaleString("en-NZ", {
   ["Driver", safeText(driverName)],
   ["Licence", safeText(licenceNumber)],
   ["TCL number", safeText(tclNumber)],
-  [
-    "Vehicle registration",
-    safeText(vehicleRegistration ?? vehicleRego),
-  ],
+  ["Reporting period", getReportingPeriod(logs)],
   ["Generated", generatedAt],
   [],
 ];
@@ -297,6 +303,7 @@ const generatedAt = new Date().toLocaleString("en-NZ", {
 const header = [
           "Date",
           "Driver Type",
+          "Vehicle",
           "Vehicle Registration",
           "Compliance",
           "Compliance Reason",
@@ -314,6 +321,7 @@ const header = [
           return [
             log.date,
             log.driverType,
+            log.vehicleType,
             log.vehicleRegistration,
             log.complianceStatus,
             log.complianceReason,
@@ -430,17 +438,18 @@ const csv =
           document.page.margins.right;
 
        const columns = [
-         { label: "Date",        width: 65 },
-         { label: "Driver Type", width: 75 },
-         { label: "Rego",        width: 60 },
-         { label: "Status",      width: 58 },
-         { label: "Reason",      width: 130 },
-         { label: "Start",       width: 52 },
-         { label: "End",         width: 52 },
-         { label: "Driving",     width: 65 },
-         { label: "Work",        width: 65 },
-         { label: "Breaks",      width: 65 },
-         { label: "Distance",    width: 75 },
+         { label: "Date",        width: 60 },
+         { label: "Driver Type", width: 70 },
+         { label: "Vehicle",     width: 65 },
+         { label: "Rego",        width: 55 },
+         { label: "Status",      width: 52 },
+         { label: "Reason",      width: 110 },
+         { label: "Start",       width: 48 },
+         { label: "End",         width: 48 },
+         { label: "Driving",     width: 62 },
+         { label: "Work",        width: 62 },
+         { label: "Breaks",      width: 62 },
+         { label: "Distance",    width: 68 },
         ];
           const rowHeight = 24;
         const tableLeft = document.page.margins.left;
@@ -508,13 +517,11 @@ document.y = headerTop + 55;
           );
 
           document.text(
-            `Vehicle registration: ${safeText(
-              vehicleRegistration ?? vehicleRego
-            )}`
+            `TCL number: ${safeText(tclNumber)}`
           );
 
           document.text(
-            `TCL number: ${safeText(tclNumber)}`
+            `Reporting period: ${getReportingPeriod(logs)}`
           );
 
           document.text(
@@ -636,6 +643,7 @@ document.y = headerTop + 55;
             [
               safeText(log.date),
               abbrevDriverType(log.driverType),
+              safeText(log.vehicleType),
               safeText(log.vehicleRegistration),
               safeText(log.complianceStatus),
               safeText(log.complianceReason),
@@ -733,9 +741,9 @@ document.y = headerTop + 55;
           .sheet(0)
           .name("Logbook");
 
-        // Title row — 11 columns (Vehicle Type removed)
+        // Title row — 12 columns
         sheet
-          .range("A1:K1")
+          .range("A1:L1")
           .merged(true);
 
         sheet
@@ -765,25 +773,18 @@ document.y = headerTop + 55;
           .merged(true)
           .value(licenceNumber || "");
 
-        // Row 3: Vehicle registration | TCL number
-        sheet
-          .cell("A3")
-          .value("Vehicle registration");
-
+        // Row 3: TCL number | Reporting period
+        sheet.cell("A3").value("TCL number");
         sheet
           .range("B3:C3")
           .merged(true)
-          .value(
-            vehicleRegistration ??
-              vehicleRego ??
-              ""
-          );
+          .value(tclNumber || "—");
 
-        sheet.cell("D3").value("TCL number");
+        sheet.cell("D3").value("Reporting period");
         sheet
           .range("E3:H3")
           .merged(true)
-          .value(tclNumber || "—");
+          .value(getReportingPeriod(logs));
 
         // Row 4: Generated
         sheet.cell("A4").value("Generated");
@@ -817,10 +818,11 @@ document.y = headerTop + 55;
             fill: "EAF0F8",
           });
 
-        // Table headers — Vehicle Type column removed
+        // Table headers — 12 columns
         const headers = [
           "Date",
           "Driver Type",
+          "Vehicle",
           "Vehicle Registration",
           "Compliance",
           "Compliance Reason",
@@ -851,30 +853,31 @@ document.y = headerTop + 55;
 
           sheet.cell(row, 1).value(log.date);
           sheet.cell(row, 2).value(log.driverType);
-          sheet.cell(row, 3).value(log.vehicleRegistration);
-          sheet.cell(row, 4).value(log.complianceStatus);
-          sheet.cell(row, 5).value(log.complianceReason);
-          sheet.cell(row, 6).value(log.start);
-          sheet.cell(row, 7).value(log.end);
-
-          sheet
-            .cell(row, 8)
-            .value(formatHoursMinutes(log.drivingSeconds));
+          sheet.cell(row, 3).value(log.vehicleType);
+          sheet.cell(row, 4).value(log.vehicleRegistration);
+          sheet.cell(row, 5).value(log.complianceStatus);
+          sheet.cell(row, 6).value(log.complianceReason);
+          sheet.cell(row, 7).value(log.start);
+          sheet.cell(row, 8).value(log.end);
 
           sheet
             .cell(row, 9)
-            .value(formatHoursMinutes(log.workSeconds));
+            .value(formatHoursMinutes(log.drivingSeconds));
 
           sheet
             .cell(row, 10)
-            .value(formatHoursMinutes(log.breakSeconds));
+            .value(formatHoursMinutes(log.workSeconds));
 
           sheet
             .cell(row, 11)
+            .value(formatHoursMinutes(log.breakSeconds));
+
+          sheet
+            .cell(row, 12)
             .value(log.distanceKm);
 
           sheet
-            .range(row, 1, row, 11)
+            .range(row, 1, row, 12)
             .style({
               border: true,
               verticalAlignment: "center",
@@ -882,7 +885,7 @@ document.y = headerTop + 55;
 
           if (index % 2 === 1) {
             sheet
-              .range(row, 1, row, 11)
+              .range(row, 1, row, 12)
               .style({
                 fill: "F3F6FA",
               });
@@ -890,16 +893,17 @@ document.y = headerTop + 55;
         });
 
         sheet.column("A").width(14); // Date
-        sheet.column("B").width(18); // Driver Type
-        sheet.column("C").width(22); // Vehicle Registration
-        sheet.column("D").width(14); // Compliance
-        sheet.column("E").width(38); // Compliance Reason
-        sheet.column("F").width(12); // Start
-        sheet.column("G").width(12); // End
-        sheet.column("H").width(14); // Driving
-        sheet.column("I").width(14); // Work
-        sheet.column("J").width(14); // Breaks
-        sheet.column("K").width(15); // Distance
+        sheet.column("B").width(16); // Driver Type
+        sheet.column("C").width(16); // Vehicle
+        sheet.column("D").width(20); // Vehicle Registration
+        sheet.column("E").width(14); // Compliance
+        sheet.column("F").width(36); // Compliance Reason
+        sheet.column("G").width(12); // Start
+        sheet.column("H").width(12); // End
+        sheet.column("I").width(14); // Driving
+        sheet.column("J").width(14); // Work
+        sheet.column("K").width(14); // Breaks
+        sheet.column("L").width(15); // Distance
 
         sheet.freezePanes(6, 0);
 
