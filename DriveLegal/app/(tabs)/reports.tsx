@@ -64,8 +64,9 @@ export default function ReportsScreen() {
   logs: filteredLogs,
   driverName: user.name ?? "",
   licenceNumber: user.licenceNumber ?? "",
+  tclNumber: (user as any).tslNumber ?? "",
   vehicleRego: user.vehicleRegistration ?? "",
-  vehicleType: user.vehicleType ?? "",     
+  vehicleType: user.vehicleType ?? "",
   driverType,
   password: password || undefined,
 });
@@ -90,6 +91,7 @@ export default function ReportsScreen() {
   logs,
   driverName: user.name ?? "",
   licenceNumber: user.licenceNumber ?? "",
+  tclNumber: (user as any).tslNumber ?? "",
   vehicleRegistration: user.vehicleRegistration ?? "",
   vehicleType: user.vehicleType ?? "",
   driverType,

@@ -295,7 +295,7 @@ const newCompliance = evaluateCompliance(
     return result;
   }, [user]);
 
-  const startShift = useCallback(async (odometer?: number, restOverrideNote?: string, driverType?: "goods" | "large_passenger" | "small_passenger" | "vehicle_recovery"): Promise<{ success: boolean; error?: string }> => {
+  const startShift = useCallback(async (odometer?: number, restOverrideNote?: string, driverType?: "goods" | "large_passenger" | "small_passenger" | "vehicle_recovery", vehicleType?: string, vehicleRegistration?: string): Promise<{ success: boolean; error?: string }> => {
     if (!user) return { success: false, error: "Not logged in." };
     // Refresh subscription state before allowing shift start
    const subState = await getSubscriptionState(user.id);
@@ -331,8 +331,8 @@ const newCompliance = evaluateCompliance(
       restOverrideNote,
       driverType: resolvedDriverType,
       workTimeRule,
-      vehicleType: user.vehicleType,
-      vehicleRegistration: user.vehicleRegistration,
+      vehicleType: vehicleType ?? user.vehicleType,
+      vehicleRegistration: vehicleRegistration ?? user.vehicleRegistration,
     });
     const fortnightly = await loadFortnightly(user.id);
     await loadTodayWork(user.id);

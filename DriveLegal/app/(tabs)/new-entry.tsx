@@ -51,6 +51,9 @@ export default function NewEntryScreen() {
   const [endOdometerInput, setEndOdometerInput] = useState("");
   const [vehicleRegoInput, setVehicleRegoInput] = useState("");
   const [vehicleOdometerInput, setVehicleOdometerInput] = useState("");
+  const [useDefaultVehicle, setUseDefaultVehicle] = useState(true);
+  const [shiftVehicleType, setShiftVehicleType] = useState("");
+  const [shiftVehicleRego, setShiftVehicleRego] = useState("");
   const [restOverrideNote, setRestOverrideNote] = useState("");
   const [restOverrideError, setRestOverrideError] = useState<string | null>(null);
   const [pendingRestTitle, setPendingRestTitle] = useState("");
@@ -110,9 +113,10 @@ export default function NewEntryScreen() {
   const confirmStartShift = async () => {
     setStartShiftError(null);
     const odo = odometerInput.trim() ? parseInt(odometerInput.trim(), 10) : undefined;
-    // Pass override note if one was entered (may be empty string for normal starts)
     const overrideNote = restOverrideNote.trim() || undefined;
-    const result = await startShift(isNaN(odo as number) ? undefined : odo, overrideNote, selectedDriverType);
+    const vType = useDefaultVehicle ? undefined : shiftVehicleType.trim() || undefined;
+    const vRego = useDefaultVehicle ? undefined : shiftVehicleRego.trim().toUpperCase() || undefined;
+    const result = await startShift(isNaN(odo as number) ? undefined : odo, overrideNote, selectedDriverType, vType, vRego);
     if (!result.success) {
       setStartShiftError(result.error ?? "Could not start shift. Please try again.");
       return;
@@ -120,6 +124,9 @@ export default function NewEntryScreen() {
     setShowStartOdometer(false);
     setOdometerInput("");
     setRestOverrideNote("");
+    setUseDefaultVehicle(true);
+    setShiftVehicleType("");
+    setShiftVehicleRego("");
   };
 
   const handleEndShift = async () => {
@@ -607,14 +614,47 @@ export default function NewEntryScreen() {
                      selectedDriverType === "goods" ? "🚛 Large Vehicle · 5.5 h" : "🚗 Other · 5.5 h"}
                   </Text>
                 </View>
-                <Text style={{ fontSize: 13, color: "#6B7A99", marginBottom: 16 }}>Enter your odometer reading (optional).</Text>
-                {startShiftError && (
-                  <View style={{ backgroundColor: "#FEF2F2", borderWidth: 1, borderColor: "#FECACA", borderRadius: 10, padding: 12, marginBottom: 12 }}>
-                    <Text style={{ color: "#B91C1C", fontSize: 12, fontWeight: "600", lineHeight: 18 }}>{startShiftError}</Text>
+
+                {/* ── Vehicle section ── */}
+                <View style={{ backgroundColor: "#F0F4FF", borderRadius: 12, padding: 12, marginBottom: 12 }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <Text style={{ fontSize: 10, color: "#6B7A99", fontWeight: "600" }}>VEHICLE</Text>
+                    <TouchableOpacity onPress={() => { setUseDefaultVehicle(!useDefaultVehicle); setShiftVehicleType(""); setShiftVehicleRego(""); }}>
+                      <Text style={{ fontSize: 11, color: "#003366", fontWeight: "700" }}>{useDefaultVehicle ? "Change vehicle →" : "Use default ←"}</Text>
+                    </TouchableOpacity>
                   </View>
-                )}
-                <View style={{ backgroundColor: "#F0F4FF", borderRadius: 12, padding: 12, marginBottom: 16 }}>
-                  <Text style={{ fontSize: 10, color: "#6B7A99", marginBottom: 4, fontWeight: "600" }}>ODOMETER (km)</Text>
+                  {useDefaultVehicle ? (
+                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#1F2937" }}>
+                      {(user as any)?.vehicleRegistration || "No default vehicle set"}{(user as any)?.vehicleType ? `  ·  ${(user as any).vehicleType}` : ""}
+                    </Text>
+                  ) : (
+                    <>
+                      <TextInput
+                        style={{ fontSize: 13, fontWeight: "600", color: "#003366", borderBottomWidth: 1, borderBottomColor: "#CBD5E1", paddingVertical: 4, marginBottom: 8 }}
+                        placeholder="Vehicle type (e.g. Van, Sedan, Bus)"
+                        placeholderTextColor="#9BA8C0"
+                        value={shiftVehicleType}
+                        onChangeText={setShiftVehicleType}
+                        returnKeyType="next"
+                      />
+                      <TextInput
+                        style={{ fontSize: 13, fontWeight: "600", color: "#003366", borderBottomWidth: 1, borderBottomColor: "#CBD5E1", paddingVertical: 4 }}
+                        placeholder="Registration (e.g. ABC123)"
+                        placeholderTextColor="#9BA8C0"
+                        autoCapitalize="characters"
+                        value={shiftVehicleRego}
+                        onChangeText={setShiftVehicleRego}
+                        returnKeyType="next"
+                      />
+                    </>
+                  )}
+                </View>
+
+                {/* ── Odometer / starting mileage ── */}
+                <View style={{ backgroundColor: "#F0F4FF", borderRadius: 12, padding: 12, marginBottom: 12 }}>
+                  <Text style={{ fontSize: 10, color: "#6B7A99", marginBottom: 4, fontWeight: "600" }}>
+                    {useDefaultVehicle ? "ODOMETER (km)" : "STARTING MILEAGE FOR THIS VEHICLE (km)"}
+                  </Text>
                   <TextInput
                     style={{ fontSize: 18, fontWeight: "700", color: "#003366", paddingVertical: 8 }}
                     placeholder="e.g. 125430"
@@ -625,6 +665,11 @@ export default function NewEntryScreen() {
                     returnKeyType="done"
                   />
                 </View>
+                {startShiftError && (
+                  <View style={{ backgroundColor: "#FEF2F2", borderWidth: 1, borderColor: "#FECACA", borderRadius: 10, padding: 12, marginBottom: 12 }}>
+                    <Text style={{ color: "#B91C1C", fontSize: 12, fontWeight: "600", lineHeight: 18 }}>{startShiftError}</Text>
+                  </View>
+                )}
                 <View style={{ flexDirection: "row", gap: 12 }}>
                   <TouchableOpacity
                     style={{ flex: 1, borderWidth: 1, borderColor: "#D1DCF0", borderRadius: 12, paddingVertical: 14, alignItems: "center" }}

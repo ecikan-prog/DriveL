@@ -10,6 +10,7 @@ type GenerateExcelOptions = {
   logs: DailyLog[];
   driverName: string;
   licenceNumber: string;
+  tclNumber?: string;
   vehicleRego: string;
   vehicleType: string;
   driverType: string;
@@ -73,6 +74,7 @@ export async function generateAndShareExcel({
   logs,
   driverName,
   licenceNumber,
+  tclNumber,
   vehicleRego,
   vehicleType,
   driverType,
@@ -137,6 +139,7 @@ export async function generateAndShareExcel({
         logs: safeLogs,
         driverName: driverName ?? "",
         licenceNumber: licenceNumber ?? "",
+        tclNumber: tclNumber ?? "",
         vehicleRego: vehicleRego ?? "",
         vehicleRegistration: vehicleRego ?? "",
         vehicleType: vehicleType ?? "",
