@@ -19,7 +19,7 @@
  * this function so they can never disagree.
  */
 import { getDrivingLimitSeconds } from "@/hooks/use-nzta-compliance";
-import { WORK_TIME_LIMITS, type DailyLog } from "@/lib/logbook-storage";
+import { WORK_TIME_LIMITS, type DailyLog, type WorkTimeRule } from "@/lib/logbook-storage";
 import type { DriverType } from "@/lib/local-auth";
 
 export type ComplianceEvaluation = {
@@ -138,7 +138,15 @@ export function evaluateLogCompliance(
   log: DailyLog,
   driverType: DriverType = "small_passenger"
 ): ComplianceEvaluation {
-  const continuousWorkLimitSeconds = getDrivingLimitSeconds(driverType);
+  // getDrivingLimitSeconds expects a WorkTimeRule, not a DriverType string.
+  // Prefer log.workTimeRule (authoritative — set at shift start), then derive
+  // from driverType as fallback so SPS always gets the 7-hour threshold.
+  const workTimeRule: WorkTimeRule =
+    log.workTimeRule ??
+    (driverType === "small_passenger"
+      ? "sps_short_fares_7_hour"
+      : "standard_5_5_hour");
+  const continuousWorkLimitSeconds = getDrivingLimitSeconds(workTimeRule);
   const maxContinuousWorkSeconds = getMaxContinuousWorkSeconds(log);
   const continuousWorkExceeded =
     maxContinuousWorkSeconds > continuousWorkLimitSeconds;
