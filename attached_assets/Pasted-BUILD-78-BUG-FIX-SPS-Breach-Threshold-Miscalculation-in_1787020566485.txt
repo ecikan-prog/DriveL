@@ -1,0 +1,26 @@
+BUILD 78 BUG FIX — SPS Breach Threshold Miscalculation in Logbook Report
+
+ISSUE:
+The Logbook Report is incorrectly applying the standard 5.5-hour continuous work threshold (standard_5_5_hour) to SPS (Small Passenger Service) driver type entries instead of the correct 7-hour SPS threshold (sps_short_fares_7_hour). This causes false breach flags and missed breach flags on SPS rows.
+
+EVIDENCE (from report generated 18/08/2026, reporting period 2026-08-03 to 2026-08-18):
+
+1. FALSE BREACH — 2026-08-18, SPS, 6h46m work — flagged "Breach / Continuous work limit" but 6h46m is under the 7-hour SPS limit. Should be Compliant.
+
+2. FALSE BREACH — 2026-08-14, SPS, 6h2m work — flagged "Breach" but 6h2m is under 7 hours. Should be Compliant. (This entry sits between 5.5h and 7h, strongly suggesting the report is checking against 5.5h instead of 7h for SPS.)
+
+3. MISSED BREACH — 2026-08-03, SPS, 8h6m work — flagged "Compliant" but 8h6m exceeds the 7-hour SPS limit. Should be Breach.
+
+4. CORRECT FOR REFERENCE — 2026-08-15, SPS, 7h1m work — correctly flagged Breach (just over 7h).
+
+ROOT CAUSE HYPOTHESIS:
+The report/breach-calculation logic is not correctly resolving driver_type to the matching threshold constant. It appears to default to or fall through to standard_5_5_hour even when driver_type = SPS, rather than using sps_short_fares_7_hour.
+
+WHAT TO CHECK:
+- Report generation / PDF export logic: confirm it pulls threshold per-row based on driver_type, not a single global threshold.
+- Any shared breach-evaluation function used by both the dashboard and the report — confirm SPS vs standard branching happens in one place and is applied consistently everywhere (dashboard ring, banner/notification, PDF/CSV/Excel export).
+- Double-check the Aug 18 row specifically (6h46m, SPS) as a live test case — should recalculate to Compliant once fixed.
+- Verify Aug 3 (8h6m, SPS) recalculates to Breach.
+
+GOAL FOR BUILD 78:
+SPS entries must be evaluated strictly against the 7-hour sps_short_fares_7_hour threshold across dashboard, notifications, and all report exports (PDF/CSV/Excel). Standard/Goods/Large Passenger/Recovery driver types continue using the 5.5-hour standard_5_5_hour threshold. No conflation between the two anywhere in the codebase.
