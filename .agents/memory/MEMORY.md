@@ -1,2 +1,3 @@
 - [GitHub push method](github-push.md) — classic PAT (ghp_) required; fine-grained PATs always fail with 403 on write ops even when read works
 - [build74-fix branch](build74-fix-branch.md) — clean push branch containing all fixes; replit-agent branch has corrupt gitsafe history that breaks git pack
+- [Expo background audio](expo-background-audio.md) — media plugins can inject iOS audio background mode without a direct plist entry
