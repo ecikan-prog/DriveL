@@ -467,8 +467,10 @@ export async function clearActiveShiftFromCloud(
 }
 
 // Added delete helper (preserve original file and add this small helper)
-export async function deleteDriverCloud(localUserId: string): Promise<{ success: boolean; error?: string }> {
-  const result = await trpcCall("driverAuth.deleteAccount", { localUserId });
+export async function deleteDriverCloud(email: string): Promise<{ success: boolean; error?: string }> {
+  const result = await trpcCall("driverAuth.deleteAccount", {
+    email: email.trim().toLowerCase(),
+  });
   if (!result) return { success: false, error: "Network error." };
   return result;
 }
