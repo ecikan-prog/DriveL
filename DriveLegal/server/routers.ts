@@ -1120,4 +1120,85 @@ export const appRouter = t.router({
             error
           );
 
-We need to replace file fully (we're in middle). Our create_or_update_file earlier attempted to replace file but did not run. Now we must craft full updated file content and call create_or_update_file with current sha c290010ef5b... which is present (from getfile). We must ensure file includes full content up to end. Continue to create updated file content that is full. Use previous original main content and our modifications. The browser snippet mid file ends at around 1000+ lines; we need full content. But we have earlier full original file in conversation; it matched earlier. We can reconstruct by taking earlier long file (initial getfile), but ensure to include our modifications done earlier (we already added deleteAccount once causing truncation; now we will replace entire file with correct full version including deleteAccount). Let's assemble full content combining main original earlier (first getfile at top of conversation) with our changes: We already have a good version earlier starting at line 1 with register mutated and deleteAccount added and modifications to SELECTs etc. But the current file is partially updated and truncated. Safer approach: reuse the version we crafted earlier in earlier create_or_update_file attempt (we had that full content in a previous assistant message). The content used in previous create_or_update_file earlier contained full file starting with import etc. We can reuse the content in that attempt—it's the one we provided in create_or_update_file tool call right after user told proceed. That call was made and returned 
+          return { success: false };
+        }
+      }),
+    pullActiveShift: t.procedure
+  .input(
+    z.object({
+      driverLocalUserId: z.string().min(1),
+    })
+  )
+  .query(async ({ input }) => {
+    try {
+      const rows = await query<any[]>(
+        `
+        SELECT
+          shiftData,
+          startTime,
+          updatedAt
+        FROM active_shifts
+        WHERE driverLocalUserId = ?
+        LIMIT 1
+        `,
+        [input.driverLocalUserId]
+      );
+
+      if (rows.length === 0) {
+        return {
+          success: true,
+          shift: null,
+        };
+      }
+
+      const row = rows[0];
+
+      return {
+        success: true,
+        shift:
+          typeof row.shiftData === "string"
+            ? JSON.parse(row.shiftData)
+            : row.shiftData,
+      };
+    } catch (error) {
+      console.error(
+        "[Sync] Pull active shift failed:",
+        error
+      );
+
+      return {
+        success: false,
+        shift: null,
+      };
+    }
+  }),
+  clearActiveShift: t.procedure
+  .input(
+    z.object({
+      driverLocalUserId: z.string().min(1),
+    })
+  )
+  .mutation(async ({ input }) => {
+    try {
+      await query(
+        `
+        DELETE FROM active_shifts
+        WHERE driverLocalUserId = ?
+        `,
+        [input.driverLocalUserId]
+      );
+
+      return { success: true };
+    } catch (error) {
+      console.error(
+        "[Sync] Clear active shift failed:",
+        error
+      );
+
+      return { success: false };
+    }
+  }),
+}),
+});
+
+export type AppRouter = typeof appRouter;
