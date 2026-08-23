@@ -513,8 +513,28 @@ export function AuthProvider({
       }
 
       try {
+        const currentUser = await LocalAuth.getCurrentUser();
+        const rawAuthenticatedEmail =
+          currentUser?.email ?? user.email;
+
+        if (
+          typeof rawAuthenticatedEmail !== "string" ||
+          rawAuthenticatedEmail.trim().length === 0
+        ) {
+          return {
+            success: false,
+            error:
+              "Unable to determine your authenticated email. Please sign out and sign in again, then retry account deletion.",
+          };
+        }
+
+        const authenticatedEmail =
+          normaliseEmail(rawAuthenticatedEmail);
+
         // Call the existing backend mutation to delete the account
-        const result = await deleteDriverCloud(user.email);
+        const result = await deleteDriverCloud(
+          authenticatedEmail
+        );
 
         if (!result.success) {
           return {
