@@ -51,7 +51,7 @@ export default function MoreScreen() {
   const { user, logout, deleteAccount } = useAuthContext();
 
   const handleContactSupport = async () => {
-    const mailto = `mailto:support@drivelegal.app?subject=Drive%20Legal%20Support%20Request&body=Hello%2C%0A%0AI%20need%20help%20with%20Drive%20Legal.%0A%0ADriver%3A%20${encodeURIComponent(user?.name ?? "Unknown")}%0AEmail%3A%20${encodeURIComponent(user?.email ?? "Unknown")}`;
+    const mailto = `mailto:support@drivelegal.app?subject=Drive%20Legal%20Support%20Request&body=Hello%2C%0A%0AI%20need%20help%20with%20Drive%20Legal.%0A%0ADriver%3A%20${encodeURIComponent(user?.name ?? "")}%0ALicence%3A%20${encodeURIComponent(user?.licenceNumber ?? "")}%0A%0A%5BPlease%20describe%20your%20issue%20here%5D`;
     try {
       await Linking.openURL(mailto);
     } catch {
