@@ -23,6 +23,7 @@ import {
   pullLogsFromCloud,
   pushLogsToCloud,
   registerDriverCloud,
+  deleteDriverCloud,
 } from "./cloud-sync";
 
 import { migrateLogCalculations } from "./logbook-storage";
@@ -75,6 +76,7 @@ type AuthContextValue = {
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   syncToCloud: () => Promise<void>;
+  deleteAccount: () => Promise<{ success: boolean; error?: string }>;
 };
 
 const AuthContext =
@@ -303,18 +305,18 @@ export function AuthProvider({
   plan: driver.subscriptionPlan,
 });
 
-await pullLogsFromCloud(driver.localUserId);
+ await pullLogsFromCloud(driver.localUserId);
 
-await migrateLogCalculations(driver.localUserId);
+ await migrateLogCalculations(driver.localUserId);
 
-setUser(localResult.user);
+ setUser(localResult.user);
 
-return {
+ return {
   success: true,
   userId: localResult.user.id,
 };
 
-         } catch (error) {
+          } catch (error) {
         console.error(
           "[Auth] Login failed:",
           error
@@ -369,7 +371,7 @@ return {
   Date.now().toString(36) +
   Math.random().toString(36).slice(2);
 
-const trialStartDate =
+ const trialStartDate =
   new Date().toISOString();
 
       const passwordHash =
@@ -426,7 +428,7 @@ const trialStartDate =
     trialStartDate,
   });
 
-if (
+ if (
   !localResult.success ||
   !localResult.user
 ) {
@@ -438,7 +440,7 @@ if (
   };
 }
 
-        /*
+         /*
          * Registration succeeded, but the user must verify their email
          * before a session is allowed.
          */
@@ -500,6 +502,43 @@ if (
       await pushLogsToCloud(user.id);
     }, [user]);
 
+  /**
+   * Delete the user's account from the cloud and clear local session.
+   * Reuses existing deleteDriverCloud mutation.
+   */
+  const deleteAccount = useCallback(
+    async (): Promise<{ success: boolean; error?: string }> => {
+      if (!user) {
+        return { success: false, error: "No user logged in." };
+      }
+
+      try {
+        // Call the existing backend mutation to delete the account
+        const result = await deleteDriverCloud(user.id);
+
+        if (!result.success) {
+          return {
+            success: false,
+            error: result.error || "Failed to delete account on the server.",
+          };
+        }
+
+        // If server deletion succeeds, clear local session
+        await LocalAuth.logoutUser();
+        setUser(null);
+
+        return { success: true };
+      } catch (error) {
+        console.error("[Auth] Delete account failed:", error);
+        return {
+          success: false,
+          error: "Unable to delete account. Please try again.",
+        };
+      }
+    },
+    [user]
+  );
+
   return (
     <AuthContext.Provider
       value={{
@@ -510,6 +549,7 @@ if (
         logout,
         refreshUser,
         syncToCloud,
+        deleteAccount,
       }}
     >
       {children}
