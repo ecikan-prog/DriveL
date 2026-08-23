@@ -48,10 +48,10 @@ function MenuItem({
 
 export default function MoreScreen() {
   const router = useRouter();
-  const { user, logout } = useAuthContext();
+  const { user, logout, deleteAccount } = useAuthContext();
 
   const handleContactSupport = async () => {
-    const mailto = `mailto:support@drivelegal.app?subject=Drive%20Legal%20Support%20Request&body=Hello%2C%0A%0AI%20need%20help%20with%20Drive%20Legal.%0A%0ADriver%3A%20${encodeURIComponent(user?.name ?? "")}%0ALicence%3A%20${encodeURIComponent(user?.licenceNumber ?? "")}%0A%0A%5BPlease%20describe%20your%20issue%20here%5D`;
+    const mailto = `mailto:support@drivelegal.app?subject=Drive%20Legal%20Support%20Request&body=Hello%2C%0A%0AI%20need%20help%20with%20Drive%20Legal.%0A%0ADriver%3A%20${encodeURIComponent(user?.name ?? "Unknown")}%0AEmail%3A%20${encodeURIComponent(user?.email ?? "Unknown")}`;
     try {
       await Linking.openURL(mailto);
     } catch {
@@ -88,6 +88,56 @@ export default function MoreScreen() {
         [
           { text: "Cancel", style: "cancel" },
           { text: "Sign Out", style: "destructive", onPress: performLogout },
+        ]
+      );
+    }
+  };
+
+  const performDeleteAccount = async () => {
+    try {
+      const result = await deleteAccount();
+
+      if (!result.success) {
+        Alert.alert(
+          "Error",
+          result.error || "Failed to delete account. Please try again."
+        );
+        return;
+      }
+
+      // On success, navigate to login (deleteAccount already cleared the session)
+      if (Platform.OS === "web") {
+        window.location.href = "/login";
+      } else {
+        router.replace("/login" as any);
+      }
+    } catch (error) {
+      Alert.alert(
+        "Error",
+        "An unexpected error occurred. Please try again."
+      );
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    if (Platform.OS === "web") {
+      const confirmed = window.confirm(
+        "Delete Account?\n\nThis will permanently delete your account and all associated data. This action cannot be undone."
+      );
+      if (confirmed) {
+        performDeleteAccount();
+      }
+    } else {
+      Alert.alert(
+        "Delete Account?",
+        "This will permanently delete your account and all associated data. This action cannot be undone.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete Account",
+            style: "destructive",
+            onPress: performDeleteAccount,
+          },
         ]
       );
     }
@@ -225,6 +275,16 @@ export default function MoreScreen() {
           >
             <MaterialIcons name="logout" size={20} color="#B91C1C" />
             <Text style={{ color: "#B91C1C", fontWeight: "700", fontSize: 14 }}>Sign Out</Text>
+          </TouchableOpacity>
+
+          {/* Delete Account */}
+          <TouchableOpacity
+            style={{ backgroundColor: "#FEE2E2", borderWidth: 1, borderColor: "#FECACA", borderRadius: 16, paddingVertical: 16, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8, marginTop: 12 }}
+            onPress={handleDeleteAccount}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons name="delete-outline" size={20} color="#DC2626" />
+            <Text style={{ color: "#DC2626", fontWeight: "700", fontSize: 14 }}>Delete Account</Text>
           </TouchableOpacity>
 
           <Text style={{ textAlign: "center", fontSize: 11, color: "#9BA8C0", marginTop: 16 }}>
