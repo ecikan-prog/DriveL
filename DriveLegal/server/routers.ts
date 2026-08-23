@@ -2,7 +2,7 @@ import { initTRPC } from "@trpc/server";
 import { z } from "zod";
 import crypto from "crypto";
 
-import { pool, query } from "./db";
+import { query } from "./db";
 import {
   sendPasswordResetEmail,
   sendVerificationEmail,
@@ -840,95 +840,21 @@ export const appRouter = t.router({
             return { success: false, error: "Driver account was not found." };
           }
 
-          if (!pool) {
-            return {
-              success: false,
-              error: "Account deletion is temporarily unavailable.",
-            };
-          }
-
-          const driver = rows[0];
-          const connection = await pool.getConnection();
-          let failedStep = "beginTransaction";
-
-          try {
-            await connection.beginTransaction();
-            failedStep = "DELETE shift_logs";
-
-            await connection.execute(
-              `
-              DELETE FROM shift_logs
-              WHERE driverLocalUserId = ?
-              `,
-              [driver.localUserId]
-            );
-            failedStep = "DELETE active_shifts";
-
-            await connection.execute(
-              `
-              DELETE FROM active_shifts
-              WHERE driverLocalUserId = ?
-              `,
-              [driver.localUserId]
-            );
-            failedStep = "DELETE operator_drivers";
-
-            await connection.execute(
-              `
-              DELETE FROM operator_drivers
-              WHERE driverLocalUserId = ?
-              `,
-              [driver.localUserId]
-            );
-            failedStep = "DELETE password_reset_tokens";
-
-            await connection.execute(
-              `
-              DELETE FROM password_reset_tokens
-              WHERE email = ?
-                AND userType = 'driver'
-              `,
-              [driver.email]
-            );
-            failedStep = "DELETE email_verification_tokens";
-
-            await connection.execute(
-              `
-              DELETE FROM email_verification_tokens
-              WHERE email = ?
-              `,
-              [driver.email]
-            );
-            failedStep = "DELETE drivers";
-
-            await connection.execute(
-              `
-              DELETE FROM drivers
-              WHERE email = ?
-              LIMIT 1
-              `,
-              [driver.email]
-            );
-            failedStep = "commit";
-
-            await connection.commit();
-          } catch (txError) {
-            await connection.rollback();
-            const mysqlError = txError as any;
-            console.error("[DriverAuth] Delete account SQL step failed:", {
-              step: failedStep,
-              email: driver.email,
-              localUserId: driver.localUserId,
-              code: mysqlError?.code,
-              errno: mysqlError?.errno,
-              sqlState: mysqlError?.sqlState,
-              sqlMessage: mysqlError?.sqlMessage,
-              message: mysqlError?.message,
-            });
-            throw txError;
-          } finally {
-            connection.release();
-          }
+          // Soft-delete: mark the account as deleted and clear the password
+          // so the driver cannot log in, but retain all data (shift logs,
+          // operator links, compliance records) for administrative purposes.
+          await query(
+            `
+            UPDATE drivers
+            SET
+              status = 'deleted',
+              deletedAt = NOW(),
+              passwordHash = ''
+            WHERE email = ?
+            LIMIT 1
+            `,
+            [email]
+          );
 
           return { success: true };
         } catch (error) {
