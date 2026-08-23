@@ -514,7 +514,7 @@ export function AuthProvider({
 
       try {
         // Call the existing backend mutation to delete the account
-        const result = await deleteDriverCloud(user.id);
+        const result = await deleteDriverCloud(user.email);
 
         if (!result.success) {
           return {

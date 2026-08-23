@@ -2,7 +2,7 @@ import { initTRPC } from "@trpc/server";
 import { z } from "zod";
 import crypto from "crypto";
 
-import { query } from "./db";
+import { pool, query } from "./db";
 import {
   sendPasswordResetEmail,
   sendVerificationEmail,
@@ -815,51 +815,110 @@ export const appRouter = t.router({
         }
       }),
 
-    // New deleteAccount mutation
+    // Delete account by immutable email and remove associated driver data.
     deleteAccount: t.procedure
-      .input(z.object({ localUserId: z.string().min(1) }))
+      .input(
+        z.object({
+          email: z.string().email(),
+        })
+      )
       .mutation(async ({ input }) => {
+        const email = normaliseEmail(input.email);
+
         try {
           const rows = await query<any[]>(
             `
-            SELECT email
+            SELECT localUserId, email
             FROM drivers
-            WHERE localUserId = ?
+            WHERE email = ?
+              AND deletedAt IS NULL
             LIMIT 1
             `,
-            [input.localUserId]
+            [email]
           );
 
           if (rows.length === 0) {
             return { success: false, error: "Driver account was not found." };
           }
 
-          const email = rows[0].email;
+          if (!pool) {
+            return {
+              success: false,
+              error: "Account deletion is temporarily unavailable.",
+            };
+          }
 
-          await query(
-            `
-            UPDATE drivers
-            SET deletedAt = CURRENT_TIMESTAMP,
-                status = 'deleted'
-            WHERE localUserId = ?
-            `,
-            [input.localUserId]
-          );
+          const driver = rows[0];
+          const connection = await pool.getConnection();
 
-          // Remove any outstanding password reset tokens for this email
-          await query(
-            `
-            DELETE FROM password_reset_tokens
-            WHERE email = ?
-              AND userType = 'driver'
-            `,
-            [email]
-          );
+          try {
+            await connection.beginTransaction();
+
+            await connection.execute(
+              `
+              DELETE FROM shift_logs
+              WHERE driverLocalUserId = ?
+              `,
+              [driver.localUserId]
+            );
+
+            await connection.execute(
+              `
+              DELETE FROM active_shifts
+              WHERE driverLocalUserId = ?
+              `,
+              [driver.localUserId]
+            );
+
+            await connection.execute(
+              `
+              DELETE FROM operator_drivers
+              WHERE driverLocalUserId = ?
+              `,
+              [driver.localUserId]
+            );
+
+            await connection.execute(
+              `
+              DELETE FROM password_reset_tokens
+              WHERE email = ?
+                AND userType = 'driver'
+              `,
+              [driver.email]
+            );
+
+            await connection.execute(
+              `
+              DELETE FROM email_verification_tokens
+              WHERE email = ?
+              `,
+              [driver.email]
+            );
+
+            await connection.execute(
+              `
+              DELETE FROM drivers
+              WHERE email = ?
+              LIMIT 1
+              `,
+              [driver.email]
+            );
+
+            await connection.commit();
+          } catch (txError) {
+            await connection.rollback();
+            throw txError;
+          } finally {
+            connection.release();
+          }
 
           return { success: true };
         } catch (error) {
           console.error("[DriverAuth] Delete account failed:", error);
-          return { success: false, error: "Unable to delete account." };
+          return {
+            success: false,
+            error: "Unable to delete account. Please try again.",
+          };
         }
       }),
 
