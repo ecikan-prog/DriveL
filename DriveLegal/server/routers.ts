@@ -831,7 +831,6 @@ export const appRouter = t.router({
             SELECT localUserId, email
             FROM drivers
             WHERE email = ?
-              AND deletedAt IS NULL
             LIMIT 1
             `,
             [email]
@@ -850,9 +849,11 @@ export const appRouter = t.router({
 
           const driver = rows[0];
           const connection = await pool.getConnection();
+          let failedStep = "beginTransaction";
 
           try {
             await connection.beginTransaction();
+            failedStep = "DELETE shift_logs";
 
             await connection.execute(
               `
@@ -861,6 +862,7 @@ export const appRouter = t.router({
               `,
               [driver.localUserId]
             );
+            failedStep = "DELETE active_shifts";
 
             await connection.execute(
               `
@@ -869,6 +871,7 @@ export const appRouter = t.router({
               `,
               [driver.localUserId]
             );
+            failedStep = "DELETE operator_drivers";
 
             await connection.execute(
               `
@@ -877,6 +880,7 @@ export const appRouter = t.router({
               `,
               [driver.localUserId]
             );
+            failedStep = "DELETE password_reset_tokens";
 
             await connection.execute(
               `
@@ -886,6 +890,7 @@ export const appRouter = t.router({
               `,
               [driver.email]
             );
+            failedStep = "DELETE email_verification_tokens";
 
             await connection.execute(
               `
@@ -894,6 +899,7 @@ export const appRouter = t.router({
               `,
               [driver.email]
             );
+            failedStep = "DELETE drivers";
 
             await connection.execute(
               `
@@ -903,10 +909,22 @@ export const appRouter = t.router({
               `,
               [driver.email]
             );
+            failedStep = "commit";
 
             await connection.commit();
           } catch (txError) {
             await connection.rollback();
+            const mysqlError = txError as any;
+            console.error("[DriverAuth] Delete account SQL step failed:", {
+              step: failedStep,
+              email: driver.email,
+              localUserId: driver.localUserId,
+              code: mysqlError?.code,
+              errno: mysqlError?.errno,
+              sqlState: mysqlError?.sqlState,
+              sqlMessage: mysqlError?.sqlMessage,
+              message: mysqlError?.message,
+            });
             throw txError;
           } finally {
             connection.release();
