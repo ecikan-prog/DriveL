@@ -6,19 +6,18 @@
  * short-lived display cache that is always overwritten by the real StoreKit
  * state on every app launch and after every transaction event.
  *
- * Product IDs must match exactly what is configured in App Store Connect
- * under the bundle ID: com.app.guidednzlogbook
+ * Product IDs must match exactly what is configured in App Store Connect.
  *
  * App Store Connect setup required
  * ─────────────────────────────────
  * 1. Paid Apps Agreement must be active (Agreements, Tax, and Banking).
  * 2. Create a Subscription Group (e.g. "Drive Legal Premium").
  * 3. Create two Auto-Renewable Subscriptions inside that group:
- *      Product ID:  com.app.guidednzlogbook.monthly
+ *      Product ID:  com.drivelegal.app.monthly
  *      Display name: Drive Legal Monthly
  *      Price: NZD $6.99/month
  *
- *      Product ID:  com.app.guidednzlogbook.annual
+ *      Product ID:  com.drivelegal.app.annual
  *      Display name: Drive Legal Annual
  *      Price: NZD $69.99/year
  * 4. On each product (or on the group) configure a free-trial introductory
@@ -32,8 +31,8 @@ import { Platform } from "react-native";
 // ─── Product IDs ──────────────────────────────────────────────────────────────
 // These must be identical to the Product IDs in App Store Connect.
 export const IAP_PRODUCT_IDS = {
-  monthly: "com.app.guidednzlogbook.monthly",
-  annual: "com.app.guidednzlogbook.annual",
+  monthly: "com.drivelegal.app.monthly",
+  annual: "com.drivelegal.app.annual",
 } as const;
 
 export type IAPPlan = keyof typeof IAP_PRODUCT_IDS;
