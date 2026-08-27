@@ -28,7 +28,7 @@
  * RevenueCat dashboard setup required
  * ────────────────────────────────────
  * 1. Create a RevenueCat project and add the iOS app with bundle ID
- *    com.app.guidednzlogbook.
+ *    app.drivelegal.mobile.
  * 2. Add both products to a RevenueCat Offering.
  * 3. Create an Entitlement called "premium" and attach both products to it.
  * 4. Copy the RevenueCat iOS API key and set it as

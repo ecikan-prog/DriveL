@@ -7,7 +7,7 @@ import type { ExpoConfig } from "expo/config";
 // Bundle ID can only contain letters, numbers, and dots
 // Android requires each dot-separated segment to start with a letter
 // Bundle ID for the Drive Legal iOS app (EAS credentials registered under this ID)
-const bundleId = "com.app.guidednzlogbook";
+const bundleId = "app.drivelegal.mobile";
 // Primary branded deep link scheme — drivelegal://
 // The auto-generated manus scheme is kept as a secondary scheme for compatibility.
 const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
