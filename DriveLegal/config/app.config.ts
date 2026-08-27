@@ -80,7 +80,6 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-router",
-    "expo-in-app-purchases",
     [
       "expo-splash-screen",
       {

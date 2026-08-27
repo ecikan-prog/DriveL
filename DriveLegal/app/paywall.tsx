@@ -6,7 +6,7 @@
  *   1. Load product metadata from the App Store (real prices, trial info).
  *   2. User selects Monthly or Annual plan.
  *   3. "Subscribe Now" calls purchasePlan() which triggers Apple's native
- *      payment sheet via StoreKit (expo-in-app-purchases).
+ *      payment sheet via StoreKit (react-native-purchases / RevenueCat).
  *   4. On a successful verified transaction, activateSubscriptionFromIAP()
  *      writes the StoreKit-verified state to cache.
  *   5. Paywall closes.
@@ -195,13 +195,12 @@ export default function PaywallScreen() {
       const entitlement = await checkCurrentEntitlement();
 
       if (entitlement.isActive && entitlement.plan) {
-        // Confirmed active entitlement via StoreKit — activate locally
-        const periodEnd = entitlement.expiryDate ?? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
-
+        // Confirmed active entitlement via RevenueCat — activate locally.
+        // Use the real product identifier from RevenueCat as the transactionId.
         await activateSubscriptionFromIAP(
           user.id,
           entitlement.plan,
-          `restored_${Date.now()}`,
+          entitlement.transactionId ?? entitlement.plan,
           Date.now()
         );
 
