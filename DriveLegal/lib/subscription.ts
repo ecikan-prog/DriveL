@@ -1,9 +1,25 @@
 /**
  * Subscription management for Drive Legal.
- * Server (Railway/MySQL) is the source of truth for subscription status.
- * AsyncStorage is a local cache, refreshed from the server on every login.
+ *
+ * Source-of-truth hierarchy (highest → lowest):
+ *   1. StoreKit / expo-in-app-purchases  (iOS production entitlement)
+ *   2. Railway/MySQL server              (synced on login via syncSubscriptionFromServer)
+ *   3. AsyncStorage cache                (display only — never overrides StoreKit)
+ *
+ * Rules
+ * ─────
+ * • AsyncStorage is ONLY a display cache.  It is always overwritten by the
+ *   real StoreKit state; it never upgrades status on its own.
+ * • activateSubscriptionFromIAP() is the only function that marks a
+ *   subscription "active" from within the app.  It requires a verified
+ *   StoreKit transaction ID — there is no fake/demo activation path.
+ * • The 21-day free trial is an Apple introductory offer configured in
+ *   App Store Connect.  The local trialEndDate field is kept for
+ *   backward-compatibility with the server schema; it is NOT the gating
+ *   mechanism for trial access on iOS.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { checkCurrentEntitlement, estimatePeriodEnd } from "./iap";
 
 const SUBSCRIPTION_KEY = "drivelegal_subscription";
 
@@ -14,19 +30,27 @@ export type SubscriptionState = {
   status: SubscriptionStatus;
   trialStartDate: string;
   trialEndDate: string;
+  /** StoreKit transaction ID or server-provided subscription ID */
   subscriptionId?: string;
   currentPeriodEnd?: string;
   plan?: "monthly" | "annual";
   lastChecked: string;
-  lastServerSync?: string; // set only by syncSubscriptionFromServer
+  /** Timestamp of last syncSubscriptionFromServer call */
+  lastServerSync?: string;
+  /** Whether the current active state was verified by StoreKit */
+  iapVerified?: boolean;
 };
 
 const TRIAL_DAYS = 21;
 
+// ─── Server sync (called after login) ────────────────────────────────────────
+
 /**
- * THE ONLY place subscription status should be set from an authoritative source.
- * Call this right after login/register, using the driver fields returned by the server.
- * This always wins over whatever was cached locally.
+ * Sync subscription state from the Railway backend.
+ * Called immediately after a successful cloud login.
+ * This sets the AsyncStorage cache from authoritative server data.
+ * On iOS, refreshIAPEntitlement() is called afterward to let StoreKit
+ * override the server state with the real entitlement.
  */
 export async function syncSubscriptionFromServer(params: {
   userId: string;
@@ -37,9 +61,7 @@ export async function syncSubscriptionFromServer(params: {
   currentPeriodEnd?: string | null;
   plan?: "monthly" | "annual" | null;
 }): Promise<SubscriptionState> {
-  const trialStartDate =
-    params.trialStartDate ?? new Date().toISOString();
-
+  const trialStartDate = params.trialStartDate ?? new Date().toISOString();
   const trialEndDate =
     params.trialEndDate ??
     new Date(
@@ -56,26 +78,134 @@ export async function syncSubscriptionFromServer(params: {
     plan: params.plan ?? undefined,
     lastChecked: new Date().toISOString(),
     lastServerSync: new Date().toISOString(),
+    iapVerified: false,
   };
 
   await saveSubscriptionState(state);
   return state;
 }
 
+// ─── StoreKit entitlement refresh ────────────────────────────────────────────
+
 /**
- * Read subscription state for display / gating decisions.
- * Does NOT resync dates or re-derive status from scratch — it only ever
- * applies a one-way expiry downgrade (trial/active -> expired) based on
- * the dates that were already set by syncSubscriptionFromServer.
- * If nothing is cached yet (first-ever run, offline), falls back to a
- * short-lived local trial so the app remains usable until the next login.
+ * Query StoreKit for the real current entitlement and update the cache.
+ * This is called on every app launch (from shift-context) so that the
+ * cached state can never drift from the actual App Store state.
+ *
+ * IMPORTANT: This is the ONLY function allowed to set status = "active"
+ * based on a StoreKit check.  It cannot be bypassed.
+ */
+export async function refreshIAPEntitlement(userId: string): Promise<SubscriptionState> {
+  const cached = await getSubscriptionState(userId);
+
+  try {
+    const entitlement = await checkCurrentEntitlement();
+
+    if (entitlement.isActive && entitlement.plan) {
+      // StoreKit confirms an active subscription — mark as active regardless
+      // of what the AsyncStorage cache or server said.
+      const periodEnd = entitlement.expiryDate
+        ? entitlement.expiryDate.toISOString()
+        : estimatePeriodEnd(entitlement.plan, Date.now()).toISOString();
+
+      const updated: SubscriptionState = {
+        ...cached,
+        userId,
+        status: "active",
+        plan: entitlement.plan,
+        currentPeriodEnd: periodEnd,
+        lastChecked: new Date().toISOString(),
+        iapVerified: true,
+      };
+      await saveSubscriptionState(updated);
+      return updated;
+    }
+
+    // StoreKit returns no active subscription.  Downgrade active/trial to
+    // expired only when StoreKit explicitly says no entitlement.
+    if (cached.status === "active" && cached.iapVerified) {
+      // Previously confirmed via StoreKit — now expired/cancelled.
+      const downgraded: SubscriptionState = {
+        ...cached,
+        status: "expired",
+        lastChecked: new Date().toISOString(),
+        iapVerified: false,
+      };
+      await saveSubscriptionState(downgraded);
+      return downgraded;
+    }
+  } catch {
+    // StoreKit unavailable (offline, simulator, etc.) — return cached state.
+    // Do NOT downgrade or modify the cached state on network errors.
+  }
+
+  return cached;
+}
+
+// ─── Post-purchase activation ─────────────────────────────────────────────────
+
+/**
+ * Activate the subscription after a successful verified StoreKit purchase.
+ * This is the ONLY code path that can transition status → "active" from
+ * within the app.  It requires a real StoreKit transaction ID.
+ *
+ * The fake "sim_sub_" prefix is explicitly rejected.
+ */
+export async function activateSubscriptionFromIAP(
+  userId: string,
+  plan: "monthly" | "annual",
+  transactionId: string,
+  purchaseTime: number
+): Promise<SubscriptionState> {
+  if (transactionId.startsWith("sim_sub_")) {
+    throw new Error(
+      "Simulated transaction IDs are not accepted. A real StoreKit transaction is required."
+    );
+  }
+
+  const raw = await AsyncStorage.getItem(`${SUBSCRIPTION_KEY}_${userId}`);
+  const base: SubscriptionState = raw
+    ? JSON.parse(raw)
+    : {
+        userId,
+        status: "trial",
+        trialStartDate: new Date().toISOString(),
+        trialEndDate: new Date().toISOString(),
+        lastChecked: new Date().toISOString(),
+      };
+
+  const periodEnd = estimatePeriodEnd(plan, purchaseTime);
+
+  const updated: SubscriptionState = {
+    ...base,
+    userId,
+    status: "active",
+    plan,
+    subscriptionId: transactionId,
+    currentPeriodEnd: periodEnd.toISOString(),
+    lastChecked: new Date().toISOString(),
+    iapVerified: true,
+  };
+
+  await saveSubscriptionState(updated);
+  return updated;
+}
+
+// ─── Read / display helpers ───────────────────────────────────────────────────
+
+/**
+ * Read the cached subscription state.
+ * Applies a one-way expiry downgrade for non-IAP-verified states only.
+ * Never upgrades status — that is StoreKit's job.
  */
 export async function getSubscriptionState(userId: string): Promise<SubscriptionState> {
   try {
     const raw = await AsyncStorage.getItem(`${SUBSCRIPTION_KEY}_${userId}`);
     if (raw) {
       const state: SubscriptionState = JSON.parse(raw);
-      const updated = applyExpiryCheck(state);
+      // Only apply local expiry check to states NOT verified by StoreKit,
+      // to avoid incorrectly expiring a valid subscription while offline.
+      const updated = state.iapVerified ? state : applyExpiryCheck(state);
       if (updated.status !== state.status) {
         await saveSubscriptionState(updated);
       }
@@ -85,7 +215,7 @@ export async function getSubscriptionState(userId: string): Promise<Subscription
     // fall through to offline default
   }
 
-  // No cached state at all (should be rare — only before first server sync).
+  // No cache at all — show as trial pending the first server sync.
   const trialStart = new Date().toISOString();
   const trialEnd = new Date(
     Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000
@@ -97,16 +227,14 @@ export async function getSubscriptionState(userId: string): Promise<Subscription
     trialStartDate: trialStart,
     trialEndDate: trialEnd,
     lastChecked: new Date().toISOString(),
+    iapVerified: false,
   };
 
   await saveSubscriptionState(fallback);
   return fallback;
 }
 
-/**
- * One-way downgrade only: trial -> expired, active -> expired.
- * Never upgrades or resets dates. Never touches cancelled.
- */
+/** One-way downgrade only for non-IAP-verified local/server-synced states. */
 function applyExpiryCheck(state: SubscriptionState): SubscriptionState {
   const now = Date.now();
 
@@ -129,50 +257,13 @@ function applyExpiryCheck(state: SubscriptionState): SubscriptionState {
 
 export async function saveSubscriptionState(state: SubscriptionState): Promise<void> {
   state.lastChecked = new Date().toISOString();
-  await AsyncStorage.setItem(`${SUBSCRIPTION_KEY}_${state.userId}`, JSON.stringify(state));
+  await AsyncStorage.setItem(
+    `${SUBSCRIPTION_KEY}_${state.userId}`,
+    JSON.stringify(state)
+  );
 }
 
-/**
- * Activate a subscription (called after successful Stripe payment).
- * Local-first; a follow-up server call/webhook should also update the drivers table
- * so other devices and future logins see it too.
- */
-export async function activateSubscription(
-  userId: string,
-  plan: "monthly" | "annual",
-  subscriptionId: string,
-  currentPeriodEnd: string
-): Promise<SubscriptionState> {
-  const raw = await AsyncStorage.getItem(`${SUBSCRIPTION_KEY}_${userId}`);
-  const state: SubscriptionState = raw
-    ? JSON.parse(raw)
-    : {
-        userId,
-        status: "trial",
-        trialStartDate: new Date().toISOString(),
-        trialEndDate: new Date().toISOString(),
-        lastChecked: new Date().toISOString(),
-      };
-
-  state.status = "active";
-  state.plan = plan;
-  state.subscriptionId = subscriptionId;
-  state.currentPeriodEnd = currentPeriodEnd;
-
-  await saveSubscriptionState(state);
-  return state;
-}
-
-export async function cancelSubscription(userId: string): Promise<SubscriptionState> {
-  const raw = await AsyncStorage.getItem(`${SUBSCRIPTION_KEY}_${userId}`);
-  if (!raw) throw new Error("No subscription found");
-
-  const state: SubscriptionState = JSON.parse(raw);
-  state.status = "cancelled";
-
-  await saveSubscriptionState(state);
-  return state;
-}
+// ─── Gating helpers ───────────────────────────────────────────────────────────
 
 export function canLogShifts(state: SubscriptionState): boolean {
   return state.status === "trial" || state.status === "active";
