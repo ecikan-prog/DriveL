@@ -2,7 +2,7 @@
  * Subscription management for Drive Legal.
  *
  * Source-of-truth hierarchy (highest → lowest):
- *   1. RevenueCat / react-native-purchases  (iOS production entitlement)
+ *   1. StoreKit / react-native-iap  (iOS production entitlement)
  *   2. Railway/MySQL server              (synced on login via syncSubscriptionFromServer)
  *   3. AsyncStorage cache                (display only — never overrides StoreKit)
  *

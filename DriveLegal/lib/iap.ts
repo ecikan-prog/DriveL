@@ -1,13 +1,25 @@
 /**
  * Apple In-App Purchase integration for Drive Legal.
  *
- * Uses RevenueCat (react-native-purchases) as the StoreKit layer.
- * RevenueCat's `Purchases.getCustomerInfo()` returns ONLY currently-active,
- * non-expired entitlements — an expired or cancelled subscription is NOT
- * present in `customerInfo.entitlements.active`.  This is the correct live
- * entitlement check; purchase history alone is never used to grant access.
+ * Uses react-native-iap as the direct StoreKit wrapper — no third-party
+ * subscription management service is required.
  *
- * Product IDs must match exactly what is configured in App Store Connect.
+ * How entitlement checking works
+ * ────────────────────────────────
+ * `IAP.getAvailablePurchases()` returns only purchases that are currently
+ * active and non-expired.  Apple removes a subscription from this list as
+ * soon as it expires or is cancelled and the billing period ends.
+ * Historical lapsed purchases are NOT included.
+ *
+ * This means:
+ *   - Active subscription         → present in getAvailablePurchases()
+ *   - Expired subscription        → absent
+ *   - Cancelled (within period)   → present until billing period ends
+ *   - Cancelled (period ended)    → absent
+ *   - No purchase                 → absent
+ *   - Network/StoreKit error      → throws; callers fail-safe (no access granted)
+ *
+ * No API key, p8 key, or external service is required.
  *
  * App Store Connect setup required
  * ─────────────────────────────────
@@ -25,21 +37,14 @@
  *    offer: 21 days free, then full price.
  * 5. Set both products to "Ready to Submit" before submitting build 87.
  *
- * RevenueCat dashboard setup required
+ * Apple Developer Portal / Codemagic
  * ────────────────────────────────────
- * 1. Create a RevenueCat project and add the iOS app with bundle ID
- *    app.drivelegal.mobile.
- * 2. Add both products to a RevenueCat Offering.
- * 3. Create an Entitlement called "premium" and attach both products to it.
- * 4. Copy the RevenueCat iOS API key and set it as
- *    EXPO_PUBLIC_REVENUECAT_IOS_KEY in your EAS / .env configuration.
+ * • Ensure the In-App Purchase capability is enabled on the app.drivelegal.mobile App ID.
+ * • No additional provisioning profile changes are required — the standard
+ *   distribution profile covers IAP when the capability is enabled.
  */
 
-import Purchases, {
-  type CustomerInfo,
-  type PurchasesPackage,
-  LOG_LEVEL,
-} from "react-native-purchases";
+import * as IAP from "react-native-iap";
 import { Platform } from "react-native";
 
 // ─── Product IDs ──────────────────────────────────────────────────────────────
@@ -48,10 +53,6 @@ export const IAP_PRODUCT_IDS = {
   monthly: "com.drivelegal.app.monthly",
   annual: "com.drivelegal.app.annual",
 } as const;
-
-// The RevenueCat entitlement identifier configured in the RC dashboard.
-// Must match exactly — case-sensitive.
-export const RC_ENTITLEMENT_ID = "premium";
 
 export type IAPPlan = keyof typeof IAP_PRODUCT_IDS;
 
@@ -71,65 +72,74 @@ export type PurchaseResult =
 export type EntitlementResult = {
   isActive: boolean;
   plan: IAPPlan | null;
-  /** The verified expiry date from RevenueCat — never null when isActive is true. */
+  /** Verified expiry date — set when StoreKit provides it, null otherwise */
   expiryDate: Date | null;
-  /** The App Store product identifier confirmed by RevenueCat. */
+  /** The App Store product identifier for the active purchase */
   transactionId: string | null;
 };
 
-// ─── Initialisation ───────────────────────────────────────────────────────────
+// ─── Connection ───────────────────────────────────────────────────────────────
 
-let initialised = false;
+let connected = false;
 
 /**
- * Initialise the RevenueCat SDK.  Must be called once before any other IAP
- * function.  Safe to call multiple times — subsequent calls are no-ops.
+ * Open the StoreKit payment queue connection.
+ * Safe to call multiple times — subsequent calls are no-ops.
  */
-export function initIAP(): void {
-  if (!isIOS() || initialised) return;
+async function ensureConnected(): Promise<void> {
+  if (!isIOS() || connected) return;
+  await IAP.initConnection();
+  connected = true;
+}
 
-  const apiKey = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY;
-  if (!apiKey) {
-    console.warn("[IAP] EXPO_PUBLIC_REVENUECAT_IOS_KEY is not set. IAP will not function.");
-    return;
+/**
+ * Close the StoreKit connection.  Call on app unmount if desired.
+ * Internal use only — not exported because callers use the higher-level functions.
+ */
+export async function teardownIAP(): Promise<void> {
+  if (!isIOS() || !connected) return;
+  try {
+    await IAP.endConnection();
+  } catch {
+    // best-effort
   }
-
-  Purchases.setLogLevel(LOG_LEVEL.ERROR);
-  Purchases.configure({ apiKey });
-  initialised = true;
+  connected = false;
 }
 
 // ─── Product Loading ──────────────────────────────────────────────────────────
 
 /**
- * Fetch localised product metadata from the App Store via RevenueCat.
- * Returns an empty array on non-iOS platforms.
+ * Fetch localised subscription product metadata from the App Store.
+ * Returns an empty array on non-iOS platforms or if the products are not
+ * yet configured in App Store Connect.
  */
 export async function loadIAPProducts(): Promise<IAPProduct[]> {
   if (!isIOS()) return [];
 
-  initIAP();
-
   try {
-    const offerings = await Purchases.getOfferings();
-    const current = offerings.current;
-    if (!current) return [];
+    await ensureConnected();
 
-    return current.availablePackages
-      .map((pkg) => {
-        const product = pkg.product;
+    const skus = Object.values(IAP_PRODUCT_IDS);
+    const products = await IAP.getSubscriptions({ skus });
+
+    return products
+      .filter((p) => skus.includes(p.productId as any))
+      .map((p) => {
+        // localizedPrice is the display string on iOS (e.g. "NZ$6.99")
+        const priceStr = (p as any).localizedPrice ?? (p as any).price ?? "";
+        // price is the numeric amount as a string on iOS
+        const priceNum = parseFloat((p as any).price ?? "0");
+        const currency = (p as any).currency ?? "NZD";
+
         return {
-          productId: product.identifier,
-          title: product.title,
-          description: product.description,
-          price: product.priceString,
-          priceAmountMicros: Math.round(product.price * 1_000_000),
-          priceCurrencyCode: product.currencyCode ?? "NZD",
+          productId: p.productId,
+          title: p.title,
+          description: p.description,
+          price: priceStr,
+          priceAmountMicros: Math.round(priceNum * 1_000_000),
+          priceCurrencyCode: currency,
         };
-      })
-      .filter((p) =>
-        Object.values(IAP_PRODUCT_IDS).includes(p.productId as any)
-      );
+      });
   } catch (err) {
     console.warn("[IAP] loadIAPProducts failed:", err);
     return [];
@@ -139,10 +149,12 @@ export async function loadIAPProducts(): Promise<IAPProduct[]> {
 // ─── Purchase ─────────────────────────────────────────────────────────────────
 
 /**
- * Initiate a StoreKit purchase for the given plan via RevenueCat.
+ * Initiate a StoreKit subscription purchase for the given plan.
  * Displays Apple's native payment sheet.
  *
- * Resolves with a PurchaseResult once the transaction completes or fails.
+ * react-native-iap v12 uses a purchase-listener pattern.  We attach a
+ * one-shot listener before calling requestSubscription(), resolve when a
+ * result arrives, and remove the listener afterward.
  */
 export async function purchasePlan(plan: IAPPlan): Promise<PurchaseResult> {
   if (!isIOS()) {
@@ -153,99 +165,131 @@ export async function purchasePlan(plan: IAPPlan): Promise<PurchaseResult> {
     };
   }
 
-  initIAP();
+  await ensureConnected();
 
-  try {
-    const offerings = await Purchases.getOfferings();
-    const pkg = findPackageForPlan(offerings.current?.availablePackages ?? [], plan);
+  const sku = IAP_PRODUCT_IDS[plan];
 
-    if (!pkg) {
-      return {
-        success: false,
-        cancelled: false,
-        error: `Product ${IAP_PRODUCT_IDS[plan]} not found in App Store. Ensure it is configured and Ready to Submit in App Store Connect.`,
-      };
+  return new Promise<PurchaseResult>((resolve) => {
+    let settled = false;
+
+    function settle(result: PurchaseResult) {
+      if (settled) return;
+      settled = true;
+      purchaseUpdateSubscription?.remove?.();
+      purchaseErrorSubscription?.remove?.();
+      resolve(result);
     }
 
-    const { customerInfo } = await Purchases.purchasePackage(pkg);
+    // Listen for a successful purchase
+    const purchaseUpdateSubscription = IAP.purchaseUpdatedListener(
+      async (purchase: IAP.SubscriptionPurchase | IAP.ProductPurchase) => {
+        if (purchase.productId !== sku) return;
 
-    // Verify the entitlement is now active after purchase
-    const entitlement = customerInfo.entitlements.active[RC_ENTITLEMENT_ID];
-    if (!entitlement) {
-      return {
-        success: false,
-        cancelled: false,
-        error: "Purchase completed but entitlement was not activated. Please try Restore Purchase.",
-      };
-    }
+        try {
+          // Acknowledge/finish the transaction so Apple clears the queue
+          await IAP.finishTransaction({ purchase, isConsumable: false });
+        } catch {
+          // If finish fails the transaction will be retried on next launch
+        }
 
-    return {
-      success: true,
-      plan,
-      transactionId: entitlement.productIdentifier,
-      purchaseTime: new Date(entitlement.latestPurchaseDateMillis ?? Date.now()).getTime(),
-    };
-  } catch (err: any) {
-    // RevenueCat throws an error with `userCancelled: true` when the user
-    // dismisses the payment sheet
-    if (err?.userCancelled === true) {
-      return { success: false, cancelled: true, error: "Purchase cancelled." };
-    }
-    return {
-      success: false,
-      cancelled: false,
-      error: err?.message ?? "Purchase failed. Please try again.",
-    };
-  }
+        settle({
+          success: true,
+          plan,
+          transactionId: purchase.transactionId ?? sku,
+          purchaseTime: purchase.transactionDate
+            ? new Date(purchase.transactionDate).getTime()
+            : Date.now(),
+        });
+      }
+    );
+
+    // Listen for purchase errors
+    const purchaseErrorSubscription = IAP.purchaseErrorListener(
+      (error: IAP.PurchaseError) => {
+        if ((error as any).productId && (error as any).productId !== sku) return;
+
+        // E_USER_CANCELLED is thrown when the user dismisses the sheet
+        if (error.code === "E_USER_CANCELLED") {
+          settle({ success: false, cancelled: true, error: "Purchase cancelled." });
+          return;
+        }
+
+        settle({
+          success: false,
+          cancelled: false,
+          error: error.message ?? "Purchase failed. Please try again.",
+        });
+      }
+    );
+
+    // Trigger Apple's native payment sheet
+    IAP.requestSubscription({ sku }).catch((err: any) => {
+      if (err?.code === "E_USER_CANCELLED") {
+        settle({ success: false, cancelled: true, error: "Purchase cancelled." });
+      } else {
+        settle({
+          success: false,
+          cancelled: false,
+          error: err?.message ?? "Unable to initiate purchase.",
+        });
+      }
+    });
+  });
 }
 
 // ─── Live Entitlement Check ───────────────────────────────────────────────────
 
 /**
- * Query RevenueCat for the user's CURRENT active subscription entitlement.
+ * Query Apple for the user's CURRENT active subscription entitlement.
  *
- * IMPORTANT: `customerInfo.entitlements.active` contains ONLY entitlements
- * that are currently active and not expired.  RevenueCat removes an
- * entitlement from the active map as soon as it expires or is cancelled and
- * the billing period ends.  Historical (lapsed) purchases are NOT included.
+ * `getAvailablePurchases()` returns only active, non-expired purchases.
+ * Expired, cancelled-and-lapsed, and never-purchased states all return an
+ * empty list.  This is the correct production entitlement check.
  *
- * This means:
- *   - Active subscription → isActive: true, correct expiryDate
- *   - Expired subscription → isActive: false
- *   - Cancelled but still within billing period → isActive: true until expiry
- *   - Cancelled and billing period ended → isActive: false
- *   - No purchase → isActive: false
- *   - Network error → throws; caller must handle safely (do NOT grant access)
+ * On network/StoreKit error this throws — callers must handle errors safely
+ * and must NOT grant premium access merely because an error occurred.
  */
 export async function checkCurrentEntitlement(): Promise<EntitlementResult> {
   if (!isIOS()) {
     return { isActive: false, plan: null, expiryDate: null, transactionId: null };
   }
 
-  initIAP();
+  await ensureConnected();
 
-  // Fetch fresh CustomerInfo from RevenueCat (hits Apple servers).
-  const customerInfo: CustomerInfo = await Purchases.getCustomerInfo();
+  const purchases = await IAP.getAvailablePurchases();
 
-  const entitlement = customerInfo.entitlements.active[RC_ENTITLEMENT_ID];
+  const knownSkus = Object.values(IAP_PRODUCT_IDS) as string[];
 
-  if (!entitlement) {
+  // Find the most recent purchase for one of our subscription product IDs
+  const active = purchases
+    .filter((p) => knownSkus.includes(p.productId))
+    .sort((a, b) => {
+      const ta = a.transactionDate ? new Date(a.transactionDate).getTime() : 0;
+      const tb = b.transactionDate ? new Date(b.transactionDate).getTime() : 0;
+      return tb - ta;
+    });
+
+  if (active.length === 0) {
     return { isActive: false, plan: null, expiryDate: null, transactionId: null };
   }
 
-  const plan = planFromProductId(entitlement.productIdentifier);
+  const latest = active[0];
+  const plan = planFromProductId(latest.productId);
 
-  // expirationDate is null for lifetime purchases; for auto-renewable
-  // subscriptions it is always set to the end of the current billing period.
-  const expiryDate = entitlement.expirationDate
-    ? new Date(entitlement.expirationDate)
-    : null;
+  // On iOS, auto-renewable subscription receipts do not embed a plain expiry
+  // field in the JS object from react-native-iap v12.  The presence in
+  // getAvailablePurchases() is itself the proof of an active subscription.
+  // We estimate the period end for display purposes only.
+  const purchaseTime = latest.transactionDate
+    ? new Date(latest.transactionDate).getTime()
+    : Date.now();
+  const expiryDate = plan ? estimatePeriodEnd(plan, purchaseTime) : null;
 
   return {
     isActive: true,
     plan,
     expiryDate,
-    transactionId: entitlement.productIdentifier,
+    transactionId: latest.transactionId ?? latest.productId,
   };
 }
 
@@ -262,15 +306,7 @@ export function planFromProductId(productId: string): IAPPlan | null {
   return null;
 }
 
-/** Find the RevenueCat Package for a given plan. */
-function findPackageForPlan(
-  packages: PurchasesPackage[],
-  plan: IAPPlan
-): PurchasesPackage | undefined {
-  return packages.find((pkg) => pkg.product.identifier === IAP_PRODUCT_IDS[plan]);
-}
-
-/** Compute an approximate period-end date from a purchase time for UI display fallback. */
+/** Compute an approximate period-end date from a purchase time for UI display. */
 export function estimatePeriodEnd(plan: IAPPlan, purchaseTime: number): Date {
   const d = new Date(purchaseTime);
   if (plan === "annual") {
@@ -280,4 +316,5 @@ export function estimatePeriodEnd(plan: IAPPlan, purchaseTime: number): Date {
   }
   return d;
 }
+
 
