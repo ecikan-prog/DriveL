@@ -88,6 +88,7 @@ let connected = false;
  */
 async function ensureConnected(): Promise<void> {
   if (!isIOS() || connected) return;
+  IAP.setup({ storekitMode: "STOREKIT_HYBRID_MODE" });
   await IAP.initConnection();
   connected = true;
 }
