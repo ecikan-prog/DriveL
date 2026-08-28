@@ -1,21 +1,22 @@
 /**
  * withFmtXcode26Fix.js
  *
- * Fixes fmt 11.0.2 compilation failure on Xcode 26+.
+ * Fixes fmt 11.0.2 compilation failures on Xcode 26+.
  *
- * Root cause: Xcode 26 changed the default for SWIFT_ENABLE_EXPLICIT_MODULES to YES.
- * Explicit Modules mode requires every pod to be modular-clean (have a module map).
- * fmt 11.0.2 has no module map, so the clang module scanner fails when compiling
- * fmt/src/format.cc, producing exit status 65 with no visible diagnostic.
+ * Root causes:
+ * 1) Xcode 26 changed the default for SWIFT_ENABLE_EXPLICIT_MODULES to YES.
+ *    Explicit Modules mode requires every pod to be modular-clean (have a module map).
+ * 2) Apple Clang 21 in Xcode 26.4 rejects fmt 11.0.2 consteval checks in base.h.
  *
  * React Native 0.81.5 applies a SWIFT_ENABLE_EXPLICIT_MODULES = NO workaround only
  * when NOT building React Native from source (see react_native_post_install in
  * scripts/react_native_pods.rb). Because this project sets buildReactNativeFromSource:true,
  * that branch is skipped and fmt is left exposed to the Xcode 26 default.
  *
- * Fix: inject the fmt build-setting logic INTO the existing post_install block in
- * the generated Podfile when one is present; otherwise append exactly one new
- * post_install block containing the fix.  CocoaPods does not allow multiple
+ * Fix: inject fmt-specific build-setting and post-install patch logic INTO the
+ * existing post_install block in the generated Podfile when one is present;
+ * otherwise append exactly one new post_install block containing the fix.
+ * CocoaPods does not allow multiple
  * post_install hooks ("Invalid Podfile: Specifying multiple post_install hooks
  * is unsupported"), so a second block is never created.
  *
@@ -38,6 +39,24 @@ const FMT_XCODE26_SNIPPET = `  ${FMT_XCODE26_MARKER}
     next unless target.name == 'fmt'
     target.build_configurations.each do |config|
       config.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
+    end
+  end
+
+  # Patch fmt 11.0.2 for Xcode 26.4+ consteval failure:
+  # format-inl.h/base.h errors such as "call to consteval function is not a
+  # constant expression" while compiling fmt/src/format.cc.
+  # Idempotent: only patch once, and only if the exact 11.0.2 guard text exists.
+  fmt_base_h_path = File.join(installer.sandbox.root.to_s, 'fmt', 'include', 'fmt', 'base.h')
+  if File.exist?(fmt_base_h_path)
+    fmt_base_h = File.read(fmt_base_h_path)
+    patch_marker = 'withFmtXcode26Fix consteval workaround'
+    unless fmt_base_h.include?(patch_marker)
+      from = "#elif defined(__apple_build_version__) && __apple_build_version__ < 14000029L\\n#  define FMT_USE_CONSTEVAL 0  // consteval is broken in Apple clang < 14."
+      to = "#elif defined(__apple_build_version__)\\n#  define FMT_USE_CONSTEVAL 0  // #{patch_marker} for Xcode 26.4 + fmt 11.0.2"
+      if fmt_base_h.include?(from)
+        fmt_base_h.sub!(from, to)
+        File.write(fmt_base_h_path, fmt_base_h)
+      end
     end
   end`;
 
