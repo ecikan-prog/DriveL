@@ -171,11 +171,17 @@ export default function PaywallScreen() {
       setSubscriptionLoading(true);
 
       try {
-        // Load cached state first for instant UI
+        // Load cached state first.
+        // Only show it immediately if it is already StoreKit-verified active —
+        // so the user never sees a stale "Free Trial Ended" flash while the
+        // StoreKit entitlement check is still in progress.
         const cached = await getSubscriptionState(user.id);
-        if (isMounted) setSubscriptionState(cached);
+        if (isMounted && cached.status === "active" && cached.iapVerified) {
+          setSubscriptionState(cached);
+        }
 
-        // Then refresh from StoreKit (iOS only) in parallel with product fetch
+        // Await StoreKit entitlement refresh and product fetch together so
+        // that the authoritative Apple status is shown on first render.
         const [refreshed] = await Promise.all([
           refreshIAPEntitlement(user.id).catch(() => cached),
           storeProductsPromise,
