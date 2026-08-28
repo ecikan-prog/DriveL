@@ -22,10 +22,7 @@ import {
   type DriverType,
 } from "@/lib/local-auth";
 import {
-  getSubscriptionState,
-  refreshIAPEntitlement,
   getTrialDaysLeft,
-  type SubscriptionState,
 } from "@/lib/subscription";
 import {
   formatHoursMinutes,
@@ -283,18 +280,12 @@ function SelectorField({
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, logout, refreshUser } = useAuthContext();
-  const { activeShift, subscriptionState: shiftSubscriptionState } = useShiftContext();
+  const { activeShift, subscriptionState, subscriptionVerifying } = useShiftContext();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showVehiclePicker, setShowVehiclePicker] = useState(false);
   const [showDriverTypePicker, setShowDriverTypePicker] = useState(false);
   const [iconLoadFailed, setIconLoadFailed] = useState(false);
-  const [subscriptionState, setSubscriptionState] = useState<SubscriptionState | null>(
-    shiftSubscriptionState
-  );
-  const [subscriptionStatusLoading, setSubscriptionStatusLoading] = useState(
-    !shiftSubscriptionState
-  );
   const [form, setForm] = useState({
     name: user?.name ?? "",
     licenceNumber: user?.licenceNumber ?? "",
@@ -337,53 +328,6 @@ export default function ProfileScreen() {
         // Non-fatal: leave stats at defaults if this fails
       });
   }, [user]);
-
-  useEffect(() => {
-    setSubscriptionState(shiftSubscriptionState);
-    if (shiftSubscriptionState) {
-      setSubscriptionStatusLoading(false);
-    }
-  }, [shiftSubscriptionState]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadSubscriptionState = async () => {
-      if (!user) {
-        if (isMounted) {
-          setSubscriptionState(null);
-          setSubscriptionStatusLoading(false);
-        }
-        return;
-      }
-
-      if (isMounted) {
-        setSubscriptionStatusLoading(true);
-      }
-
-      const cached = await getSubscriptionState(user.id);
-      if (isMounted) {
-        setSubscriptionState(cached);
-      }
-
-      const refreshed = await refreshIAPEntitlement(user.id).catch(() => cached);
-      if (isMounted) {
-        setSubscriptionState(refreshed);
-        setSubscriptionStatusLoading(false);
-      }
-    };
-
-    loadSubscriptionState().catch((error) => {
-      console.error("[Profile] Failed to load subscription state:", error);
-      if (isMounted) {
-        setSubscriptionStatusLoading(false);
-      }
-    });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [user?.id]);
 
   const trialDays =
     subscriptionState?.status === "trial" ? getTrialDaysLeft(subscriptionState) : 0;
@@ -609,7 +553,7 @@ return (
                 : styles.trialCardExpired,
             ]}
           >
-            {subscriptionStatusLoading ? (
+            {subscriptionVerifying ? (
               <View style={styles.subscriptionStatusLoading}>
                 <ActivityIndicator size="small" color={COLORS.white} />
               </View>

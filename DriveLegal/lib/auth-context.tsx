@@ -28,7 +28,7 @@ import {
 
 import { migrateLogCalculations } from "./logbook-storage";
 import { lockPinSession } from "./pin-security";
-import { syncSubscriptionFromServer } from "./subscription";
+import { syncSubscriptionFromServer, refreshIAPEntitlement } from "./subscription";
 
 const LIVE_BACKEND =
   "https://drivel-production.up.railway.app";
@@ -291,19 +291,14 @@ export function AuthProvider({
   plan: driver.subscriptionPlan,
 });
 
- await syncSubscriptionFromServer({
-  userId: driver.localUserId,
-  status: driver.subscriptionStatus,
-  trialStartDate:
-    driver.trialStartDate ??
-    driver.createdAt ??
-    localResult.user.trialStartDate ??
-    localResult.user.createdAt,
-  trialEndDate: driver.trialEndDate,
-  subscriptionId: driver.subscriptionId,
-  currentPeriodEnd: driver.currentPeriodEnd,
-  plan: driver.subscriptionPlan,
-});
+ // Refresh from StoreKit immediately so the AsyncStorage cache reflects the
+ // real Apple entitlement before the UI renders.  This prevents the
+ // server's stale status (e.g. "expired") from flashing on Profile/Paywall
+ // after cold start + PIN login.
+ await refreshIAPEntitlement(driver.localUserId).catch(() => {
+   // Offline or StoreKit unavailable — the server-synced state is fine as
+   // a fallback; the UI will show a loading spinner until StoreKit responds.
+ });
 
  await pullLogsFromCloud(driver.localUserId);
 
