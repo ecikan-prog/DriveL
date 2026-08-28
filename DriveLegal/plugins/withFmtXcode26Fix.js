@@ -62,11 +62,24 @@ function withFmtXcode26Fix(config) {
       // immediately after its opening line.  Otherwise append a new block.
       // CocoaPods does not allow multiple post_install hooks, so we must never
       // create a second one.
-      const POST_INSTALL_RE = /^(post_install do \|installer\|)$/m;
-      if (POST_INSTALL_RE.test(podfile)) {
+      //
+      // The regex matches the opening line regardless of indentation level so
+      // that it works both when post_install is at column 0 (bare Podfile) and
+      // when it is indented inside a target block (Expo SDK 54 template).
+      const POST_INSTALL_RE = /^([ \t]*post_install do \|installer\|)[ \t]*$/m;
+      const match = POST_INSTALL_RE.exec(podfile);
+      if (match) {
+        // Derive the indent used by the block body from the opening-line indent
+        // (post_install itself) plus two spaces, so the injected lines align
+        // with the surrounding Ruby.
+        const blockIndent = match[1].match(/^[ \t]*/)[0] + '  ';
+        const indentedSnippet = FMT_XCODE26_SNIPPET.replace(
+          /^  /gm,
+          blockIndent
+        );
         podfile = podfile.replace(
           POST_INSTALL_RE,
-          `$1\n${FMT_XCODE26_SNIPPET}\n`
+          `$1\n${indentedSnippet}\n`
         );
       } else {
         podfile =
