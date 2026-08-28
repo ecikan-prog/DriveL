@@ -28,6 +28,7 @@ import {
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuthContext } from "@/lib/auth-context";
+import { useShiftContext } from "@/lib/shift-context";
 import {
   activateSubscriptionFromIAP,
   getSubscriptionState,
@@ -83,6 +84,7 @@ function formatCurrencyFromMicros(
 export default function PaywallScreen() {
   const router = useRouter();
   const { user } = useAuthContext();
+  const { subscriptionVerifying: contextVerifying } = useShiftContext();
   const [selectedPlan, setSelectedPlan] = useState<IAPPlan>("annual");
   const [purchasing, setPurchasing] = useState(false);
   const [restoring, setRestoring] = useState(false);
@@ -429,7 +431,7 @@ export default function PaywallScreen() {
 
         {/* Subscription Status */}
         <View style={{ paddingHorizontal: 24, marginBottom: 24 }}>
-          {subscriptionLoading ? (
+          {subscriptionLoading || contextVerifying ? (
             <View style={{ backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 12, padding: 16, alignItems: "center" }}>
               <ActivityIndicator color="#FFFFFF" />
             </View>
