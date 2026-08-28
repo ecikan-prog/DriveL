@@ -60,7 +60,8 @@ export type IAPProduct = {
   productId: string;
   title: string;
   description: string;
-  price: string;            // localised display string e.g. "NZ$6.99"
+  price: string;            // Apple-localised display string e.g. "NZ$6.99"
+  displayPrice: string;
   priceAmountMicros: number;
   priceCurrencyCode: string;
 };
@@ -135,6 +136,7 @@ export async function loadIAPProducts(): Promise<IAPProduct[]> {
         productId: product.productId,
         displayPrice:
           (product as any).displayPrice ?? (product as any).localizedPrice ?? null,
+        localizedPrice: (product as any).localizedPrice ?? null,
         price: (product as any).price ?? null,
         priceLocaleCurrencyCode:
           (product as any).priceLocale?.currencyCode ??
@@ -147,17 +149,24 @@ export async function loadIAPProducts(): Promise<IAPProduct[]> {
     return products
       .filter((p) => skus.includes(p.productId as any))
       .map((p) => {
-        // localizedPrice is the display string on iOS (e.g. "NZ$6.99")
-        const priceStr = (p as any).localizedPrice ?? (p as any).price ?? "";
+        const displayPrice =
+          (p as any).displayPrice ??
+          (p as any).localizedPrice ??
+          (p as any).price ??
+          "";
         // price is the numeric amount as a string on iOS
         const priceNum = parseFloat((p as any).price ?? "0");
-        const currency = (p as any).currency ?? "NZD";
+        const currency =
+          (p as any).priceLocale?.currencyCode ??
+          (p as any).currency ??
+          "NZD";
 
         return {
           productId: p.productId,
           title: p.title,
           description: p.description,
-          price: priceStr,
+          price: displayPrice,
+          displayPrice,
           priceAmountMicros: Math.round(priceNum * 1_000_000),
           priceCurrencyCode: currency,
         };
@@ -338,4 +347,3 @@ export function estimatePeriodEnd(plan: IAPPlan, purchaseTime: number): Date {
   }
   return d;
 }
-
