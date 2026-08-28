@@ -123,6 +123,27 @@ export async function loadIAPProducts(): Promise<IAPProduct[]> {
     const skus = Object.values(IAP_PRODUCT_IDS);
     const products = await IAP.getSubscriptions({ skus });
 
+    for (const sku of skus) {
+      const product = products.find((p) => p.productId === sku);
+
+      if (!product) {
+        console.warn("[IAP] StoreKit product missing:", { productId: sku });
+        continue;
+      }
+
+      console.log("[IAP] StoreKit product loaded:", {
+        productId: product.productId,
+        displayPrice:
+          (product as any).displayPrice ?? (product as any).localizedPrice ?? null,
+        price: (product as any).price ?? null,
+        priceLocaleCurrencyCode:
+          (product as any).priceLocale?.currencyCode ??
+          (product as any).currency ??
+          null,
+        title: product.title ?? null,
+      });
+    }
+
     return products
       .filter((p) => skus.includes(p.productId as any))
       .map((p) => {
@@ -317,5 +338,4 @@ export function estimatePeriodEnd(plan: IAPPlan, purchaseTime: number): Date {
   }
   return d;
 }
-
 
