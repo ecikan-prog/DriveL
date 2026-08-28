@@ -24,11 +24,34 @@
  * duplicate the injected lines.
  */
 
-const { withDangerousMod } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
 const FMT_XCODE26_MARKER = '# withFmtXcode26Fix';
+
+function resolveWithDangerousMod() {
+  for (const request of ['@expo/config-plugins', 'expo/config-plugins']) {
+    try {
+      const mod = require(request);
+      if (typeof mod.withDangerousMod === 'function') {
+        return mod.withDangerousMod;
+      }
+    } catch (error) {
+      if (
+        error?.code !== 'MODULE_NOT_FOUND' ||
+        !error.message.includes(`'${request}'`)
+      ) {
+        throw error;
+      }
+    }
+  }
+
+  // EXConstants loads app config during native builds, where the standalone
+  // config-plugins package may not be resolvable. In that context this plugin
+  // only needs to load safely; the Podfile mutation is only needed during
+  // prebuild when config-plugins is available.
+  return (config) => config;
+}
 
 // Lines inserted at the top of the existing post_install block body.
 const FMT_XCODE26_SNIPPET = `  ${FMT_XCODE26_MARKER}
@@ -62,6 +85,7 @@ const FMT_XCODE26_SNIPPET = `  ${FMT_XCODE26_MARKER}
 
 /** @type {import('@expo/config-plugins').ConfigPlugin} */
 function withFmtXcode26Fix(config) {
+  const withDangerousMod = resolveWithDangerousMod();
   return withDangerousMod(config, [
     'ios',
     (config) => {
