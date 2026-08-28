@@ -85,7 +85,8 @@
         {
           "locationWhenInUsePermission": "Drive Legal needs your location to record GPS coordinates in your logbook entries as required by NZTA regulations."
         }
-      ]
+      ],
+      "./plugins/withFmtXcode26Fix"
     ],
     "extra": {
       "eas": {
