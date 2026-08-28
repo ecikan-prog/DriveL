@@ -18,10 +18,15 @@ import { ScreenContainer } from "@/components/screen-container";
 import { useAuthContext } from "@/lib/auth-context";
 import { useShiftContext } from "@/lib/shift-context";
 import {
-  getTrialDaysRemaining,
   updateUserProfile,
   type DriverType,
 } from "@/lib/local-auth";
+import {
+  getSubscriptionState,
+  refreshIAPEntitlement,
+  getTrialDaysLeft,
+  type SubscriptionState,
+} from "@/lib/subscription";
 import {
   formatHoursMinutes,
   getAllLogs,
@@ -278,12 +283,18 @@ function SelectorField({
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, logout, refreshUser } = useAuthContext();
-  const { activeShift } = useShiftContext();
+  const { activeShift, subscriptionState: shiftSubscriptionState } = useShiftContext();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showVehiclePicker, setShowVehiclePicker] = useState(false);
   const [showDriverTypePicker, setShowDriverTypePicker] = useState(false);
   const [iconLoadFailed, setIconLoadFailed] = useState(false);
+  const [subscriptionState, setSubscriptionState] = useState<SubscriptionState | null>(
+    shiftSubscriptionState
+  );
+  const [subscriptionStatusLoading, setSubscriptionStatusLoading] = useState(
+    !shiftSubscriptionState
+  );
   const [form, setForm] = useState({
     name: user?.name ?? "",
     licenceNumber: user?.licenceNumber ?? "",
@@ -327,16 +338,66 @@ export default function ProfileScreen() {
       });
   }, [user]);
 
-  let trialDays = 0;
+  useEffect(() => {
+    setSubscriptionState(shiftSubscriptionState);
+    if (shiftSubscriptionState) {
+      setSubscriptionStatusLoading(false);
+    }
+  }, [shiftSubscriptionState]);
 
-if (user?.trialStartDate) {
-  try {
-    trialDays = getTrialDaysRemaining(user.trialStartDate);
-  } catch (error) {
-    console.error("Failed to calculate trial days:", error);
-    trialDays = 0;
-  }
-}
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadSubscriptionState = async () => {
+      if (!user) {
+        if (isMounted) {
+          setSubscriptionState(null);
+          setSubscriptionStatusLoading(false);
+        }
+        return;
+      }
+
+      if (isMounted) {
+        setSubscriptionStatusLoading(true);
+      }
+
+      const cached = await getSubscriptionState(user.id);
+      if (isMounted) {
+        setSubscriptionState(cached);
+      }
+
+      const refreshed = await refreshIAPEntitlement(user.id).catch(() => cached);
+      if (isMounted) {
+        setSubscriptionState(refreshed);
+        setSubscriptionStatusLoading(false);
+      }
+    };
+
+    loadSubscriptionState().catch((error) => {
+      console.error("[Profile] Failed to load subscription state:", error);
+      if (isMounted) {
+        setSubscriptionStatusLoading(false);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
+
+  const trialDays =
+    subscriptionState?.status === "trial" ? getTrialDaysLeft(subscriptionState) : 0;
+  const activePlanLabel =
+    subscriptionState?.plan === "annual"
+      ? "Annual"
+      : subscriptionState?.plan === "monthly"
+        ? "Monthly"
+        : "Subscription";
+  const hasActiveSubscription = subscriptionState?.status === "active";
+  const isTrialOnly = subscriptionState?.status === "trial" && trialDays > 0;
+  const isSubscriptionExpired =
+    subscriptionState?.status === "expired" ||
+    subscriptionState?.status === "cancelled";
 
   const handleSave = async () => {
     if (!user) return;
@@ -543,10 +604,27 @@ return (
           <View
             style={[
               styles.trialCard,
-              trialDays > 0 ? styles.trialCardActive : styles.trialCardExpired,
+              hasActiveSubscription || isTrialOnly
+                ? styles.trialCardActive
+                : styles.trialCardExpired,
             ]}
           >
-            {trialDays > 0 ? (
+            {subscriptionStatusLoading ? (
+              <View style={styles.subscriptionStatusLoading}>
+                <ActivityIndicator size="small" color={COLORS.white} />
+              </View>
+            ) : hasActiveSubscription ? (
+              <>
+                <View style={styles.trialHeaderRow}>
+                  <Text style={styles.trialEmoji}>✓</Text>
+                  <Text style={styles.trialLabel}>Subscription Active</Text>
+                </View>
+                <Text style={styles.trialDays}>{activePlanLabel}</Text>
+                <Text style={styles.trialSubtext}>
+                  Your Apple subscription is active.
+                </Text>
+              </>
+            ) : isTrialOnly ? (
               <>
                 <View style={styles.trialHeaderRow}>
                   <Text style={styles.trialEmoji}>🎉</Text>
@@ -562,11 +640,17 @@ return (
             ) : (
               <>
                 <View style={styles.trialHeaderRow}>
-                  <Text style={styles.trialEmoji}>⏰</Text>
-                  <Text style={styles.trialExpiredLabel}>Trial Expired</Text>
+                  <Text style={styles.trialEmoji}>
+                    {isSubscriptionExpired ? "⏰" : "…"}
+                  </Text>
+                  <Text style={styles.trialExpiredLabel}>
+                    {isSubscriptionExpired ? "Trial Expired" : "Subscription Unavailable"}
+                  </Text>
                 </View>
                 <Text style={styles.trialExpiredSubtext}>
-                  Subscribe to continue using Drive Legal
+                  {isSubscriptionExpired
+                    ? "Subscribe to continue using Drive Legal"
+                    : "Unable to load your current subscription status."}
                 </Text>
                 <TouchableOpacity
                   style={styles.subscribeButton}
@@ -1066,6 +1150,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     marginBottom: 4,
+  },
+  subscriptionStatusLoading: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 72,
   },
   trialEmoji: {
     fontSize: 20,

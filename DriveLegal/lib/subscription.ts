@@ -61,12 +61,31 @@ export async function syncSubscriptionFromServer(params: {
   currentPeriodEnd?: string | null;
   plan?: "monthly" | "annual" | null;
 }): Promise<SubscriptionState> {
+  const existingRaw = await AsyncStorage.getItem(`${SUBSCRIPTION_KEY}_${params.userId}`);
+  const existingState = existingRaw
+    ? (JSON.parse(existingRaw) as SubscriptionState)
+    : null;
   const trialStartDate = params.trialStartDate ?? new Date().toISOString();
   const trialEndDate =
     params.trialEndDate ??
     new Date(
       new Date(trialStartDate).getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000
     ).toISOString();
+
+  if (
+    existingState?.status === "active" &&
+    existingState.iapVerified &&
+    params.status !== "active"
+  ) {
+    const preserved: SubscriptionState = {
+      ...existingState,
+      userId: params.userId,
+      lastServerSync: new Date().toISOString(),
+    };
+
+    await saveSubscriptionState(preserved);
+    return preserved;
+  }
 
   const state: SubscriptionState = {
     userId: params.userId,

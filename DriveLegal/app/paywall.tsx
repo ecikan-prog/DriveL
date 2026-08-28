@@ -14,7 +14,7 @@
  * There is NO Stripe integration, NO "Simulate Subscribe" dialog, and NO
  * demo/fake activation path in this file.
  */
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -46,10 +46,7 @@ import {
 type PlanOption = {
   id: IAPPlan;
   name: string;
-  /** Fallback display price shown before StoreKit products load */
-  fallbackPrice: string;
   period: string;
-  savings?: string;
   popular?: boolean;
 };
 
@@ -57,18 +54,31 @@ const PLANS: PlanOption[] = [
   {
     id: "monthly",
     name: "Monthly",
-    fallbackPrice: "NZD $6.99",
     period: "/month",
   },
   {
     id: "annual",
     name: "Annual",
-    fallbackPrice: "NZD $69.99",
     period: "/year",
-    savings: "Save NZ$13.89",
     popular: true,
   },
 ];
+
+function formatCurrencyFromMicros(
+  priceAmountMicros: number,
+  currencyCode: string
+): string {
+  const amount = priceAmountMicros / 1_000_000;
+
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: currencyCode,
+    }).format(amount);
+  } catch {
+    return `${currencyCode} ${amount.toFixed(2)}`;
+  }
+}
 
 export default function PaywallScreen() {
   const router = useRouter();
@@ -77,6 +87,8 @@ export default function PaywallScreen() {
   const [purchasing, setPurchasing] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [products, setProducts] = useState<IAPProduct[]>([]);
+  const [productsLoading, setProductsLoading] = useState(Platform.OS === "ios");
+  const [productsUnavailable, setProductsUnavailable] = useState(false);
   const [subscriptionState, setSubscriptionState] =
     useState<Awaited<ReturnType<typeof getSubscriptionState>> | null>(null);
   const [subscriptionLoading, setSubscriptionLoading] = useState(true);
@@ -85,10 +97,74 @@ export default function PaywallScreen() {
   useEffect(() => {
     let isMounted = true;
 
+    const loadProducts = async (): Promise<IAPProduct[]> => {
+      if (Platform.OS !== "ios") {
+        if (isMounted) {
+          setProducts([]);
+          setProductsLoading(false);
+          setProductsUnavailable(true);
+        }
+        return [];
+      }
+
+      if (isMounted) {
+        setProductsLoading(true);
+        setProductsUnavailable(false);
+      }
+
+      try {
+        const storeProducts = await loadIAPProducts();
+        const monthlyProduct = storeProducts.find(
+          (product) => product.productId === IAP_PRODUCT_IDS.monthly
+        );
+        const annualProduct = storeProducts.find(
+          (product) => product.productId === IAP_PRODUCT_IDS.annual
+        );
+
+        console.log("[Paywall] StoreKit products fetched:", {
+          count: storeProducts.length,
+          monthlyReturned: Boolean(monthlyProduct),
+          monthlyProductId: monthlyProduct?.productId ?? null,
+          monthlyDisplayPrice:
+            monthlyProduct?.displayPrice ?? monthlyProduct?.price ?? null,
+          annualReturned: Boolean(annualProduct),
+          annualProductId: annualProduct?.productId ?? null,
+          annualDisplayPrice:
+            annualProduct?.displayPrice ?? annualProduct?.price ?? null,
+        });
+
+        if (isMounted) {
+          setProducts(storeProducts);
+          setProductsUnavailable(!monthlyProduct || !annualProduct);
+          console.log("[Paywall] Paywall product state updated:", {
+            productCount: storeProducts.length,
+            monthlyStateUpdated: Boolean(monthlyProduct),
+            annualStateUpdated: Boolean(annualProduct),
+          });
+        }
+
+        return storeProducts;
+      } catch (error) {
+        console.warn("[Paywall] Failed to load StoreKit products:", error);
+        if (isMounted) {
+          setProducts([]);
+          setProductsUnavailable(true);
+        }
+        return [];
+      } finally {
+        if (isMounted) {
+          setProductsLoading(false);
+        }
+      }
+    };
+
     const init = async () => {
+      const storeProductsPromise = loadProducts();
+
       if (!user) {
         setSubscriptionState(null);
         setSubscriptionLoading(false);
+        await storeProductsPromise;
         return;
       }
 
@@ -100,14 +176,13 @@ export default function PaywallScreen() {
         if (isMounted) setSubscriptionState(cached);
 
         // Then refresh from StoreKit (iOS only) in parallel with product fetch
-        const [refreshed, storeProducts] = await Promise.all([
+        const [refreshed] = await Promise.all([
           refreshIAPEntitlement(user.id).catch(() => cached),
-          Platform.OS === "ios" ? loadIAPProducts() : Promise.resolve([]),
+          storeProductsPromise,
         ]);
 
         if (isMounted) {
           setSubscriptionState(refreshed);
-          setProducts(storeProducts);
         }
       } catch (error) {
         console.error("[Paywall] Initialisation error:", error);
@@ -118,17 +193,85 @@ export default function PaywallScreen() {
 
     init();
 
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, [user?.id]);
 
-  /** Return the App Store price string for a plan, or the fallback if not loaded yet. */
-  const displayPrice = useCallback(
-    (plan: PlanOption): string => {
-      const product = products.find((p) => p.productId === IAP_PRODUCT_IDS[plan.id]);
-      return product ? product.price : plan.fallbackPrice;
-    },
+  const monthlyProduct = useMemo(
+    () =>
+      products.find((product) => product.productId === IAP_PRODUCT_IDS.monthly) ??
+      null,
     [products]
   );
+
+  const annualProduct = useMemo(
+    () =>
+      products.find((product) => product.productId === IAP_PRODUCT_IDS.annual) ??
+      null,
+    [products]
+  );
+
+  useEffect(() => {
+    console.log("[Paywall] Render price state:", {
+      monthlyProductId: monthlyProduct?.productId ?? null,
+      monthlyDisplayPrice:
+        monthlyProduct?.displayPrice ?? monthlyProduct?.price ?? null,
+      annualProductId: annualProduct?.productId ?? null,
+      annualDisplayPrice:
+        annualProduct?.displayPrice ?? annualProduct?.price ?? null,
+      productsLoading,
+      productsUnavailable,
+    });
+  }, [monthlyProduct, annualProduct, productsLoading, productsUnavailable]);
+
+  const annualSavings = useMemo(() => {
+    if (!monthlyProduct || !annualProduct) return null;
+    if (
+      monthlyProduct.priceAmountMicros <= 0 ||
+      annualProduct.priceAmountMicros <= 0
+    ) {
+      return null;
+    }
+
+    const yearlyMonthlyCost = monthlyProduct.priceAmountMicros * 12;
+    const savingsMicros = yearlyMonthlyCost - annualProduct.priceAmountMicros;
+
+    if (savingsMicros <= 0) return null;
+
+    const currencyCode =
+      annualProduct.priceCurrencyCode || monthlyProduct.priceCurrencyCode;
+
+    return `Save ${formatCurrencyFromMicros(savingsMicros, currencyCode)}`;
+  }, [monthlyProduct, annualProduct]);
+
+  const selectedProduct =
+    selectedPlan === "monthly" ? monthlyProduct : annualProduct;
+
+  const canPurchase =
+    Platform.OS === "ios" &&
+    Boolean(user) &&
+    !productsLoading &&
+    !productsUnavailable &&
+    Boolean(selectedProduct);
+
+  const trialDaysLeft = subscriptionState ? getTrialDaysLeft(subscriptionState) : 0;
+  const isTrial = subscriptionState?.status === "trial";
+  const isActive = subscriptionState?.status === "active";
+  const isExpired =
+    subscriptionState?.status === "expired" ||
+    subscriptionState?.status === "cancelled";
+
+  const displayPrice = (plan: PlanOption): string | null => {
+    const product = plan.id === "monthly" ? monthlyProduct : annualProduct;
+    return product?.displayPrice ?? product?.price ?? null;
+  };
+
+  useEffect(() => {
+    if (subscriptionState?.status === "active" && subscriptionState.plan) {
+      setSelectedPlan(subscriptionState.plan);
+    }
+  }, [subscriptionState?.status, subscriptionState?.plan]);
 
   // ─── Subscribe ──────────────────────────────────────────────────────────────
 
@@ -139,6 +282,14 @@ export default function PaywallScreen() {
       Alert.alert(
         "iOS Only",
         "Subscriptions are managed through the App Store on iOS devices."
+      );
+      return;
+    }
+
+    if (!selectedProduct) {
+      Alert.alert(
+        "Subscription Unavailable",
+        "We couldn't load the latest App Store pricing right now. Please try again in a moment."
       );
       return;
     }
@@ -159,6 +310,7 @@ export default function PaywallScreen() {
 
         const updated = await getSubscriptionState(user.id);
         setSubscriptionState(updated);
+        setSelectedPlan(result.plan);
 
         Alert.alert(
           "Subscription Active ✓",
@@ -206,6 +358,7 @@ export default function PaywallScreen() {
 
         const updated = await getSubscriptionState(user.id);
         setSubscriptionState(updated);
+        setSelectedPlan(entitlement.plan);
 
         Alert.alert(
           "Subscription Restored ✓",
@@ -227,15 +380,6 @@ export default function PaywallScreen() {
       setRestoring(false);
     }
   };
-
-  // ─── Derived display state ─────────────────────────────────────────────────
-
-  const trialDaysLeft = subscriptionState ? getTrialDaysLeft(subscriptionState) : 0;
-  const isTrial = subscriptionState?.status === "trial";
-  const isActive = subscriptionState?.status === "active";
-  const isExpired =
-    subscriptionState?.status === "expired" ||
-    subscriptionState?.status === "cancelled";
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
@@ -315,13 +459,34 @@ export default function PaywallScreen() {
           <Text style={{ color: "#FFFFFF", fontSize: 18, fontWeight: "700", marginBottom: 16, textAlign: "center" }}>
             Choose Your Plan
           </Text>
+          {!productsLoading && productsUnavailable && (
+            <View
+              style={{
+                backgroundColor: "rgba(239,68,68,0.15)",
+                borderRadius: 12,
+                padding: 12,
+                borderWidth: 1,
+                borderColor: "rgba(239,68,68,0.3)",
+                marginBottom: 12,
+              }}
+            >
+              <Text style={{ color: "#FCA5A5", fontSize: 12, textAlign: "center", lineHeight: 18 }}>
+                App Store pricing is temporarily unavailable. Please wait for the prices to load before subscribing.
+              </Text>
+            </View>
+          )}
 
           {PLANS.map((plan) => {
             const isSelected = selectedPlan === plan.id;
+            const product = plan.id === "monthly" ? monthlyProduct : annualProduct;
+            const planPrice = displayPrice(plan);
+            const showUnavailable = !productsLoading && !product;
+
             return (
               <TouchableOpacity
                 key={plan.id}
                 onPress={() => setSelectedPlan(plan.id)}
+                disabled={productsLoading || showUnavailable}
                 style={{
                   backgroundColor: isSelected ? "rgba(89,128,233,0.2)" : "rgba(255,255,255,0.05)",
                   borderRadius: 16,
@@ -331,6 +496,7 @@ export default function PaywallScreen() {
                   borderWidth: 2,
                   borderColor: isSelected ? "#5980E9" : "rgba(255,255,255,0.1)",
                   position: "relative",
+                  opacity: productsLoading || showUnavailable ? 0.75 : 1,
                 }}
               >
                 {plan.popular && (
@@ -341,21 +507,34 @@ export default function PaywallScreen() {
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
                   <View>
                     <Text style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "700" }}>{plan.name}</Text>
-                    {plan.savings && (
+                    {plan.id === "annual" && annualSavings && (
                       <Text style={{ color: "#4ADE80", fontSize: 12, fontWeight: "600", marginTop: 2 }}>
-                        {plan.savings}
+                        {annualSavings}
                       </Text>
                     )}
                   </View>
                   <View style={{ alignItems: "flex-end", flexShrink: 1, marginLeft: 12 }}>
-                    <Text
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                      minimumFontScale={0.8}
-                      style={{ color: "#FFFFFF", fontSize: 18, fontWeight: "800", textAlign: "right" }}
-                    >
-                      {displayPrice(plan)}
-                    </Text>
+                    {productsLoading ? (
+                      <View style={{ alignItems: "flex-end" }}>
+                        <ActivityIndicator color="#FFFFFF" size="small" />
+                        <Text style={{ color: "#8AACDA", fontSize: 11, marginTop: 4 }}>
+                          Loading price…
+                        </Text>
+                      </View>
+                    ) : planPrice ? (
+                      <Text
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.8}
+                        style={{ color: "#FFFFFF", fontSize: 18, fontWeight: "800", textAlign: "right" }}
+                      >
+                        {planPrice}
+                      </Text>
+                    ) : (
+                      <Text style={{ color: "#FCA5A5", fontSize: 13, fontWeight: "700", textAlign: "right" }}>
+                        Price unavailable
+                      </Text>
+                    )}
                     <Text style={{ color: "#8AACDA", fontSize: 11 }}>{plan.period}</Text>
                   </View>
                 </View>
@@ -392,9 +571,9 @@ export default function PaywallScreen() {
         <View style={{ paddingHorizontal: 24, marginBottom: 16 }}>
           <TouchableOpacity
             onPress={handleSubscribe}
-            disabled={purchasing || restoring}
+            disabled={purchasing || restoring || !canPurchase}
             style={{
-              backgroundColor: purchasing || restoring ? "#3A5A9E" : "#5980E9",
+              backgroundColor: purchasing || restoring || !canPurchase ? "#3A5A9E" : "#5980E9",
               borderRadius: 14,
               paddingVertical: 16,
               alignItems: "center",
@@ -409,7 +588,11 @@ export default function PaywallScreen() {
               <ActivityIndicator color="#FFFFFF" />
             ) : (
               <Text style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "800" }}>
-                Subscribe Now
+                {productsLoading
+                  ? "Loading Prices…"
+                  : productsUnavailable
+                    ? "Subscription Unavailable"
+                    : "Subscribe Now"}
               </Text>
             )}
           </TouchableOpacity>
