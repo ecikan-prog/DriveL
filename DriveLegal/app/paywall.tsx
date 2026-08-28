@@ -267,6 +267,12 @@ export default function PaywallScreen() {
     return product?.displayPrice ?? product?.price ?? null;
   };
 
+  useEffect(() => {
+    if (subscriptionState?.status === "active" && subscriptionState.plan) {
+      setSelectedPlan(subscriptionState.plan);
+    }
+  }, [subscriptionState?.status, subscriptionState?.plan]);
+
   // ─── Subscribe ──────────────────────────────────────────────────────────────
 
   const handleSubscribe = async () => {
@@ -304,6 +310,7 @@ export default function PaywallScreen() {
 
         const updated = await getSubscriptionState(user.id);
         setSubscriptionState(updated);
+        setSelectedPlan(result.plan);
 
         Alert.alert(
           "Subscription Active ✓",
@@ -351,6 +358,7 @@ export default function PaywallScreen() {
 
         const updated = await getSubscriptionState(user.id);
         setSubscriptionState(updated);
+        setSelectedPlan(entitlement.plan);
 
         Alert.alert(
           "Subscription Restored ✓",
