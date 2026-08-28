@@ -14,9 +14,10 @@
  * that branch is skipped and fmt is left exposed to the Xcode 26 default.
  *
  * Fix: inject the fmt build-setting logic INTO the existing post_install block in
- * the generated Podfile. CocoaPods does not allow multiple post_install hooks, so
- * adding a second block would cause "Invalid Podfile: Specifying multiple
- * post_install hooks is unsupported."
+ * the generated Podfile when one is present; otherwise append exactly one new
+ * post_install block containing the fix.  CocoaPods does not allow multiple
+ * post_install hooks ("Invalid Podfile: Specifying multiple post_install hooks
+ * is unsupported"), so a second block is never created.
  *
  * The injection is idempotent – repeated expo prebuild --clean runs will not
  * duplicate the injected lines.
@@ -57,24 +58,21 @@ function withFmtXcode26Fix(config) {
         return config;
       }
 
-      // Find the opening line of the existing post_install block and inject
-      // immediately after it.  The generated Podfile always contains a block
-      // of the form:
-      //   post_install do |installer|
-      //     …
-      //   end
+      // If the Podfile already has a post_install block, inject the snippet
+      // immediately after its opening line.  Otherwise append a new block.
+      // CocoaPods does not allow multiple post_install hooks, so we must never
+      // create a second one.
       const POST_INSTALL_RE = /^(post_install do \|installer\|)$/m;
-      if (!POST_INSTALL_RE.test(podfile)) {
-        throw new Error(
-          'withFmtXcode26Fix: could not find a "post_install do |installer|" ' +
-            'block in the generated Podfile. The fix cannot be applied.'
+      if (POST_INSTALL_RE.test(podfile)) {
+        podfile = podfile.replace(
+          POST_INSTALL_RE,
+          `$1\n${FMT_XCODE26_SNIPPET}\n`
         );
+      } else {
+        podfile =
+          podfile.trimEnd() +
+          `\n\npost_install do |installer|\n${FMT_XCODE26_SNIPPET}\nend\n`;
       }
-
-      podfile = podfile.replace(
-        POST_INSTALL_RE,
-        `$1\n${FMT_XCODE26_SNIPPET}\n`
-      );
 
       fs.writeFileSync(podfilePath, podfile, 'utf8');
 
