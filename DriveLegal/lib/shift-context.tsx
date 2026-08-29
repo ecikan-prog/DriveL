@@ -83,6 +83,8 @@ type ShiftContextValue = {
   currentLocation: LocationData | null;
   restValidation: RestValidationResult | null;
   checkRestValidation: () => Promise<RestValidationResult>;
+  /** Re-runs StoreKit entitlement check and updates subscriptionState in context. Call after a successful purchase. */
+  refreshSubscription: () => Promise<void>;
 };
 
 const ShiftContext = createContext<ShiftContextValue | null>(null);
@@ -513,6 +515,19 @@ const newCompliance = evaluateCompliance(
     }
   }, [user, activeShift]);
 
+  const refreshSubscription = useCallback(async () => {
+    if (!user) return;
+    setSubscriptionVerifying(true);
+    try {
+      const refreshed = await refreshIAPEntitlement(user.id);
+      setSubscriptionState(refreshed);
+    } catch {
+      // offline — leave existing state
+    } finally {
+      setSubscriptionVerifying(false);
+    }
+  }, [user]);
+
   const isShiftActive = activeShift !== null;
   const isOnBreak = activeShift ? Logbook.isCurrentlyOnBreak(activeShift) : false;
   const isOtherWork = activeShift ? Logbook.isCurrentlyOtherWork(activeShift) : false;
@@ -546,6 +561,7 @@ const newCompliance = evaluateCompliance(
         currentLocation,
         restValidation,
         checkRestValidation,
+        refreshSubscription,
       }}
     >
       {children}

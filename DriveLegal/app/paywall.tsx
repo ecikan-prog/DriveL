@@ -29,6 +29,7 @@ import {
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuthContext } from "@/lib/auth-context";
+import { useShiftContext } from "@/lib/shift-context";
 import {
   activateSubscriptionFromIAP,
   getSubscriptionState,
@@ -84,6 +85,7 @@ function formatCurrencyFromMicros(
 export default function PaywallScreen() {
   const router = useRouter();
   const { user } = useAuthContext();
+  const { refreshSubscription } = useShiftContext();
   const [selectedPlan, setSelectedPlan] = useState<IAPPlan>("annual");
   const [purchasing, setPurchasing] = useState(false);
   const [restoring, setRestoring] = useState(false);
@@ -331,7 +333,13 @@ export default function PaywallScreen() {
           result.purchaseTime
         );
 
-        const updated = await getSubscriptionState(user.id);
+        // Re-verify against StoreKit to get the authoritative plan and status,
+        // then propagate to ShiftContext so Profile and other screens see the
+        // correct post-purchase state without needing a cold restart.
+        const [updated] = await Promise.all([
+          getSubscriptionState(user.id),
+          refreshSubscription(),
+        ]);
         setSubscriptionState(updated);
         setSelectedPlan(result.plan);
 
@@ -379,7 +387,10 @@ export default function PaywallScreen() {
           Date.now()
         );
 
-        const updated = await getSubscriptionState(user.id);
+        const [updated] = await Promise.all([
+          getSubscriptionState(user.id),
+          refreshSubscription(),
+        ]);
         setSubscriptionState(updated);
         setSelectedPlan(entitlement.plan);
 
