@@ -22,6 +22,7 @@ import {
   ScrollView,
   Alert,
   Image,
+  Linking,
   Platform,
   ActivityIndicator,
 } from "react-native";
@@ -279,6 +280,22 @@ export default function PaywallScreen() {
     }
   }, [subscriptionState?.status, subscriptionState?.plan]);
 
+  // ─── Manage existing subscription ────────────────────────────────────────────
+
+  const handleManage = async () => {
+    const url = "https://apps.apple.com/account/subscriptions";
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert("Manage Subscription", "Open Settings → Apple ID → Subscriptions to manage your subscription.");
+      }
+    } catch {
+      Alert.alert("Manage Subscription", "Open Settings → Apple ID → Subscriptions to manage your subscription.");
+    }
+  };
+
   // ─── Subscribe ──────────────────────────────────────────────────────────────
 
   const handleSubscribe = async () => {
@@ -447,6 +464,11 @@ export default function PaywallScreen() {
               <Text style={{ color: "#86EFAC", fontSize: 14, fontWeight: "700", textAlign: "center" }}>
                 ✓ Subscription Active
               </Text>
+              {subscriptionState?.plan && (
+                <Text style={{ color: "#D1D5DB", fontSize: 12, textAlign: "center", marginTop: 4 }}>
+                  {subscriptionState.plan === "annual" ? "Annual" : "Monthly"} plan
+                </Text>
+              )}
             </View>
           ) : isExpired ? (
             <View style={{ backgroundColor: "rgba(239,68,68,0.15)", borderRadius: 12, padding: 16, borderWidth: 1, borderColor: "rgba(239,68,68,0.3)" }}>
@@ -484,6 +506,7 @@ export default function PaywallScreen() {
 
           {PLANS.map((plan) => {
             const isSelected = selectedPlan === plan.id;
+            const isCurrentPlan = isActive && subscriptionState?.plan === plan.id;
             const product = plan.id === "monthly" ? monthlyProduct : annualProduct;
             const planPrice = displayPrice(plan);
             const showUnavailable = !productsLoading && !product;
@@ -494,13 +517,21 @@ export default function PaywallScreen() {
                 onPress={() => setSelectedPlan(plan.id)}
                 disabled={productsLoading || showUnavailable}
                 style={{
-                  backgroundColor: isSelected ? "rgba(89,128,233,0.2)" : "rgba(255,255,255,0.05)",
+                  backgroundColor: isCurrentPlan
+                    ? "rgba(34,197,94,0.15)"
+                    : isSelected
+                      ? "rgba(89,128,233,0.2)"
+                      : "rgba(255,255,255,0.05)",
                   borderRadius: 16,
                   padding: 20,
                   paddingLeft: 54,
                   marginBottom: 12,
                   borderWidth: 2,
-                  borderColor: isSelected ? "#5980E9" : "rgba(255,255,255,0.1)",
+                  borderColor: isCurrentPlan
+                    ? "rgba(34,197,94,0.6)"
+                    : isSelected
+                      ? "#5980E9"
+                      : "rgba(255,255,255,0.1)",
                   position: "relative",
                   opacity: productsLoading || showUnavailable ? 0.75 : 1,
                 }}
@@ -513,6 +544,11 @@ export default function PaywallScreen() {
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
                   <View>
                     <Text style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "700" }}>{plan.name}</Text>
+                    {isCurrentPlan && (
+                      <Text style={{ color: "#86EFAC", fontSize: 12, fontWeight: "700", marginTop: 2 }}>
+                        Current plan
+                      </Text>
+                    )}
                     {plan.id === "annual" && annualSavings && (
                       <Text style={{ color: "#4ADE80", fontSize: 12, fontWeight: "600", marginTop: 2 }}>
                         {annualSavings}
@@ -544,9 +580,21 @@ export default function PaywallScreen() {
                     <Text style={{ color: "#8AACDA", fontSize: 11 }}>{plan.period}</Text>
                   </View>
                 </View>
-                {/* Radio indicator */}
-                <View style={{ position: "absolute", top: 20, left: 20, width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: isSelected ? "#5980E9" : "#4A6AB0", alignItems: "center", justifyContent: "center" }}>
-                  {isSelected && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#5980E9" }} />}
+                {/* Radio / checkmark indicator */}
+                <View style={{
+                  position: "absolute", top: 20, left: 20,
+                  width: 20, height: 20, borderRadius: 10,
+                  borderWidth: 2,
+                  borderColor: isCurrentPlan ? "#86EFAC" : isSelected ? "#5980E9" : "#4A6AB0",
+                  alignItems: "center", justifyContent: "center",
+                  backgroundColor: isCurrentPlan ? "rgba(34,197,94,0.3)" : "transparent",
+                }}>
+                  {isCurrentPlan
+                    ? <Text style={{ color: "#86EFAC", fontSize: 11, fontWeight: "900", lineHeight: 14 }}>✓</Text>
+                    : isSelected
+                      ? <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#5980E9" }} />
+                      : null
+                  }
                 </View>
               </TouchableOpacity>
             );
@@ -573,35 +621,56 @@ export default function PaywallScreen() {
           ))}
         </View>
 
-        {/* Subscribe Button */}
+        {/* Action Button — Manage (active) or Subscribe Now */}
         <View style={{ paddingHorizontal: 24, marginBottom: 16 }}>
-          <TouchableOpacity
-            onPress={handleSubscribe}
-            disabled={purchasing || restoring || !canPurchase}
-            style={{
-              backgroundColor: purchasing || restoring || !canPurchase ? "#3A5A9E" : "#5980E9",
-              borderRadius: 14,
-              paddingVertical: 16,
-              alignItems: "center",
-              shadowColor: "#5980E9",
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.3,
-              shadowRadius: 8,
-              elevation: 6,
-            }}
-          >
-            {purchasing ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "800" }}>
-                {productsLoading
-                  ? "Loading Prices…"
-                  : productsUnavailable
-                    ? "Subscription Unavailable"
-                    : "Subscribe Now"}
+          {isActive ? (
+            <TouchableOpacity
+              onPress={handleManage}
+              style={{
+                backgroundColor: "#22C55E",
+                borderRadius: 14,
+                paddingVertical: 16,
+                alignItems: "center",
+                shadowColor: "#22C55E",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 8,
+                elevation: 6,
+              }}
+            >
+              <Text style={{ color: "#003366", fontSize: 16, fontWeight: "800" }}>
+                Manage Subscription
               </Text>
-            )}
-          </TouchableOpacity>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              onPress={handleSubscribe}
+              disabled={purchasing || restoring || !canPurchase}
+              style={{
+                backgroundColor: purchasing || restoring || !canPurchase ? "#3A5A9E" : "#5980E9",
+                borderRadius: 14,
+                paddingVertical: 16,
+                alignItems: "center",
+                shadowColor: "#5980E9",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 8,
+                elevation: 6,
+              }}
+            >
+              {purchasing ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "800" }}>
+                  {productsLoading
+                    ? "Loading Prices…"
+                    : productsUnavailable
+                      ? "Subscription Unavailable"
+                      : "Subscribe Now"}
+                </Text>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Restore / Legal */}
