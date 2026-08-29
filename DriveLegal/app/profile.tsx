@@ -283,7 +283,7 @@ function SelectorField({
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, logout, refreshUser } = useAuthContext();
-  const { activeShift, subscriptionState: shiftSubscriptionState } = useShiftContext();
+  const { activeShift, subscriptionState: shiftSubscriptionState, subscriptionVerifying: shiftSubscriptionVerifying } = useShiftContext();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showVehiclePicker, setShowVehiclePicker] = useState(false);
@@ -344,6 +344,10 @@ export default function ProfileScreen() {
       setSubscriptionStatusLoading(false);
     }
   }, [shiftSubscriptionState]);
+
+  useEffect(() => {
+    console.log('[PROFILE] subscriptionVerifying', shiftSubscriptionVerifying, 'subscriptionStatusLoading', subscriptionStatusLoading);
+  }, [shiftSubscriptionVerifying, subscriptionStatusLoading]);
 
   useEffect(() => {
     let isMounted = true;
@@ -609,7 +613,7 @@ return (
                 : styles.trialCardExpired,
             ]}
           >
-            {subscriptionStatusLoading ? (
+            {subscriptionStatusLoading || shiftSubscriptionVerifying ? (
               <View style={styles.subscriptionStatusLoading}>
                 <ActivityIndicator size="small" color={COLORS.white} />
               </View>

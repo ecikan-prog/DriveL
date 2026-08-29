@@ -86,6 +86,7 @@ export default function PinLoginScreen() {
       const valid = await verifyPin(user.id, enteredPin);
 
       if (valid) {
+        console.log('[AUTH] PIN unlock');
         markPinSessionUnlocked(user.id);
 
         setPin("");

@@ -40,6 +40,11 @@ type ShiftContextValue = {
   /** Total driving across the full shift — used for End Shift summary */
   drivingSeconds: number;
   /**
+   * True while StoreKit entitlement verification is in progress.
+   * The UI must NOT show "Trial Expired" while this is true.
+   */
+  subscriptionVerifying: boolean;
+  /**
    * Consecutive DRIVING since last qualifying break. Retained for driving-time
    * reporting only. Do NOT use this for the legal rest-break countdown —
    * see continuousWorkSeconds below.
@@ -99,6 +104,7 @@ export function ShiftProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuthContext();
   const [activeShift, setActiveShift] = useState<Logbook.ActiveShift | null>(null);
   const [subscriptionState, setSubscriptionState] = useState<SubscriptionState | null>(null);
+  const [subscriptionVerifying, setSubscriptionVerifying] = useState(false);
   const [drivingSeconds, setDrivingSeconds] = useState(0);
   const [consecutiveDrivingSeconds, setConsecutiveDrivingSeconds] = useState(0);
   const [continuousWorkSeconds, setContinuousWorkSeconds] = useState(0);
@@ -276,13 +282,26 @@ const newCompliance = evaluateCompliance(
   useEffect(() => {
     if (!user) {
       setSubscriptionState(null);
+      setSubscriptionVerifying(false);
       return;
     }
+    setSubscriptionVerifying(true);
     getSubscriptionState(user.id).then((cached) => {
+      console.log('[SUB] subscription state BEFORE StoreKit refresh', cached.status);
       setSubscriptionState(cached);
-      // Refresh from StoreKit in the background so the UI always reflects
-      // the real Apple entitlement, not just the cached server state.
-      refreshIAPEntitlement(user.id).then(setSubscriptionState).catch(() => {/* offline — use cached */});
+      console.log('[SUB] refreshIAPEntitlement START');
+      refreshIAPEntitlement(user.id)
+        .then((refreshed) => {
+          console.log('[SUB] StoreKit entitlement RESULT', refreshed.status, 'iapVerified:', refreshed.iapVerified);
+          setSubscriptionState(refreshed);
+          console.log('[SUB] subscription state AFTER StoreKit refresh', refreshed.status);
+        })
+        .catch(() => {/* offline — use cached */})
+        .finally(() => {
+          setSubscriptionVerifying(false);
+        });
+    }).catch(() => {
+      setSubscriptionVerifying(false);
     });
 
   }, [user]);
@@ -522,6 +541,7 @@ const newCompliance = evaluateCompliance(
         changeVehicle,
         loading,
         subscriptionState,
+        subscriptionVerifying,
         isTrialExpired,
         currentLocation,
         restValidation,
