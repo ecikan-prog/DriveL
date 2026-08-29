@@ -149,17 +149,40 @@ export async function loadIAPProducts(): Promise<IAPProduct[]> {
     return products
       .filter((p) => skus.includes(p.productId as any))
       .map((p) => {
-        const displayPrice =
+        // Prefer Apple's pre-formatted localised string (StoreKit 2 / hybrid).
+        // Fall back to localizedPrice if available (some rn-iap versions).
+        // Last resort: format the numeric price ourselves using the product's
+        // actual currency code — never fall back to a bare numeric string,
+        // which has no currency symbol and loses locale information.
+        const rawDisplayPrice: string | null =
           (p as any).displayPrice ??
           (p as any).localizedPrice ??
-          (p as any).price ??
-          "";
+          null;
+
         // price is the numeric amount as a string on iOS
         const priceNum = parseFloat((p as any).price ?? "0");
-        const currency =
+        const currency: string =
           (p as any).priceLocale?.currencyCode ??
           (p as any).currency ??
-          "NZD";
+          "";
+
+        // Build the display string: use Apple's formatted string when present,
+        // otherwise format the numeric amount with the real currency code.
+        let displayPrice: string;
+        if (rawDisplayPrice) {
+          displayPrice = rawDisplayPrice;
+        } else if (priceNum > 0 && currency) {
+          try {
+            displayPrice = new Intl.NumberFormat(undefined, {
+              style: "currency",
+              currency,
+            }).format(priceNum);
+          } catch {
+            displayPrice = `${currency} ${priceNum.toFixed(2)}`;
+          }
+        } else {
+          displayPrice = (p as any).price ?? "";
+        }
 
         return {
           productId: p.productId,
