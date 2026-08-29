@@ -140,18 +140,29 @@ export async function refreshIAPEntitlement(userId: string): Promise<Subscriptio
       return updated;
     }
 
-    // StoreKit returns no active subscription.  Downgrade active/trial to
-    // expired only when StoreKit explicitly says no entitlement.
+    // StoreKit returns no active subscription.  Only downgrade a previously
+    // iapVerified active state when the estimated period end is confirmed past.
+    // In STOREKIT_HYBRID_MODE the entitlement check uses the SK1
+    // getAvailablePurchases() path, which cannot see subscriptions purchased
+    // and finished via StoreKit 2.  An empty result while currentPeriodEnd is
+    // still in the future is therefore ambiguous — preserve the active state.
     if (cached.status === "active" && cached.iapVerified) {
-      // Previously confirmed via StoreKit — now expired/cancelled.
-      const downgraded: SubscriptionState = {
-        ...cached,
-        status: "expired",
-        lastChecked: new Date().toISOString(),
-        iapVerified: false,
-      };
-      await saveSubscriptionState(downgraded);
-      return downgraded;
+      const periodEnd = cached.currentPeriodEnd
+        ? new Date(cached.currentPeriodEnd).getTime()
+        : null;
+      if (periodEnd !== null && periodEnd < Date.now()) {
+        // Period end is confirmed in the past — subscription has lapsed.
+        const downgraded: SubscriptionState = {
+          ...cached,
+          status: "expired",
+          lastChecked: new Date().toISOString(),
+          iapVerified: false,
+        };
+        await saveSubscriptionState(downgraded);
+        return downgraded;
+      }
+      // Period end is in the future (or unknown) — SK1 returning empty is
+      // ambiguous in hybrid mode; keep the active+iapVerified state.
     }
   } catch {
     // StoreKit unavailable (offline, simulator, etc.) — return cached state.
