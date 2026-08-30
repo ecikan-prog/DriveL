@@ -300,6 +300,19 @@ export async function purchasePlan(plan: IAPPlan): Promise<PurchaseResult> {
  * Expired, cancelled-and-lapsed, and never-purchased states all return an
  * empty list.  This is the correct production entitlement check.
  *
+ * IMPORTANT — StoreKit 2 productStore population:
+ * In STOREKIT_HYBRID_MODE, `getAvailablePurchases()` routes to
+ * `RNIapIosSk2.getAvailableItems(onlyIncludeActiveItems: true)` which iterates
+ * `Transaction.currentEntitlements`.  For each autoRenewable transaction it
+ * checks `productStore.getProduct(productID:)` — if that returns nil the
+ * transaction is silently dropped and the function returns [].
+ *
+ * `productStore` is only populated by `getItems()` (called inside
+ * `getSubscriptions()`).  On a cold app start the Paywall has not yet mounted
+ * and `loadIAPProducts()` has not been called, so productStore is empty.
+ * Calling `getSubscriptions()` here ensures productStore is populated before
+ * the entitlement query, making startup behave identically to the Restore path.
+ *
  * On network/StoreKit error this throws — callers must handle errors safely
  * and must NOT grant premium access merely because an error occurred.
  */
@@ -309,6 +322,18 @@ export async function checkCurrentEntitlement(): Promise<EntitlementResult> {
   }
 
   await ensureConnected();
+
+  // Populate the SK2 productStore before querying entitlements so that
+  // Transaction.currentEntitlements transactions are not silently filtered out.
+  // This is a read-only metadata fetch — it does not affect purchase state.
+  // Safe to call multiple times: productStore entries are keyed by product ID
+  // and are only cleared on endConnection(), never by repeated getItems() calls.
+  try {
+    await IAP.getSubscriptions({ skus: Object.values(IAP_PRODUCT_IDS) });
+  } catch {
+    // Non-fatal. If the App Store is unreachable the entitlement check still
+    // proceeds — it will find nothing and callers fall back to cached state.
+  }
 
   const purchases = await IAP.getAvailablePurchases();
 
