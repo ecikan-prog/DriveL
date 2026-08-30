@@ -11,7 +11,10 @@ import React, {
   useState,
 } from "react";
 import * as Logbook from "./logbook-storage";
-import { evaluateCompliance, type ComplianceStatus } from "@/hooks/use-nzta-compliance";
+import {
+  evaluateCompliance,
+  type ComplianceStatus,
+} from "@/hooks/use-nzta-compliance";
 import { useAuthContext } from "./auth-context";
 import {
   saveActiveShiftToCloud,
@@ -27,10 +30,17 @@ try {
 }
 import { Platform } from "react-native";
 import { AppState } from "react-native";
-import { getSubscriptionState, canLogShifts, type SubscriptionState } from "./subscription";
+import {
+  getSubscriptionState,
+  canLogShifts,
+  type SubscriptionState,
+} from "./subscription";
 import { addToHashChain } from "./integrity";
 import { captureLocation, type LocationData } from "./location";
-import { validateRestPeriod, type RestValidationResult } from "./rest-validation";
+import {
+  validateRestPeriod,
+  type RestValidationResult,
+} from "./rest-validation";
 import { evaluateLogCompliance } from "./compliance";
 
 type ShiftContextValue = {
@@ -66,13 +76,22 @@ type ShiftContextValue = {
    */
   todayWorkSeconds: number;
   compliance: ComplianceStatus;
-  startShift: (odometer?: number, restOverrideNote?: string, driverType?: "goods" | "large_passenger" | "small_passenger" | "vehicle_recovery") => Promise<{ success: boolean; error?: string }>;
+  startShift: (
+    odometer?: number,
+    restOverrideNote?: string,
+    driverType?:
+      "goods" | "large_passenger" | "small_passenger" | "vehicle_recovery",
+  ) => Promise<{ success: boolean; error?: string }>;
   endShift: (odometer?: number) => Promise<Logbook.DailyLog | null>;
   startBreak: () => Promise<void>;
   endBreak: () => Promise<void>;
   startOtherWork: (note?: string) => Promise<void>;
   endOtherWork: () => Promise<void>;
-  changeVehicle: (registration: string, odometer: number, reason?: string) => Promise<void>;
+  changeVehicle: (
+    registration: string,
+    odometer: number,
+    reason?: string,
+  ) => Promise<void>;
   loading: boolean;
   subscriptionState: SubscriptionState | null;
   isTrialExpired: boolean;
@@ -98,8 +117,11 @@ const NULL_COMPLIANCE: ComplianceStatus = {
 
 export function ShiftProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuthContext();
-  const [activeShift, setActiveShift] = useState<Logbook.ActiveShift | null>(null);
-  const [subscriptionState, setSubscriptionState] = useState<SubscriptionState | null>(null);
+  const [activeShift, setActiveShift] = useState<Logbook.ActiveShift | null>(
+    null,
+  );
+  const [subscriptionState, setSubscriptionState] =
+    useState<SubscriptionState | null>(null);
   const [drivingSeconds, setDrivingSeconds] = useState(0);
   const [consecutiveDrivingSeconds, setConsecutiveDrivingSeconds] = useState(0);
   const [continuousWorkSeconds, setContinuousWorkSeconds] = useState(0);
@@ -107,7 +129,8 @@ export function ShiftProvider({ children }: { children: React.ReactNode }) {
   const [breakSeconds, setBreakSeconds] = useState(0);
   const [fortnightlyDrivingSeconds, setFortnightlyDrivingSeconds] = useState(0);
   const [todayWorkSeconds, setTodayWorkSeconds] = useState(0);
-  const [compliance, setCompliance] = useState<ComplianceStatus>(NULL_COMPLIANCE);
+  const [compliance, setCompliance] =
+    useState<ComplianceStatus>(NULL_COMPLIANCE);
   const [loading, setLoading] = useState(true);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevWarningsRef = useRef<Set<string>>(new Set());
@@ -144,7 +167,7 @@ export function ShiftProvider({ children }: { children: React.ReactNode }) {
         // Silently fail if notifications not permitted
       }
     },
-    []
+    [],
   );
 
   const loadFortnightly = useCallback(async (userId: string) => {
@@ -182,26 +205,24 @@ export function ShiftProvider({ children }: { children: React.ReactNode }) {
       // countdown — and total fortnightly (base + current shift total) for CWP.
       const totalFortnightly = fortnightlyBase + driving;
 
-const shiftDriverType =
-  shift.driverType ??
-  user?.driverType ??
-  "small_passenger";
+      const shiftDriverType =
+        shift.driverType ?? user?.driverType ?? "small_passenger";
 
-// evaluateCompliance() expects a WorkTimeRule, not a driver type string.
-// Resolve the rule from the persisted shift field first; derive from
-// driver type only as a fallback so SPS drivers get the 7-hour threshold.
-const shiftWorkTimeRule =
-  shift.workTimeRule ??
-  (shiftDriverType === "small_passenger"
-    ? "sps_short_fares_7_hour"
-    : "standard_5_5_hour");
+      // evaluateCompliance() expects a WorkTimeRule, not a driver type string.
+      // Resolve the rule from the persisted shift field first; derive from
+      // driver type only as a fallback so SPS drivers get the 7-hour threshold.
+      const shiftWorkTimeRule =
+        shift.workTimeRule ??
+        (shiftDriverType === "small_passenger"
+          ? "sps_short_fares_7_hour"
+          : "standard_5_5_hour");
 
-const newCompliance = evaluateCompliance(
-  continuousWork,
-  work,
-  totalFortnightly,
-  shiftWorkTimeRule
-);
+      const newCompliance = evaluateCompliance(
+        continuousWork,
+        work,
+        totalFortnightly,
+        shiftWorkTimeRule,
+      );
       setCompliance(newCompliance);
 
       // Fire notifications for new warnings
@@ -212,7 +233,7 @@ const newCompliance = evaluateCompliance(
         }
       }
     },
-    [sendWarningNotification, user?.driverType]
+    [sendWarningNotification, user?.driverType],
   );
 
   const startTimer = useCallback(
@@ -221,7 +242,7 @@ const newCompliance = evaluateCompliance(
       tick(shift, fortnightlyBase);
       timerRef.current = setInterval(() => tick(shift, fortnightlyBase), 1000);
     },
-    [tick]
+    [tick],
   );
 
   const stopTimer = useCallback(() => {
@@ -242,33 +263,30 @@ const newCompliance = evaluateCompliance(
 
     setLoading(true);
     Promise.all([
-  Logbook.getActiveShift(user.id),
-  pullActiveShiftFromCloud(user.id),
-  Logbook.getFortnightlyDrivingSeconds(user.id),
-  Logbook.getTodayWorkSeconds(user.id),
-]).then(async ([localShift, cloudShift, fortnightly, todayWork]) => {
-  setFortnightlyDrivingSeconds(fortnightly);
-  setTodayWorkSeconds(todayWork);
+      Logbook.getActiveShift(user.id),
+      pullActiveShiftFromCloud(user.id),
+      Logbook.getFortnightlyDrivingSeconds(user.id),
+      Logbook.getTodayWorkSeconds(user.id),
+    ]).then(async ([localShift, cloudShift, fortnightly, todayWork]) => {
+      setFortnightlyDrivingSeconds(fortnightly);
+      setTodayWorkSeconds(todayWork);
 
-  const shift = localShift ?? cloudShift;
+      const shift = localShift ?? cloudShift;
 
-  if (shift) {
-    if (!localShift && cloudShift) {
-      await Logbook.saveActiveShift(cloudShift);
-    }
+      if (shift) {
+        if (!localShift && cloudShift) {
+          await Logbook.saveActiveShift(cloudShift);
+        }
 
-    setActiveShift(shift);
-    saveActiveShiftToCloud(shift).catch((error) => {
-  console.error(
-    "[Shift] Active shift cloud save failed:",
-    error
-  );
-});
-    startTimer(shift, fortnightly);
-  }
+        setActiveShift(shift);
+        saveActiveShiftToCloud(shift).catch((error) => {
+          console.error("[Shift] Active shift cloud save failed:", error);
+        });
+        startTimer(shift, fortnightly);
+      }
 
-  setLoading(false);
-});
+      setLoading(false);
+    });
 
     return () => stopTimer();
   }, [user, startTimer, stopTimer]);
@@ -280,22 +298,19 @@ const newCompliance = evaluateCompliance(
       return;
     }
     const reloadSubscription = () => {
-      getSubscriptionState(user.id).then(
-        setSubscriptionState
-      );
+      getSubscriptionState(user.id).then(setSubscriptionState);
     };
 
     reloadSubscription();
 
-    const appStateSubscription =
-      AppState.addEventListener(
-        "change",
-        (nextState) => {
-          if (nextState === "active") {
-            reloadSubscription();
-          }
+    const appStateSubscription = AppState.addEventListener(
+      "change",
+      (nextState) => {
+        if (nextState === "active") {
+          reloadSubscription();
         }
-      );
+      },
+    );
 
     const interval = setInterval(() => {
       reloadSubscription();
@@ -305,148 +320,194 @@ const newCompliance = evaluateCompliance(
       appStateSubscription.remove();
       clearInterval(interval);
     };
-
   }, [user]);
 
-  const isTrialExpired = subscriptionState ? !canLogShifts(subscriptionState) : false;
+  const isTrialExpired = subscriptionState
+    ? !canLogShifts(subscriptionState)
+    : false;
 
-  const [currentLocation, setCurrentLocation] = useState<LocationData | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<LocationData | null>(
+    null,
+  );
 
-  const [restValidation, setRestValidation] = useState<RestValidationResult | null>(null);
+  const [restValidation, setRestValidation] =
+    useState<RestValidationResult | null>(null);
 
-  const checkRestValidation = useCallback(async (): Promise<RestValidationResult> => {
-    if (!user) return { canStartShift: true };
-    const result = await validateRestPeriod(user.id);
-    setRestValidation(result);
-    return result;
-  }, [user]);
+  const checkRestValidation =
+    useCallback(async (): Promise<RestValidationResult> => {
+      if (!user) return { canStartShift: true };
+      const result = await validateRestPeriod(user.id);
+      setRestValidation(result);
+      return result;
+    }, [user]);
 
-  const startShift = useCallback(async (odometer?: number, restOverrideNote?: string, driverType?: "goods" | "large_passenger" | "small_passenger" | "vehicle_recovery", vehicleType?: string, vehicleRegistration?: string): Promise<{ success: boolean; error?: string }> => {
-    if (!user) return { success: false, error: "Not logged in." };
-    const subState = await getSubscriptionState(user.id);
+  const startShift = useCallback(
+    async (
+      odometer?: number,
+      restOverrideNote?: string,
+      driverType?:
+        "goods" | "large_passenger" | "small_passenger" | "vehicle_recovery",
+      vehicleType?: string,
+      vehicleRegistration?: string,
+    ): Promise<{ success: boolean; error?: string }> => {
+      if (!user) return { success: false, error: "Not logged in." };
+      const subState = await getSubscriptionState(user.id);
 
-    setSubscriptionState(subState);
-    if (!canLogShifts(subState)) {
-      // Trial expired and no subscription — block
-      return { success: false, error: "Your trial has expired. Please subscribe to continue logging shifts." };
-    }
-    // Validate rest period — NZTA requirement
-    // Skip rest validation only when driver has provided an override note (unavoidable delay/emergency)
-    if (!restOverrideNote) {
-      const restCheck = await validateRestPeriod(user.id);
-      setRestValidation(restCheck);
-      if (!restCheck.canStartShift) {
-        const label = restCheck.restType === "cwp_reset" ? "24-Hour Rest Required" : "10-Hour Rest Required";
-        return { success: false, error: `${label}: ${restCheck.reason ?? "You must rest before starting a new shift."}` };
+      setSubscriptionState(subState);
+      if (!canLogShifts(subState)) {
+        // Trial expired and no subscription — block
+        return {
+          success: false,
+          error:
+            "Your trial has expired. Please subscribe to continue logging shifts.",
+        };
       }
-    }
-    prevWarningsRef.current = new Set();
-    // Capture GPS location
-    const loc = await captureLocation();
-    setCurrentLocation(loc);
-    const locationData = loc ? { latitude: loc.latitude, longitude: loc.longitude, displayName: loc.displayName } : undefined;
-    // Resolve driver type: modal selection → profile default → fallback
-    const resolvedDriverType = driverType ?? user.driverType ?? "small_passenger";
-    const workTimeRule = resolvedDriverType === "small_passenger"
-      ? "sps_short_fares_7_hour" as const
-      : "standard_5_5_hour" as const;
-    const shift = await Logbook.startShift(user.id, {
-      location: locationData,
-      odometer,
-      restOverrideNote,
-      driverType: resolvedDriverType,
-      workTimeRule,
-      vehicleType: vehicleType ?? user.vehicleType,
-      vehicleRegistration: vehicleRegistration ?? user.vehicleRegistration,
-    });
-    const fortnightly = await loadFortnightly(user.id);
-    await loadTodayWork(user.id);
-    setActiveShift(shift);
-    saveActiveShiftToCloud(shift).catch((error) => {
-  console.error(
-    "[Shift] Active shift cloud save failed:",
-    error
+      // Validate rest period — NZTA requirement
+      // Skip rest validation only when driver has provided an override note (unavoidable delay/emergency)
+      if (!restOverrideNote) {
+        const restCheck = await validateRestPeriod(user.id);
+        setRestValidation(restCheck);
+        if (!restCheck.canStartShift) {
+          const label =
+            restCheck.restType === "cwp_reset"
+              ? "24-Hour Rest Required"
+              : "10-Hour Rest Required";
+          return {
+            success: false,
+            error: `${label}: ${restCheck.reason ?? "You must rest before starting a new shift."}`,
+          };
+        }
+      }
+      prevWarningsRef.current = new Set();
+      // Capture GPS location
+      const loc = await captureLocation();
+      setCurrentLocation(loc);
+      const locationData = loc
+        ? {
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            displayName: loc.displayName,
+          }
+        : undefined;
+      // Resolve driver type: modal selection → profile default → fallback
+      const resolvedDriverType =
+        driverType ?? user.driverType ?? "small_passenger";
+      const workTimeRule =
+        resolvedDriverType === "small_passenger"
+          ? ("sps_short_fares_7_hour" as const)
+          : ("standard_5_5_hour" as const);
+      const shift = await Logbook.startShift(user.id, {
+        location: locationData,
+        odometer,
+        restOverrideNote,
+        driverType: resolvedDriverType,
+        workTimeRule,
+        vehicleType: vehicleType ?? user.vehicleType,
+        vehicleRegistration: vehicleRegistration ?? user.vehicleRegistration,
+      });
+      const fortnightly = await loadFortnightly(user.id);
+      await loadTodayWork(user.id);
+      setActiveShift(shift);
+      saveActiveShiftToCloud(shift).catch((error) => {
+        console.error("[Shift] Active shift cloud save failed:", error);
+      });
+      startTimer(shift, fortnightly);
+      return { success: true };
+    },
+    [user, loadFortnightly, loadTodayWork, startTimer],
   );
-});
-    startTimer(shift, fortnightly);
-    return { success: true };
-  }, [user, loadFortnightly, loadTodayWork, startTimer]);
 
-  const endShift = useCallback(async (odometer?: number): Promise<Logbook.DailyLog | null> => {
-    if (!user) return null;
-    stopTimer();
-    // Capture GPS location at end
-    const loc = await captureLocation();
-    const locationData = loc ? { latitude: loc.latitude, longitude: loc.longitude, displayName: loc.displayName } : undefined;
-    const log = await Logbook.endShift(user.id, { location: locationData, odometer });
-    clearActiveShiftFromCloud(user.id).catch((error) => {
-  console.error(
-    "[Shift] Active shift cloud clear failed:",
-    error
+  const endShift = useCallback(
+    async (odometer?: number): Promise<Logbook.DailyLog | null> => {
+      if (!user) return null;
+      stopTimer();
+      // Capture GPS location at end
+      const loc = await captureLocation();
+      const locationData = loc
+        ? {
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            displayName: loc.displayName,
+          }
+        : undefined;
+      const log = await Logbook.endShift(user.id, {
+        location: locationData,
+        odometer,
+      });
+      clearActiveShiftFromCloud(user.id).catch((error) => {
+        console.error("[Shift] Active shift cloud clear failed:", error);
+      });
+      // Add to tamper-evident hash chain
+      if (log) {
+        const finalCompliance = evaluateLogCompliance(
+          log,
+          log.driverType ?? user.driverType ?? "small_passenger",
+        );
+
+        log.complianceStatus = finalCompliance.isCompliant
+          ? "compliant"
+          : "breach";
+
+        const reasons: string[] = [];
+
+        if (finalCompliance.continuousWorkExceeded) {
+          reasons.push("Continuous work limit exceeded");
+        }
+
+        if (finalCompliance.dailyWorkExceeded) {
+          reasons.push("13-hour daily work limit exceeded");
+        }
+
+        log.complianceReason =
+          reasons.length > 0
+            ? reasons.join("; ")
+            : "Within NZTA work-time limits";
+
+        await Logbook.saveDailyLog(log);
+        await addToHashChain(log);
+      }
+      setActiveShift(null);
+      setCurrentLocation(null);
+      setDrivingSeconds(0);
+      setConsecutiveDrivingSeconds(0);
+      setContinuousWorkSeconds(0);
+      setWorkSeconds(0);
+      setBreakSeconds(0);
+      setCompliance(NULL_COMPLIANCE);
+      prevWarningsRef.current = new Set();
+      await loadFortnightly(user.id);
+      await loadTodayWork(user.id);
+      // Background: push completed shift to cloud
+      if (log) {
+        import("./cloud-sync")
+          .then(({ pushLogsToCloud }) => {
+            pushLogsToCloud(user.id).catch(() => {});
+          })
+          .catch(() => {});
+      }
+      return log;
+    },
+    [user, stopTimer, loadFortnightly, loadTodayWork],
   );
-});
-    // Add to tamper-evident hash chain
-    if (log) {
-  const finalCompliance = evaluateLogCompliance(
-    log,
-    log.driverType ?? user.driverType ?? "small_passenger"
-  );
-
-  log.complianceStatus = finalCompliance.isCompliant
-    ? "compliant"
-    : "breach";
-
-  const reasons: string[] = [];
-
-  if (finalCompliance.continuousWorkExceeded) {
-    reasons.push("Continuous work limit exceeded");
-  }
-
-  if (finalCompliance.dailyWorkExceeded) {
-    reasons.push("13-hour daily work limit exceeded");
-  }
-
-  log.complianceReason =
-    reasons.length > 0
-      ? reasons.join("; ")
-      : "Within NZTA work-time limits";
-
-  await Logbook.saveDailyLog(log);
-  await addToHashChain(log);
-}
-    setActiveShift(null);
-    setCurrentLocation(null);
-    setDrivingSeconds(0);
-    setConsecutiveDrivingSeconds(0);
-    setContinuousWorkSeconds(0);
-    setWorkSeconds(0);
-    setBreakSeconds(0);
-    setCompliance(NULL_COMPLIANCE);
-    prevWarningsRef.current = new Set();
-    await loadFortnightly(user.id);
-    await loadTodayWork(user.id);
-    // Background: push completed shift to cloud
-    if (log) {
-      import("./cloud-sync").then(({ pushLogsToCloud }) => {
-        pushLogsToCloud(user.id).catch(() => {});
-      }).catch(() => {});
-    }
-    return log;
-  }, [user, stopTimer, loadFortnightly, loadTodayWork]);
 
   const startBreak = useCallback(async () => {
     if (!user || !activeShift) return;
     const loc = await captureLocation();
-    const locationData = loc ? { latitude: loc.latitude, longitude: loc.longitude, displayName: loc.displayName } : undefined;
-    const updated = await Logbook.startBreak(user.id, { location: locationData });
+    const locationData = loc
+      ? {
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          displayName: loc.displayName,
+        }
+      : undefined;
+    const updated = await Logbook.startBreak(user.id, {
+      location: locationData,
+    });
     if (updated) {
       setActiveShift(updated);
       saveActiveShiftToCloud(updated).catch((error) => {
-  console.error(
-    "[Shift] Active shift cloud save failed:",
-    error
-  );
-});
+        console.error("[Shift] Active shift cloud save failed:", error);
+      });
       stopTimer();
       startTimer(updated, fortnightlyDrivingSeconds);
     }
@@ -455,68 +516,97 @@ const newCompliance = evaluateCompliance(
   const endBreak = useCallback(async () => {
     if (!user || !activeShift) return;
     const loc = await captureLocation();
-    const locationData = loc ? { latitude: loc.latitude, longitude: loc.longitude, displayName: loc.displayName } : undefined;
+    const locationData = loc
+      ? {
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          displayName: loc.displayName,
+        }
+      : undefined;
     const updated = await Logbook.endBreak(user.id, { location: locationData });
     if (updated) {
       setActiveShift(updated);
       saveActiveShiftToCloud(updated).catch((error) => {
-  console.error(
-    "[Shift] Active shift cloud save failed:",
-    error
-  );
-});
+        console.error("[Shift] Active shift cloud save failed:", error);
+      });
       stopTimer();
       startTimer(updated, fortnightlyDrivingSeconds);
     }
   }, [user, activeShift, fortnightlyDrivingSeconds, startTimer, stopTimer]);
 
-  const startOtherWork = useCallback(async (note?: string) => {
-    if (!user || !activeShift) return;
-    const loc = await captureLocation();
-    const locationData = loc ? { latitude: loc.latitude, longitude: loc.longitude, displayName: loc.displayName } : undefined;
-    const updated = await Logbook.startOtherWork(user.id, { location: locationData, note });
-    if (updated) {
-      setActiveShift(updated);
-      saveActiveShiftToCloud(updated).catch((error) => {
-  console.error(
-    "[Shift] Active shift cloud save failed:",
-    error
+  const startOtherWork = useCallback(
+    async (note?: string) => {
+      if (!user || !activeShift) return;
+      const loc = await captureLocation();
+      const locationData = loc
+        ? {
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            displayName: loc.displayName,
+          }
+        : undefined;
+      const updated = await Logbook.startOtherWork(user.id, {
+        location: locationData,
+        note,
+      });
+      if (updated) {
+        setActiveShift(updated);
+        saveActiveShiftToCloud(updated).catch((error) => {
+          console.error("[Shift] Active shift cloud save failed:", error);
+        });
+        stopTimer();
+        startTimer(updated, fortnightlyDrivingSeconds);
+      }
+    },
+    [user, activeShift, fortnightlyDrivingSeconds, startTimer, stopTimer],
   );
-});
-      stopTimer();
-      startTimer(updated, fortnightlyDrivingSeconds);
-    }
-  }, [user, activeShift, fortnightlyDrivingSeconds, startTimer, stopTimer]);
 
   const endOtherWork = useCallback(async () => {
     if (!user || !activeShift) return;
     const loc = await captureLocation();
-    const locationData = loc ? { latitude: loc.latitude, longitude: loc.longitude, displayName: loc.displayName } : undefined;
-    const updated = await Logbook.endOtherWork(user.id, { location: locationData });
+    const locationData = loc
+      ? {
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          displayName: loc.displayName,
+        }
+      : undefined;
+    const updated = await Logbook.endOtherWork(user.id, {
+      location: locationData,
+    });
     if (updated) {
       setActiveShift(updated);
       saveActiveShiftToCloud(updated).catch((error) => {
-  console.error(
-    "[Shift] Active shift cloud save failed:",
-    error
-  );
-});
+        console.error("[Shift] Active shift cloud save failed:", error);
+      });
       stopTimer();
       startTimer(updated, fortnightlyDrivingSeconds);
     }
   }, [user, activeShift, fortnightlyDrivingSeconds, startTimer, stopTimer]);
 
-  const changeVehicle = useCallback(async (registration: string, odometer: number, reason?: string) => {
-    if (!user || !activeShift) return;
-    const updated = await Logbook.addVehicleChange(user.id, registration, odometer, reason);
-    if (updated) {
-      setActiveShift(updated);
-    }
-  }, [user, activeShift]);
+  const changeVehicle = useCallback(
+    async (registration: string, odometer: number, reason?: string) => {
+      if (!user || !activeShift) return;
+      const updated = await Logbook.addVehicleChange(
+        user.id,
+        registration,
+        odometer,
+        reason,
+      );
+      if (updated) {
+        setActiveShift(updated);
+      }
+    },
+    [user, activeShift],
+  );
 
   const isShiftActive = activeShift !== null;
-  const isOnBreak = activeShift ? Logbook.isCurrentlyOnBreak(activeShift) : false;
-  const isOtherWork = activeShift ? Logbook.isCurrentlyOtherWork(activeShift) : false;
+  const isOnBreak = activeShift
+    ? Logbook.isCurrentlyOnBreak(activeShift)
+    : false;
+  const isOtherWork = activeShift
+    ? Logbook.isCurrentlyOtherWork(activeShift)
+    : false;
 
   return (
     <ShiftContext.Provider

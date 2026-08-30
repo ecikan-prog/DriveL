@@ -46,10 +46,8 @@ const TRIAL_DAYS = 21;
 
 /**
  * Sync subscription state from the Railway backend.
- * Called immediately after a successful cloud login.
- * This sets the AsyncStorage cache from authoritative server data.
- * On iOS, refreshIAPEntitlement() is called afterward to let StoreKit
- * override the server state with the real entitlement.
+ * Called after authenticated account sync so the cache matches the
+ * Drive Legal account currently signed in on this device.
  */
 export async function syncSubscriptionFromServer(params: {
   userId: string;
@@ -61,7 +59,9 @@ export async function syncSubscriptionFromServer(params: {
   plan?: "monthly" | "annual" | null;
   iapVerified?: boolean;
 }): Promise<SubscriptionState> {
-  const existingRaw = await AsyncStorage.getItem(`${SUBSCRIPTION_KEY}_${params.userId}`);
+  const existingRaw = await AsyncStorage.getItem(
+    `${SUBSCRIPTION_KEY}_${params.userId}`,
+  );
   const existingState = existingRaw
     ? (JSON.parse(existingRaw) as SubscriptionState)
     : null;
@@ -69,7 +69,7 @@ export async function syncSubscriptionFromServer(params: {
   const trialEndDate =
     params.trialEndDate ??
     new Date(
-      new Date(trialStartDate).getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000
+      new Date(trialStartDate).getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000,
     ).toISOString();
 
   if (
@@ -108,13 +108,15 @@ export async function syncSubscriptionFromServer(params: {
 
 /**
  * Query StoreKit for the real current entitlement and update the cache.
- * This is called on every app launch (from shift-context) so that the
- * cached state can never drift from the actual App Store state.
+ * This must only be used during an explicit purchase or restore flow,
+ * never as an automatic replacement for the authenticated account state.
  *
  * IMPORTANT: This is the ONLY function allowed to set status = "active"
  * based on a StoreKit check.  It cannot be bypassed.
  */
-export async function refreshIAPEntitlement(userId: string): Promise<SubscriptionState> {
+export async function refreshIAPEntitlement(
+  userId: string,
+): Promise<SubscriptionState> {
   const cached = await getSubscriptionState(userId);
 
   try {
@@ -174,11 +176,11 @@ export async function activateSubscriptionFromIAP(
   userId: string,
   plan: "monthly" | "annual",
   transactionId: string,
-  purchaseTime: number
+  purchaseTime: number,
 ): Promise<SubscriptionState> {
   if (transactionId.startsWith("sim_sub_")) {
     throw new Error(
-      "Simulated transaction IDs are not accepted. A real StoreKit transaction is required."
+      "Simulated transaction IDs are not accepted. A real StoreKit transaction is required.",
     );
   }
 
@@ -217,7 +219,9 @@ export async function activateSubscriptionFromIAP(
  * Applies a one-way expiry downgrade for non-IAP-verified states only.
  * Never upgrades status — that is StoreKit's job.
  */
-export async function getSubscriptionState(userId: string): Promise<SubscriptionState> {
+export async function getSubscriptionState(
+  userId: string,
+): Promise<SubscriptionState> {
   try {
     const raw = await AsyncStorage.getItem(`${SUBSCRIPTION_KEY}_${userId}`);
     if (raw) {
@@ -237,7 +241,7 @@ export async function getSubscriptionState(userId: string): Promise<Subscription
   // No cache at all — show as trial pending the first server sync.
   const trialStart = new Date().toISOString();
   const trialEnd = new Date(
-    Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000
+    Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000,
   ).toISOString();
 
   const fallback: SubscriptionState = {
@@ -274,11 +278,13 @@ function applyExpiryCheck(state: SubscriptionState): SubscriptionState {
   return state;
 }
 
-export async function saveSubscriptionState(state: SubscriptionState): Promise<void> {
+export async function saveSubscriptionState(
+  state: SubscriptionState,
+): Promise<void> {
   state.lastChecked = new Date().toISOString();
   await AsyncStorage.setItem(
     `${SUBSCRIPTION_KEY}_${state.userId}`,
-    JSON.stringify(state)
+    JSON.stringify(state),
   );
 }
 

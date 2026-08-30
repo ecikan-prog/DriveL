@@ -1,4 +1,13 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, json, boolean } from "drizzle-orm/mysql-core";
+import {
+  int,
+  mysqlEnum,
+  mysqlTable,
+  text,
+  timestamp,
+  varchar,
+  json,
+  boolean,
+} from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing Manus OAuth auth flow.
@@ -35,7 +44,14 @@ export const drivers = mysqlTable("drivers", {
   licenceNumber: varchar("licenceNumber", { length: 64 }),
   vehicleRegistration: varchar("vehicleRegistration", { length: 32 }),
   vehicleType: varchar("vehicleType", { length: 64 }),
-  driverType: mysqlEnum("driverType", ["goods", "large_passenger", "small_passenger", "vehicle_recovery"]).default("small_passenger").notNull(),
+  driverType: mysqlEnum("driverType", [
+    "goods",
+    "large_passenger",
+    "small_passenger",
+    "vehicle_recovery",
+  ])
+    .default("small_passenger")
+    .notNull(),
   /** Transport Service Licence number (e.g. 0342026 — no TSL- prefix) */
   tslNumber: varchar("tslNumber", { length: 64 }),
   /** NZ Driver Licence Class (e.g. 1, 2, 4, P) */
@@ -43,7 +59,7 @@ export const drivers = mysqlTable("drivers", {
   /** Licence expiry date (YYYY-MM-DD) */
   licenceExpiry: varchar("licenceExpiry", { length: 10 }),
   /** Driver date of birth (YYYY-MM-DD) */
- dateOfBirth: varchar("dateOfBirth", { length: 10 }),
+  dateOfBirth: varchar("dateOfBirth", { length: 10 }),
   /** Operator/Company name (TSL holder — may differ from driver name) */
   operatorName: varchar("operatorName", { length: 255 }),
   /** Whether the driver has verified their email address */
@@ -55,11 +71,10 @@ export const drivers = mysqlTable("drivers", {
     "active",
     "expired",
     "cancelled",
-  ]).default("trial").notNull(),
-  subscriptionPlan: mysqlEnum("subscriptionPlan", [
-    "monthly",
-    "annual",
-  ]),
+  ])
+    .default("trial")
+    .notNull(),
+  subscriptionPlan: mysqlEnum("subscriptionPlan", ["monthly", "annual"]),
   subscriptionId: varchar("subscriptionId", { length: 255 }),
   currentPeriodEnd: varchar("currentPeriodEnd", { length: 32 }),
   activeSessionTokenHash: varchar("activeSessionTokenHash", {
@@ -172,5 +187,7 @@ export const emailVerificationTokens = mysqlTable("email_verification_tokens", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
-export type EmailVerificationToken = typeof emailVerificationTokens.$inferSelect;
-export type InsertEmailVerificationToken = typeof emailVerificationTokens.$inferInsert;
+export type EmailVerificationToken =
+  typeof emailVerificationTokens.$inferSelect;
+export type InsertEmailVerificationToken =
+  typeof emailVerificationTokens.$inferInsert;

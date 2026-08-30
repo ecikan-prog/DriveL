@@ -3,12 +3,10 @@ import { z } from "zod";
 import crypto from "crypto";
 
 import { query } from "./db";
-import {
-  sendPasswordResetEmail,
-  sendVerificationEmail,
-} from "./email";
+import type { Context } from "./context";
+import { sendPasswordResetEmail, sendVerificationEmail } from "./email";
 
-const t = initTRPC.create();
+const t = initTRPC.context<Context>().create();
 
 const DRIVER_TYPES = [
   "goods",
@@ -60,15 +58,10 @@ function createSessionToken(): string {
 }
 
 function hashSessionToken(token: string): string {
-  return crypto
-    .createHash("sha256")
-    .update(token)
-    .digest("hex");
+  return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-function extractSessionToken(
-  authHeader: string | undefined
-): string | null {
+function extractSessionToken(authHeader: string | undefined): string | null {
   if (!authHeader) {
     return null;
   }
@@ -78,16 +71,15 @@ function extractSessionToken(
 }
 
 async function getDriverForSessionToken(
-  authHeader: string | undefined
+  authHeader: string | undefined,
 ): Promise<any | null> {
-  const sessionToken =
-    extractSessionToken(authHeader);
+  const sessionToken = extractSessionToken(authHeader);
 
   if (!sessionToken) {
     return null;
   }
 
-  const rows = await query<any[]>(
+  const rows = await query<any>(
     `
     SELECT
       localUserId,
@@ -117,7 +109,7 @@ async function getDriverForSessionToken(
       AND deletedAt IS NULL
     LIMIT 1
     `,
-    [hashSessionToken(sessionToken)]
+    [hashSessionToken(sessionToken)],
   );
 
   return rows[0] ?? null;
@@ -125,26 +117,18 @@ async function getDriverForSessionToken(
 
 async function requireDriverSession(
   authHeader: string | undefined,
-  expectedLocalUserId?: string
-): Promise<
-  | { ok: true; driver: any }
-  | { ok: false; error: string }
-> {
-  const driver =
-    await getDriverForSessionToken(authHeader);
+  expectedLocalUserId?: string,
+): Promise<{ ok: true; driver: any } | { ok: false; error: string }> {
+  const driver = await getDriverForSessionToken(authHeader);
 
   if (!driver) {
     return {
       ok: false,
-      error:
-        "Your Drive Legal session has expired. Please sign in again.",
+      error: "Your Drive Legal session has expired. Please sign in again.",
     };
   }
 
-  if (
-    expectedLocalUserId &&
-    driver.localUserId !== expectedLocalUserId
-  ) {
+  if (expectedLocalUserId && driver.localUserId !== expectedLocalUserId) {
     return {
       ok: false,
       error: "You are not authorised for this account.",
@@ -218,7 +202,10 @@ export const appRouter = t.router({
           name: z.string().min(2).max(255),
           dateOfBirth: z
             .string()
-            .regex(/^(\d{4})-(\d{2})-(\d{2})$/, "Date of birth must use YYYY-MM-DD."),
+            .regex(
+              /^(\d{4})-(\d{2})-(\d{2})$/,
+              "Date of birth must use YYYY-MM-DD.",
+            ),
 
           tslNumber: z.string().max(64).optional(),
           operatorName: z.string().max(255).optional(),
@@ -233,7 +220,7 @@ export const appRouter = t.router({
           driverType: driverTypeSchema.default("small_passenger"),
           trialStartDate: z.string().max(32).optional(),
           baseUrl: z.string().url(),
-        })
+        }),
       )
       .mutation(async ({ input }) => {
         const email = normaliseEmail(input.email);
@@ -259,13 +246,11 @@ export const appRouter = t.router({
         const age =
           today.getFullYear() -
           dateOfBirth.getFullYear() -
-          (
-            today.getMonth() < dateOfBirth.getMonth() ||
-            (today.getMonth() === dateOfBirth.getMonth() &&
-              today.getDate() < dateOfBirth.getDate())
-              ? 1
-              : 0
-          );
+          (today.getMonth() < dateOfBirth.getMonth() ||
+          (today.getMonth() === dateOfBirth.getMonth() &&
+            today.getDate() < dateOfBirth.getDate())
+            ? 1
+            : 0);
 
         if (age < 18) {
           return {
@@ -275,7 +260,7 @@ export const appRouter = t.router({
         }
 
         try {
-          const existing = await query<any[]>(
+          const existing = await query<any>(
             `
             SELECT
               id,
@@ -285,14 +270,14 @@ export const appRouter = t.router({
             WHERE email = ?
             LIMIT 1
             `,
-            [email]
+            [email],
           );
 
           const trialStartDate =
             input.trialStartDate ?? new Date().toISOString();
 
           const trialEndDate = new Date(
-            new Date(trialStartDate).getTime() + 21 * 24 * 60 * 60 * 1000
+            new Date(trialStartDate).getTime() + 21 * 24 * 60 * 60 * 1000,
           ).toISOString();
 
           if (existing.length > 0) {
@@ -317,13 +302,14 @@ export const appRouter = t.router({
                   trialStartDate,
                   trialEndDate,
                   ex.id,
-                ]
+                ],
               );
 
               // Remove any existing verification tokens and create a fresh one
-              await query(`DELETE FROM email_verification_tokens WHERE email = ?`, [
-                email,
-              ]);
+              await query(
+                `DELETE FROM email_verification_tokens WHERE email = ?`,
+                [email],
+              );
 
               const verificationToken = createSecureToken();
               const verificationExpiry = createExpiry(24);
@@ -333,19 +319,19 @@ export const appRouter = t.router({
                 INSERT INTO email_verification_tokens (email, token, expiresAt)
                 VALUES (?, ?, ?)
                 `,
-                [email, verificationToken, verificationExpiry]
+                [email, verificationToken, verificationExpiry],
               );
 
               const emailSent = await sendVerificationEmail(
                 email,
                 input.name.trim(),
                 verificationToken,
-                input.baseUrl
+                input.baseUrl,
               );
 
               if (!emailSent) {
                 console.error(
-                  `[DriverAuth] Reactivation succeeded but verification email failed for ${email}`
+                  `[DriverAuth] Reactivation succeeded but verification email failed for ${email}`,
                 );
                 return {
                   success: true,
@@ -411,7 +397,7 @@ export const appRouter = t.router({
               trialStartDate,
               trialEndDate,
               "trial",
-            ]
+            ],
           );
 
           await query(
@@ -419,7 +405,7 @@ export const appRouter = t.router({
             DELETE FROM email_verification_tokens
             WHERE email = ?
             `,
-            [email]
+            [email],
           );
 
           const verificationToken = createSecureToken();
@@ -434,19 +420,19 @@ export const appRouter = t.router({
             )
             VALUES (?, ?, ?)
             `,
-            [email, verificationToken, verificationExpiry]
+            [email, verificationToken, verificationExpiry],
           );
 
           const emailSent = await sendVerificationEmail(
             email,
             input.name.trim(),
             verificationToken,
-            input.baseUrl
+            input.baseUrl,
           );
 
           if (!emailSent) {
             console.error(
-              `[DriverAuth] Registration succeeded but verification email failed for ${email}`
+              `[DriverAuth] Registration succeeded but verification email failed for ${email}`,
             );
 
             // The account and verification token already exist.
@@ -487,13 +473,13 @@ export const appRouter = t.router({
           deviceId: z.string().min(1).max(128),
           deviceLabel: z.string().min(1).max(255),
           forceContinue: z.boolean().optional(),
-        })
+        }),
       )
       .mutation(async ({ input }) => {
         const email = normaliseEmail(input.email);
 
         try {
-          const rows = await query<any[]>(
+          const rows = await query<any>(
             `
             SELECT
               localUserId,
@@ -525,7 +511,7 @@ export const appRouter = t.router({
               AND deletedAt IS NULL
             LIMIT 1
             `,
-            [email]
+            [email],
           );
 
           if (rows.length === 0) {
@@ -558,22 +544,16 @@ export const appRouter = t.router({
             driver.activeDeviceId &&
             driver.activeDeviceId !== input.deviceId;
 
-          if (
-            hasOtherActiveDevice &&
-            !input.forceContinue
-          ) {
+          if (hasOtherActiveDevice && !input.forceContinue) {
             return {
               success: false,
               sessionConflict: true,
-              error:
-                "This account is currently active on another device.",
+              error: "This account is currently active on another device.",
             };
           }
 
-          const sessionToken =
-            createSessionToken();
-          const sessionTokenHash =
-            hashSessionToken(sessionToken);
+          const sessionToken = createSessionToken();
+          const sessionTokenHash = hashSessionToken(sessionToken);
 
           await query(
             `
@@ -592,7 +572,7 @@ export const appRouter = t.router({
               input.deviceId,
               input.deviceLabel,
               driver.localUserId,
-            ]
+            ],
           );
 
           return {
@@ -612,56 +592,42 @@ export const appRouter = t.router({
         }
       }),
 
-    currentSession: t.procedure
-      .query(async ({ ctx }) => {
-        try {
-          const session =
-            await requireDriverSession(
-              ctx.authHeader
-            );
+    currentSession: t.procedure.query(async ({ ctx }) => {
+      try {
+        const session = await requireDriverSession(ctx.authHeader);
 
-          if (!session.ok) {
-            return {
-              success: false,
-              revoked: true,
-              error: session.error,
-            };
-          }
-
-          return {
-            success: true,
-            driver: toDriverPayload(
-              session.driver
-            ),
-          };
-        } catch (error) {
-          console.error(
-            "[DriverAuth] Current session failed:",
-            error
-          );
-
+        if (session.ok === false) {
           return {
             success: false,
-            error:
-              "Unable to validate your session. Please try again.",
+            revoked: true,
+            error: session.error,
           };
         }
-      }),
 
-    logout: t.procedure
-      .mutation(async ({ ctx }) => {
-        try {
-          const sessionToken =
-            extractSessionToken(
-              ctx.authHeader
-            );
+        return {
+          success: true,
+          driver: toDriverPayload(session.driver),
+        };
+      } catch (error) {
+        console.error("[DriverAuth] Current session failed:", error);
 
-          if (!sessionToken) {
-            return { success: true };
-          }
+        return {
+          success: false,
+          error: "Unable to validate your session. Please try again.",
+        };
+      }
+    }),
 
-          await query(
-            `
+    logout: t.procedure.mutation(async ({ ctx }) => {
+      try {
+        const sessionToken = extractSessionToken(ctx.authHeader);
+
+        if (!sessionToken) {
+          return { success: true };
+        }
+
+        await query(
+          `
             UPDATE drivers
             SET
               activeSessionTokenHash = NULL,
@@ -672,23 +638,19 @@ export const appRouter = t.router({
             WHERE activeSessionTokenHash = ?
             LIMIT 1
             `,
-            [hashSessionToken(sessionToken)]
-          );
+          [hashSessionToken(sessionToken)],
+        );
 
-          return { success: true };
-        } catch (error) {
-          console.error(
-            "[DriverAuth] Logout failed:",
-            error
-          );
+        return { success: true };
+      } catch (error) {
+        console.error("[DriverAuth] Logout failed:", error);
 
-          return {
-            success: false,
-            error:
-              "Unable to end the current session.",
-          };
-        }
-      }),
+        return {
+          success: false,
+          error: "Unable to end the current session.",
+        };
+      }
+    }),
 
     /**
      * Send a fresh email verification link.
@@ -698,13 +660,13 @@ export const appRouter = t.router({
         z.object({
           email: z.string().email(),
           baseUrl: z.string().url(),
-        })
+        }),
       )
       .mutation(async ({ input }) => {
         const email = normaliseEmail(input.email);
 
         try {
-          const rows = await query<any[]>(
+          const rows = await query<any>(
             `
             SELECT
               name,
@@ -714,7 +676,7 @@ export const appRouter = t.router({
               AND deletedAt IS NULL
             LIMIT 1
             `,
-            [email]
+            [email],
           );
 
           if (rows.length === 0) {
@@ -738,7 +700,7 @@ export const appRouter = t.router({
             DELETE FROM email_verification_tokens
             WHERE email = ?
             `,
-            [email]
+            [email],
           );
 
           const verificationToken = createSecureToken();
@@ -753,14 +715,14 @@ export const appRouter = t.router({
             )
             VALUES (?, ?, ?)
             `,
-            [email, verificationToken, verificationExpiry]
+            [email, verificationToken, verificationExpiry],
           );
 
           const emailSent = await sendVerificationEmail(
             email,
             driver.name || "",
             verificationToken,
-            input.baseUrl
+            input.baseUrl,
           );
 
           if (!emailSent) {
@@ -776,10 +738,7 @@ export const appRouter = t.router({
             message: "A new verification email has been sent.",
           };
         } catch (error) {
-          console.error(
-            "[DriverAuth] Resend verification failed:",
-            error
-          );
+          console.error("[DriverAuth] Resend verification failed:", error);
 
           return {
             success: false,
@@ -796,11 +755,11 @@ export const appRouter = t.router({
       .input(
         z.object({
           token: z.string().min(1),
-        })
+        }),
       )
       .mutation(async ({ input }) => {
         try {
-          const tokenRows = await query<any[]>(
+          const tokenRows = await query<any>(
             `
             SELECT
               email,
@@ -809,29 +768,27 @@ export const appRouter = t.router({
             WHERE token = ?
             LIMIT 1
             `,
-            [input.token]
+            [input.token],
           );
 
           if (tokenRows.length === 0) {
             return {
               success: false,
-              error: "This verification link is invalid or has already been used.",
+              error:
+                "This verification link is invalid or has already been used.",
             };
           }
 
           const tokenRecord = tokenRows[0];
           const expiryTime = new Date(tokenRecord.expiresAt).getTime();
 
-          if (
-            !Number.isFinite(expiryTime) ||
-            expiryTime <= Date.now()
-          ) {
+          if (!Number.isFinite(expiryTime) || expiryTime <= Date.now()) {
             await query(
               `
               DELETE FROM email_verification_tokens
               WHERE token = ?
               `,
-              [input.token]
+              [input.token],
             );
 
             return {
@@ -847,7 +804,7 @@ export const appRouter = t.router({
             SET emailVerified = true
             WHERE email = ?
             `,
-            [tokenRecord.email]
+            [tokenRecord.email],
           );
 
           await query(
@@ -855,7 +812,7 @@ export const appRouter = t.router({
             DELETE FROM email_verification_tokens
             WHERE email = ?
             `,
-            [tokenRecord.email]
+            [tokenRecord.email],
           );
 
           return {
@@ -879,13 +836,13 @@ export const appRouter = t.router({
         z.object({
           email: z.string().email(),
           baseUrl: z.string().url(),
-        })
+        }),
       )
       .mutation(async ({ input }) => {
         const email = normaliseEmail(input.email);
 
         try {
-          const rows = await query<any[]>(
+          const rows = await query<any>(
             `
             SELECT name
             FROM drivers
@@ -893,7 +850,7 @@ export const appRouter = t.router({
               AND deletedAt IS NULL
             LIMIT 1
             `,
-            [email]
+            [email],
           );
 
           /*
@@ -914,7 +871,7 @@ export const appRouter = t.router({
             WHERE email = ?
               AND userType = 'driver'
             `,
-            [email]
+            [email],
           );
 
           const resetToken = createSecureToken();
@@ -930,7 +887,7 @@ export const appRouter = t.router({
             )
             VALUES (?, ?, 'driver', ?)
             `,
-            [email, resetToken, resetExpiry]
+            [email, resetToken, resetExpiry],
           );
 
           const emailSent = await sendPasswordResetEmail(
@@ -938,7 +895,7 @@ export const appRouter = t.router({
             rows[0].name || "",
             resetToken,
             input.baseUrl,
-            "driver"
+            "driver",
           );
 
           if (!emailSent) {
@@ -959,8 +916,7 @@ export const appRouter = t.router({
 
           return {
             success: false,
-            error:
-              "The password reset request could not be completed.",
+            error: "The password reset request could not be completed.",
           };
         }
       }),
@@ -973,11 +929,11 @@ export const appRouter = t.router({
         z.object({
           token: z.string().min(1),
           newPasswordHash: z.string().min(1),
-        })
+        }),
       )
       .mutation(async ({ input }) => {
         try {
-          const tokenRows = await query<any[]>(
+          const tokenRows = await query<any>(
             `
             SELECT
               email,
@@ -987,29 +943,27 @@ export const appRouter = t.router({
               AND userType = 'driver'
             LIMIT 1
             `,
-            [input.token]
+            [input.token],
           );
 
           if (tokenRows.length === 0) {
             return {
               success: false,
-              error: "This password reset link is invalid or has already been used.",
+              error:
+                "This password reset link is invalid or has already been used.",
             };
           }
 
           const tokenRecord = tokenRows[0];
           const expiryTime = new Date(tokenRecord.expiresAt).getTime();
 
-          if (
-            !Number.isFinite(expiryTime) ||
-            expiryTime <= Date.now()
-          ) {
+          if (!Number.isFinite(expiryTime) || expiryTime <= Date.now()) {
             await query(
               `
               DELETE FROM password_reset_tokens
               WHERE token = ?
               `,
-              [input.token]
+              [input.token],
             );
 
             return {
@@ -1025,7 +979,7 @@ export const appRouter = t.router({
             SET passwordHash = ?
             WHERE email = ?
             `,
-            [input.newPasswordHash, tokenRecord.email]
+            [input.newPasswordHash, tokenRecord.email],
           );
 
           await query(
@@ -1034,7 +988,7 @@ export const appRouter = t.router({
             WHERE email = ?
               AND userType = 'driver'
             `,
-            [tokenRecord.email]
+            [tokenRecord.email],
           );
 
           return {
@@ -1055,18 +1009,15 @@ export const appRouter = t.router({
       .input(
         z.object({
           email: z.string().email(),
-        })
+        }),
       )
       .mutation(async ({ ctx, input }) => {
         const email = normaliseEmail(input.email);
 
         try {
-          const session =
-            await requireDriverSession(
-              ctx.authHeader
-            );
+          const session = await requireDriverSession(ctx.authHeader);
 
-          if (!session.ok) {
+          if (session.ok === false) {
             return {
               success: false,
               error: session.error,
@@ -1080,14 +1031,14 @@ export const appRouter = t.router({
             };
           }
 
-          const rows = await query<any[]>(
+          const rows = await query<any>(
             `
             SELECT localUserId, email
             FROM drivers
             WHERE email = ?
             LIMIT 1
             `,
-            [email]
+            [email],
           );
 
           if (rows.length === 0) {
@@ -1111,7 +1062,7 @@ export const appRouter = t.router({
             WHERE email = ?
             LIMIT 1
             `,
-            [email]
+            [email],
           );
 
           return { success: true };
@@ -1140,31 +1091,30 @@ export const appRouter = t.router({
           vehicleRegistration: z.string().max(32).optional(),
           vehicleType: z.string().max(64).optional(),
           driverType: driverTypeSchema.optional(),
-        })
+        }),
       )
       .mutation(async ({ ctx, input }) => {
         try {
-          const session =
-            await requireDriverSession(
-              ctx.authHeader,
-              input.localUserId
-            );
+          const session = await requireDriverSession(
+            ctx.authHeader,
+            input.localUserId,
+          );
 
-          if (!session.ok) {
+          if (session.ok === false) {
             return {
               success: false,
               error: session.error,
             };
           }
 
-          const existing = await query<any[]>(
+          const existing = await query<any>(
             `
             SELECT id
             FROM drivers
             WHERE localUserId = ?
             LIMIT 1
             `,
-            [input.localUserId]
+            [input.localUserId],
           );
 
           if (existing.length === 0) {
@@ -1200,7 +1150,7 @@ export const appRouter = t.router({
               input.vehicleType?.trim() || null,
               input.driverType || null,
               input.localUserId,
-            ]
+            ],
           );
 
           return {
@@ -1219,36 +1169,17 @@ export const appRouter = t.router({
     syncSubscription: t.procedure
       .input(
         z.object({
-          status: z.enum([
-            "trial",
-            "active",
-            "expired",
-            "cancelled",
-          ]),
-          plan: z
-            .enum(["monthly", "annual"])
-            .nullable()
-            .optional(),
-          subscriptionId: z
-            .string()
-            .max(255)
-            .nullable()
-            .optional(),
-          currentPeriodEnd: z
-            .string()
-            .max(64)
-            .nullable()
-            .optional(),
-        })
+          status: z.enum(["trial", "active", "expired", "cancelled"]),
+          plan: z.enum(["monthly", "annual"]).nullable().optional(),
+          subscriptionId: z.string().max(255).nullable().optional(),
+          currentPeriodEnd: z.string().max(64).nullable().optional(),
+        }),
       )
       .mutation(async ({ ctx, input }) => {
         try {
-          const session =
-            await requireDriverSession(
-              ctx.authHeader
-            );
+          const session = await requireDriverSession(ctx.authHeader);
 
-          if (!session.ok) {
+          if (session.ok === false) {
             return {
               success: false,
               error: session.error,
@@ -1273,29 +1204,22 @@ export const appRouter = t.router({
               input.subscriptionId ?? null,
               input.currentPeriodEnd ?? null,
               session.driver.localUserId,
-            ]
+            ],
           );
 
           return {
             success: true,
             subscriptionStatus: input.status,
-            subscriptionPlan:
-              input.plan ?? null,
-            subscriptionId:
-              input.subscriptionId ?? null,
-            currentPeriodEnd:
-              input.currentPeriodEnd ?? null,
+            subscriptionPlan: input.plan ?? null,
+            subscriptionId: input.subscriptionId ?? null,
+            currentPeriodEnd: input.currentPeriodEnd ?? null,
           };
         } catch (error) {
-          console.error(
-            "[DriverAuth] Subscription sync failed:",
-            error
-          );
+          console.error("[DriverAuth] Subscription sync failed:", error);
 
           return {
             success: false,
-            error:
-              "Unable to save your subscription status.",
+            error: "Unable to save your subscription status.",
           };
         }
       }),
@@ -1320,22 +1244,21 @@ export const appRouter = t.router({
               hashTimestamp: z.string(),
               startTime: z.string(),
               endTime: z.string(),
-            })
+            }),
           ),
-        })
+        }),
       )
       .mutation(async ({ ctx, input }) => {
         let inserted = 0;
         let skipped = 0;
 
         try {
-          const session =
-            await requireDriverSession(
-              ctx.authHeader,
-              input.driverLocalUserId
-            );
+          const session = await requireDriverSession(
+            ctx.authHeader,
+            input.driverLocalUserId,
+          );
 
-          if (!session.ok) {
+          if (session.ok === false) {
             return {
               success: false,
               inserted,
@@ -1345,14 +1268,14 @@ export const appRouter = t.router({
           }
 
           for (const log of input.logs) {
-            const existing = await query<any[]>(
+            const existing = await query<any>(
               `
               SELECT id
               FROM shift_logs
               WHERE logId = ?
               LIMIT 1
               `,
-              [log.logId]
+              [log.logId],
             );
 
             if (existing.length > 0) {
@@ -1387,7 +1310,7 @@ export const appRouter = t.router({
                 log.hashTimestamp,
                 log.startTime,
                 log.endTime,
-              ]
+              ],
             );
 
             inserted += 1;
@@ -1413,17 +1336,16 @@ export const appRouter = t.router({
       .input(
         z.object({
           driverLocalUserId: z.string().min(1),
-        })
+        }),
       )
       .query(async ({ ctx, input }) => {
         try {
-          const session =
-            await requireDriverSession(
-              ctx.authHeader,
-              input.driverLocalUserId
-            );
+          const session = await requireDriverSession(
+            ctx.authHeader,
+            input.driverLocalUserId,
+          );
 
-          if (!session.ok) {
+          if (session.ok === false) {
             return {
               success: false,
               logs: [],
@@ -1431,7 +1353,7 @@ export const appRouter = t.router({
             };
           }
 
-          const rows = await query<any[]>(
+          const rows = await query<any>(
             `
             SELECT
               logId,
@@ -1447,13 +1369,12 @@ export const appRouter = t.router({
             WHERE driverLocalUserId = ?
             ORDER BY startTime DESC
             `,
-            [input.driverLocalUserId]
+            [input.driverLocalUserId],
           );
 
           return {
             success: true,
             logs: rows.map((row) => ({
-
               ...row,
               logData:
                 typeof row.logData === "string"
@@ -1470,23 +1391,22 @@ export const appRouter = t.router({
           };
         }
       }),
-        saveActiveShift: t.procedure
+    saveActiveShift: t.procedure
       .input(
         z.object({
           driverLocalUserId: z.string().min(1),
           shiftData: z.any(),
           startTime: z.string().min(1),
-        })
+        }),
       )
       .mutation(async ({ ctx, input }) => {
         try {
-          const session =
-            await requireDriverSession(
-              ctx.authHeader,
-              input.driverLocalUserId
-            );
+          const session = await requireDriverSession(
+            ctx.authHeader,
+            input.driverLocalUserId,
+          );
 
-          if (!session.ok) {
+          if (session.ok === false) {
             return {
               success: false,
               error: session.error,
@@ -1510,43 +1430,39 @@ export const appRouter = t.router({
               input.driverLocalUserId,
               JSON.stringify(input.shiftData),
               input.startTime,
-            ]
+            ],
           );
 
           return { success: true };
         } catch (error) {
-          console.error(
-            "[Sync] Save active shift failed:",
-            error
-          );
+          console.error("[Sync] Save active shift failed:", error);
 
           return { success: false };
         }
       }),
     pullActiveShift: t.procedure
-  .input(
-    z.object({
-      driverLocalUserId: z.string().min(1),
-    })
-  )
-  .query(async ({ ctx, input }) => {
-    try {
-      const session =
-        await requireDriverSession(
-          ctx.authHeader,
-          input.driverLocalUserId
-        );
+      .input(
+        z.object({
+          driverLocalUserId: z.string().min(1),
+        }),
+      )
+      .query(async ({ ctx, input }) => {
+        try {
+          const session = await requireDriverSession(
+            ctx.authHeader,
+            input.driverLocalUserId,
+          );
 
-      if (!session.ok) {
-        return {
-          success: false,
-          shift: null,
-          error: session.error,
-        };
-      }
+          if (session.ok === false) {
+            return {
+              success: false,
+              shift: null,
+              error: session.error,
+            };
+          }
 
-      const rows = await query<any[]>(
-        `
+          const rows = await query<any>(
+            `
         SELECT
           shiftData,
           startTime,
@@ -1555,77 +1471,70 @@ export const appRouter = t.router({
         WHERE driverLocalUserId = ?
         LIMIT 1
         `,
-        [input.driverLocalUserId]
-      );
+            [input.driverLocalUserId],
+          );
 
-      if (rows.length === 0) {
-        return {
-          success: true,
-          shift: null,
-        };
-      }
+          if (rows.length === 0) {
+            return {
+              success: true,
+              shift: null,
+            };
+          }
 
-      const row = rows[0];
+          const row = rows[0];
 
-      return {
-        success: true,
-        shift:
-          typeof row.shiftData === "string"
-            ? JSON.parse(row.shiftData)
-            : row.shiftData,
-      };
-    } catch (error) {
-      console.error(
-        "[Sync] Pull active shift failed:",
-        error
-      );
+          return {
+            success: true,
+            shift:
+              typeof row.shiftData === "string"
+                ? JSON.parse(row.shiftData)
+                : row.shiftData,
+          };
+        } catch (error) {
+          console.error("[Sync] Pull active shift failed:", error);
 
-      return {
-        success: false,
-        shift: null,
-      };
-    }
-  }),
-  clearActiveShift: t.procedure
-  .input(
-    z.object({
-      driverLocalUserId: z.string().min(1),
-    })
-  )
-  .mutation(async ({ ctx, input }) => {
-    try {
-      const session =
-        await requireDriverSession(
-          ctx.authHeader,
-          input.driverLocalUserId
-        );
+          return {
+            success: false,
+            shift: null,
+          };
+        }
+      }),
+    clearActiveShift: t.procedure
+      .input(
+        z.object({
+          driverLocalUserId: z.string().min(1),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        try {
+          const session = await requireDriverSession(
+            ctx.authHeader,
+            input.driverLocalUserId,
+          );
 
-      if (!session.ok) {
-        return {
-          success: false,
-          error: session.error,
-        };
-      }
+          if (session.ok === false) {
+            return {
+              success: false,
+              error: session.error,
+            };
+          }
 
-      await query(
-        `
+          await query(
+            `
         DELETE FROM active_shifts
         WHERE driverLocalUserId = ?
         `,
-        [input.driverLocalUserId]
-      );
+            [input.driverLocalUserId],
+          );
 
-      return { success: true };
-    } catch (error) {
-      console.error(
-        "[Sync] Clear active shift failed:",
-        error
-      );
+          return { success: true };
+        } catch (error) {
+          console.error("[Sync] Clear active shift failed:", error);
 
-      return { success: false };
-    }
+          return { success: false };
+        }
+      }),
   }),
-}),
 });
 
 export type AppRouter = typeof appRouter;

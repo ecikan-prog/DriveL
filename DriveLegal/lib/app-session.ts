@@ -49,12 +49,9 @@ export function getDeviceLabel(): string {
 }
 
 export async function saveAuthSession(
-  session: StoredAuthSession
+  session: StoredAuthSession,
 ): Promise<void> {
-  await AsyncStorage.setItem(
-    AUTH_SESSION_KEY,
-    JSON.stringify(session)
-  );
+  await AsyncStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
 }
 
 export async function getAuthSession(): Promise<StoredAuthSession | null> {
@@ -70,9 +67,7 @@ export async function clearAuthSession(): Promise<void> {
   await AsyncStorage.removeItem(AUTH_SESSION_KEY);
 }
 
-export async function setPendingLogoutNotice(
-  message: string
-): Promise<void> {
+export async function setPendingLogoutNotice(message: string): Promise<void> {
   await AsyncStorage.setItem(LOGOUT_NOTICE_KEY, message);
 }
 
