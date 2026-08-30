@@ -95,6 +95,23 @@ function normaliseEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+function createSecureLocalUserId(): string {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID().replace(/-/g, "");
+  }
+
+  if (typeof globalThis.crypto?.getRandomValues !== "function") {
+    throw new Error("Secure randomness is unavailable on this device.");
+  }
+
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
+    "",
+  );
+}
+
 function getVerificationBaseUrl(): string {
   if (
     Platform.OS === "web" &&
@@ -459,8 +476,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         vehicleType: params.vehicleType.trim(),
         driverType: params.driverType ?? "small_passenger",
       };
-      const localUserId =
-        Date.now().toString(36) + Math.random().toString(36).slice(2);
+      const localUserId = createSecureLocalUserId();
 
       const trialStartDate = new Date().toISOString();
 
