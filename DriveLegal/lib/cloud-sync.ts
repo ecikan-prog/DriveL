@@ -11,7 +11,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import { DailyLog, type ActiveShift } from "./logbook-storage";
 import type { DriverType } from "@/lib/local-auth";
-import { getAuthSession } from "./app-session";
+import * as LocalAuth from "./local-auth";
+import {
+  clearAuthSession,
+  getAuthSession,
+  notifySessionInvalidated,
+  setPendingLogoutNotice,
+} from "./app-session";
+import { lockPinSession } from "./pin-security";
 
 const SYNC_STATUS_KEY = "dl_sync_status";
 
@@ -30,6 +37,14 @@ type SyncStatus = {
   lastPushTime?: string;
   pushedLogIds: string[];
 };
+
+async function handleInvalidSession(message: string): Promise<void> {
+  await setPendingLogoutNotice(message);
+  lockPinSession();
+  await LocalAuth.logoutUser();
+  await clearAuthSession();
+  notifySessionInvalidated(message);
+}
 
 async function getSyncStatus(userId: string): Promise<SyncStatus> {
   try {
@@ -133,6 +148,10 @@ async function trpcCall(
         data,
       );
 
+      if (response.status === 401) {
+        await handleInvalidSession(message);
+      }
+
       return {
         success: false,
         error: message,
@@ -141,7 +160,16 @@ async function trpcCall(
       };
     }
 
-    return data?.result?.data?.json ?? data?.result?.data ?? data;
+    const result = data?.result?.data?.json ?? data?.result?.data ?? data;
+
+    if (result?.sessionInvalid === true || result?.revoked === true) {
+      await handleInvalidSession(
+        result.error ??
+          "Your Drive Legal session has expired. Please sign in again.",
+      );
+    }
+
+    return result;
   } catch (error) {
     const message =
       error instanceof Error
@@ -387,6 +415,7 @@ export async function loginDriverCloud(
     trialStartDate: string | null;
     createdAt: string | null;
     trialEndDate: string | null;
+    appAccountToken: string | null;
     subscriptionStatus: "trial" | "active" | "expired" | "cancelled";
     subscriptionPlan: "monthly" | "annual" | null;
     subscriptionId: string | null;
@@ -406,6 +435,7 @@ export async function loginDriverCloud(
 export async function restoreDriverSessionCloud(): Promise<{
   success: boolean;
   revoked?: boolean;
+  sessionInvalid?: boolean;
   error?: string;
   driver?: {
     localUserId: string;
@@ -423,6 +453,7 @@ export async function restoreDriverSessionCloud(): Promise<{
     trialStartDate: string | null;
     createdAt: string | null;
     trialEndDate: string | null;
+    appAccountToken: string | null;
     subscriptionStatus: "trial" | "active" | "expired" | "cancelled";
     subscriptionPlan: "monthly" | "annual" | null;
     subscriptionId: string | null;
@@ -447,6 +478,7 @@ export async function syncSubscriptionToCloud(params: {
   plan?: "monthly" | "annual" | null;
   subscriptionId?: string | null;
   currentPeriodEnd?: string | null;
+  appAccountToken?: string | null;
 }): Promise<{
   success: boolean;
   error?: string;

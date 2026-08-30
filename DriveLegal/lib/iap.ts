@@ -71,7 +71,9 @@ export type PurchaseResult =
       success: true;
       plan: IAPPlan;
       transactionId: string;
+      originalTransactionId: string | null;
       purchaseTime: number;
+      appAccountToken: string | null;
     }
   | { success: false; cancelled: boolean; error: string };
 
@@ -82,6 +84,8 @@ export type EntitlementResult = {
   expiryDate: Date | null;
   /** The App Store product identifier for the active purchase */
   transactionId: string | null;
+  originalTransactionId: string | null;
+  appAccountToken: string | null;
 };
 
 // ─── Connection ───────────────────────────────────────────────────────────────
@@ -192,7 +196,10 @@ export async function loadIAPProducts(): Promise<IAPProduct[]> {
  * one-shot listener before calling requestSubscription(), resolve when a
  * result arrives, and remove the listener afterward.
  */
-export async function purchasePlan(plan: IAPPlan): Promise<PurchaseResult> {
+export async function purchasePlan(
+  plan: IAPPlan,
+  appAccountToken: string,
+): Promise<PurchaseResult> {
   if (!isIOS()) {
     return {
       success: false,
@@ -232,9 +239,12 @@ export async function purchasePlan(plan: IAPPlan): Promise<PurchaseResult> {
           success: true,
           plan,
           transactionId: purchase.transactionId ?? sku,
+          originalTransactionId:
+            (purchase as any).originalTransactionIdentifierIOS ?? null,
           purchaseTime: purchase.transactionDate
             ? new Date(purchase.transactionDate).getTime()
             : Date.now(),
+          appAccountToken: (purchase as any).appAccountToken ?? null,
         });
       },
     );
@@ -264,7 +274,7 @@ export async function purchasePlan(plan: IAPPlan): Promise<PurchaseResult> {
     );
 
     // Trigger Apple's native payment sheet
-    IAP.requestSubscription({ sku }).catch((err: any) => {
+    IAP.requestSubscription({ sku, appAccountToken }).catch((err: any) => {
       if (err?.code === "E_USER_CANCELLED") {
         settle({
           success: false,
@@ -301,6 +311,8 @@ export async function checkCurrentEntitlement(): Promise<EntitlementResult> {
       plan: null,
       expiryDate: null,
       transactionId: null,
+      originalTransactionId: null,
+      appAccountToken: null,
     };
   }
 
@@ -329,6 +341,8 @@ export async function checkCurrentEntitlement(): Promise<EntitlementResult> {
       plan: null,
       expiryDate: null,
       transactionId: null,
+      originalTransactionId: null,
+      appAccountToken: null,
     };
   }
 
@@ -349,6 +363,9 @@ export async function checkCurrentEntitlement(): Promise<EntitlementResult> {
     plan,
     expiryDate,
     transactionId: latest.transactionId ?? latest.productId,
+    originalTransactionId:
+      (latest as any).originalTransactionIdentifierIOS ?? null,
+    appAccountToken: (latest as any).appAccountToken ?? null,
   };
 }
 

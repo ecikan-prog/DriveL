@@ -25,6 +25,29 @@ export async function query<T = any>(sql: string, params: any[] = []): Promise<T
   return rows as T[];
 }
 
+export async function withTransaction<T>(
+  work: (connection: mysql.PoolConnection) => Promise<T>,
+): Promise<T> {
+  if (!pool) throw new Error("Database not configured");
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+    const result = await work(connection);
+    await connection.commit();
+    return result;
+  } catch (error) {
+    try {
+      await connection.rollback();
+    } catch {}
+
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 /* ─────────────────────────────────────────────
    EMAIL VERIFICATION HELPERS
    ───────────────────────────────────────────── */

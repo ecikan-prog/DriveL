@@ -7,9 +7,9 @@
  *   2. User selects Monthly or Annual plan.
  *   3. "Subscribe Now" calls purchasePlan() which triggers Apple's native
  *      payment sheet via StoreKit (react-native-iap).
- *   4. On a successful verified transaction, activateSubscriptionFromIAP()
- *      writes the StoreKit-verified state to cache.
- *   5. Paywall closes.
+ *   4. The resulting Apple transaction must match the authenticated
+ *      Drive Legal account before the server and local cache are updated.
+ *   5. Paywall closes only after account sync succeeds.
  *
  * There is NO Stripe integration, NO "Simulate Subscribe" dialog, and NO
  * demo/fake activation path in this file.
@@ -28,9 +28,9 @@ import {
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuthContext } from "@/lib/auth-context";
+import { getAuthSession } from "@/lib/app-session";
 import { syncSubscriptionToCloud } from "@/lib/cloud-sync";
 import {
-  activateSubscriptionFromIAP,
   getSubscriptionState,
   getTrialDaysLeft,
   syncSubscriptionFromServer,
@@ -301,19 +301,33 @@ export default function PaywallScreen() {
       return;
     }
 
+    const authSession = await getAuthSession();
+
+    if (!authSession?.appAccountToken) {
+      Alert.alert(
+        "Session Refresh Required",
+        "Please sign out and sign back into this Drive Legal account before purchasing.",
+      );
+      return;
+    }
+
     setPurchasing(true);
 
     try {
-      const result = await purchasePlan(selectedPlan);
+      const result = await purchasePlan(
+        selectedPlan,
+        authSession.appAccountToken,
+      );
 
       if (result.success) {
-        // Verified StoreKit transaction — activate entitlement
-        await activateSubscriptionFromIAP(
-          user.id,
-          result.plan,
-          result.transactionId,
-          result.purchaseTime,
-        );
+        if (
+          !result.appAccountToken ||
+          result.appAccountToken !== authSession.appAccountToken
+        ) {
+          throw new Error(
+            "This Apple transaction is not linked to the authenticated Drive Legal account.",
+          );
+        }
 
         const currentPeriodEnd = new Date(
           result.plan === "annual"
@@ -328,14 +342,15 @@ export default function PaywallScreen() {
         const serverResult = await syncSubscriptionToCloud({
           status: "active",
           plan: result.plan,
-          subscriptionId: result.transactionId,
+          subscriptionId: result.originalTransactionId ?? result.transactionId,
           currentPeriodEnd,
+          appAccountToken: result.appAccountToken,
         });
 
         if (!serverResult.success) {
           throw new Error(
             serverResult.error ??
-              "Unable to save your subscription to your account.",
+              "Your App Store purchase completed, but Drive Legal could not confirm it for this account. Stay signed into this account and tap Restore Purchases, or contact support.",
           );
         }
 
@@ -393,32 +408,48 @@ export default function PaywallScreen() {
       return;
     }
 
+    const authSession = await getAuthSession();
+
+    if (!authSession?.appAccountToken) {
+      Alert.alert(
+        "Session Refresh Required",
+        "Please sign out and sign back into this Drive Legal account before restoring purchases.",
+      );
+      return;
+    }
+
     setRestoring(true);
 
     try {
       const entitlement = await checkCurrentEntitlement();
 
       if (entitlement.isActive && entitlement.plan) {
-        // Confirmed active entitlement via StoreKit — activate locally.
-        // Use the real product identifier as the transactionId.
-        await activateSubscriptionFromIAP(
-          user.id,
-          entitlement.plan,
-          entitlement.transactionId ?? entitlement.plan,
-          Date.now(),
-        );
+        if (
+          !entitlement.appAccountToken ||
+          entitlement.appAccountToken !== authSession.appAccountToken
+        ) {
+          Alert.alert(
+            "Restore Unavailable",
+            "This Apple subscription is not linked to the currently signed-in Drive Legal account, so it cannot be restored here automatically.",
+          );
+          return;
+        }
 
         const serverResult = await syncSubscriptionToCloud({
           status: "active",
           plan: entitlement.plan,
-          subscriptionId: entitlement.transactionId ?? entitlement.plan,
+          subscriptionId:
+            entitlement.originalTransactionId ??
+            entitlement.transactionId ??
+            entitlement.plan,
           currentPeriodEnd: entitlement.expiryDate?.toISOString() ?? null,
+          appAccountToken: entitlement.appAccountToken,
         });
 
         if (!serverResult.success) {
           throw new Error(
             serverResult.error ??
-              "Unable to save your subscription to your account.",
+              "Drive Legal could not confirm this Apple subscription for the authenticated account.",
           );
         }
 

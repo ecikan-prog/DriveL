@@ -33,8 +33,10 @@ import {
   getAuthSession,
   getDeviceLabel,
   getOrCreateDeviceId,
+  patchAuthSession,
   saveAuthSession,
   setPendingLogoutNotice,
+  subscribeToSessionInvalidation,
 } from "./app-session";
 
 import { migrateLogCalculations } from "./logbook-storage";
@@ -135,6 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (
       driver: Awaited<ReturnType<typeof restoreDriverSessionCloud>>["driver"],
       passwordHash?: string,
+      options?: { pullLogs?: boolean },
     ): Promise<
       | {
           success: true;
@@ -193,8 +196,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         plan: driver.subscriptionPlan,
       });
 
-      await pullLogsFromCloud(driver.localUserId);
-      await migrateLogCalculations(driver.localUserId);
+      if (driver.appAccountToken) {
+        await patchAuthSession({
+          appAccountToken: driver.appAccountToken,
+        });
+      }
+
+      if (options?.pullLogs !== false) {
+        await pullLogsFromCloud(driver.localUserId);
+        await migrateLogCalculations(driver.localUserId);
+      }
 
       setUser(localResult.user);
 
@@ -223,6 +234,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
     [clearAuthenticatedState],
   );
+
+  useEffect(() => {
+    return subscribeToSessionInvalidation(() => {
+      void clearAuthenticatedState();
+    });
+  }, [clearAuthenticatedState]);
 
   /**
    * Restore the currently authenticated local session.
@@ -260,12 +277,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const result = await restoreDriverSessionCloud();
 
         if (result.success && result.driver) {
-          const applied = await applyAuthenticatedDriver(result.driver);
+          const applied = await applyAuthenticatedDriver(
+            result.driver,
+            undefined,
+            { pullLogs: false },
+          );
 
           return applied.success;
         }
 
-        if (result.revoked) {
+        if (result.revoked || result.sessionInvalid) {
           await forceLogout(
             "You’ve been signed out because this account was signed in on another device.",
           );
@@ -302,12 +323,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             return;
           }
 
-          const valid = await validateAuthenticatedSession();
+          const restored = await restoreDriverSessionCloud();
 
-          if (valid) {
-            pushLogsToCloud(currentUser.id).catch((error) => {
-              console.error("[Auth] Background log sync failed:", error);
-            });
+          if (restored.success && restored.driver) {
+            const applied = await applyAuthenticatedDriver(
+              restored.driver,
+              undefined,
+              { pullLogs: true },
+            );
+
+            if (applied.success) {
+              pushLogsToCloud(currentUser.id).catch((error) => {
+                console.error("[Auth] Background log sync failed:", error);
+              });
+            }
+          } else if (restored.revoked || restored.sessionInvalid) {
+            await forceLogout(
+              "You’ve been signed out because this account was signed in on another device.",
+            );
+          } else {
+            const valid = await validateAuthenticatedSession();
+
+            if (valid) {
+              pushLogsToCloud(currentUser.id).catch((error) => {
+                console.error("[Auth] Background log sync failed:", error);
+              });
+            }
           }
         }
       } catch (error) {
@@ -324,7 +365,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       mounted = false;
     };
-  }, [forceLogout, validateAuthenticatedSession]);
+  }, [applyAuthenticatedDriver, forceLogout, validateAuthenticatedSession]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -427,8 +468,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           sessionToken: cloudResult.sessionToken,
           deviceId,
           deviceLabel,
+          appAccountToken: driver.appAccountToken ?? undefined,
         });
-        const applied = await applyAuthenticatedDriver(driver, passwordHash);
+        const applied = await applyAuthenticatedDriver(driver, passwordHash, {
+          pullLogs: true,
+        });
 
         if (!applied.success) {
           await clearAuthSession();
@@ -574,7 +618,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
 
     await pushLogsToCloud(user.id);
-  }, [user]);
+  }, [clearAuthenticatedState, user]);
 
   /**
    * Delete the user's account from the cloud and clear local session.
@@ -616,8 +660,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // If server deletion succeeds, clear local session
-      await LocalAuth.logoutUser();
-      setUser(null);
+      await clearAuthenticatedState();
 
       return { success: true };
     } catch (error) {

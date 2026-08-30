@@ -74,6 +74,7 @@ export const drivers = mysqlTable("drivers", {
   ])
     .default("trial")
     .notNull(),
+  appAccountToken: varchar("appAccountToken", { length: 36 }),
   subscriptionPlan: mysqlEnum("subscriptionPlan", ["monthly", "annual"]),
   subscriptionId: varchar("subscriptionId", { length: 255 }),
   currentPeriodEnd: varchar("currentPeriodEnd", { length: 32 }),

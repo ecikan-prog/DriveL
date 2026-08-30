@@ -2,7 +2,7 @@ import { initTRPC } from "@trpc/server";
 import { z } from "zod";
 import crypto from "crypto";
 
-import { query } from "./db";
+import { query, withTransaction } from "./db";
 import type { Context } from "./context";
 import { sendPasswordResetEmail, sendVerificationEmail } from "./email";
 
@@ -57,6 +57,10 @@ function createSessionToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }
 
+function createAppAccountToken(): string {
+  return crypto.randomUUID();
+}
+
 function hashSessionToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
@@ -97,6 +101,7 @@ async function getDriverForSessionToken(
       trialStartDate,
       createdAt,
       trialEndDate,
+      appAccountToken,
       subscriptionStatus,
       subscriptionPlan,
       subscriptionId,
@@ -112,19 +117,45 @@ async function getDriverForSessionToken(
     [hashSessionToken(sessionToken)],
   );
 
-  return rows[0] ?? null;
+  const driver = rows[0] ?? null;
+
+  if (!driver) {
+    return null;
+  }
+
+  if (!driver.appAccountToken) {
+    driver.appAccountToken = createAppAccountToken();
+
+    await query(
+      `
+      UPDATE drivers
+      SET
+        appAccountToken = ?,
+        updatedAt = NOW()
+      WHERE localUserId = ?
+      LIMIT 1
+      `,
+      [driver.appAccountToken, driver.localUserId],
+    );
+  }
+
+  return driver;
 }
 
 async function requireDriverSession(
   authHeader: string | undefined,
   expectedLocalUserId?: string,
-): Promise<{ ok: true; driver: any } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; driver: any }
+  | { ok: false; error: string; sessionInvalid: boolean }
+> {
   const driver = await getDriverForSessionToken(authHeader);
 
   if (!driver) {
     return {
       ok: false,
       error: "Your Drive Legal session has expired. Please sign in again.",
+      sessionInvalid: true,
     };
   }
 
@@ -132,6 +163,7 @@ async function requireDriverSession(
     return {
       ok: false,
       error: "You are not authorised for this account.",
+      sessionInvalid: false,
     };
   }
 
@@ -158,6 +190,7 @@ function toDriverPayload(driver: any) {
     trialStartDate: driver.trialStartDate,
     createdAt: driver.createdAt,
     trialEndDate: driver.trialEndDate,
+    appAccountToken: driver.appAccountToken,
     subscriptionStatus: driver.subscriptionStatus,
     subscriptionPlan: driver.subscriptionPlan,
     subscriptionId: driver.subscriptionId,
@@ -376,9 +409,10 @@ export const appRouter = t.router({
               emailVerified,
               trialStartDate,
               trialEndDate,
+              appAccountToken,
               subscriptionStatus
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, ?, ?, ?, ?)
             `,
             [
               input.localUserId,
@@ -396,6 +430,7 @@ export const appRouter = t.router({
               input.operatorName?.trim() || null,
               trialStartDate,
               trialEndDate,
+              createAppAccountToken(),
               "trial",
             ],
           );
@@ -479,109 +514,118 @@ export const appRouter = t.router({
         const email = normaliseEmail(input.email);
 
         try {
-          const rows = await query<any>(
-            `
-            SELECT
-              localUserId,
-              email,
-              passwordHash,
-              name,
-              dateOfBirth,
-              tslNumber,
-              operatorName,
-              licenceNumber,
-              licenceClass,
-              licenceExpiry,
-              vehicleRegistration,
-              vehicleType,
-              driverType,
-              trialStartDate,
-              createdAt,
-              trialEndDate,
-              subscriptionStatus,
-              subscriptionPlan,
-              subscriptionId,
-              currentPeriodEnd,
-              emailVerified,
-              activeSessionTokenHash,
-              activeDeviceId,
-              activeDeviceLabel
-            FROM drivers
-            WHERE email = ?
-              AND deletedAt IS NULL
-            LIMIT 1
-            `,
-            [email],
-          );
+          return await withTransaction(async (connection) => {
+            const [rows] = await connection.execute<any[]>(
+              `
+              SELECT
+                localUserId,
+                email,
+                passwordHash,
+                name,
+                dateOfBirth,
+                tslNumber,
+                operatorName,
+                licenceNumber,
+                licenceClass,
+                licenceExpiry,
+                vehicleRegistration,
+                vehicleType,
+                driverType,
+                trialStartDate,
+                createdAt,
+                trialEndDate,
+                appAccountToken,
+                subscriptionStatus,
+                subscriptionPlan,
+                subscriptionId,
+                currentPeriodEnd,
+                emailVerified,
+                activeSessionTokenHash,
+                activeDeviceId,
+                activeDeviceLabel
+              FROM drivers
+              WHERE email = ?
+                AND deletedAt IS NULL
+              LIMIT 1
+              FOR UPDATE
+              `,
+              [email],
+            );
 
-          if (rows.length === 0) {
+            if (rows.length === 0) {
+              return {
+                success: false,
+                error: "Invalid email address or password.",
+              };
+            }
+
+            const driver = rows[0];
+
+            if (driver.passwordHash !== input.passwordHash) {
+              return {
+                success: false,
+                error: "Invalid email address or password.",
+              };
+            }
+
+            if (!driver.emailVerified) {
+              return {
+                success: false,
+                verificationRequired: true,
+                email,
+                error: "Please verify your email address before signing in.",
+              };
+            }
+
+            const hasOtherActiveDevice =
+              Boolean(driver.activeSessionTokenHash) &&
+              driver.activeDeviceId &&
+              driver.activeDeviceId !== input.deviceId;
+
+            if (hasOtherActiveDevice && !input.forceContinue) {
+              return {
+                success: false,
+                sessionConflict: true,
+                error: "This account is currently active on another device.",
+              };
+            }
+
+            const sessionToken = createSessionToken();
+            const sessionTokenHash = hashSessionToken(sessionToken);
+            const appAccountToken =
+              driver.appAccountToken || createAppAccountToken();
+
+            await connection.execute(
+              `
+              UPDATE drivers
+              SET
+                activeSessionTokenHash = ?,
+                activeDeviceId = ?,
+                activeDeviceLabel = ?,
+                activeSessionUpdatedAt = NOW(),
+                appAccountToken = ?,
+                updatedAt = NOW()
+              WHERE localUserId = ?
+              LIMIT 1
+              `,
+              [
+                sessionTokenHash,
+                input.deviceId,
+                input.deviceLabel,
+                appAccountToken,
+                driver.localUserId,
+              ],
+            );
+
             return {
-              success: false,
-              error: "Invalid email address or password.",
+              success: true,
+              sessionToken,
+              driver: toDriverPayload({
+                ...driver,
+                appAccountToken,
+              }),
             };
-          }
-
-          const driver = rows[0];
-
-          if (driver.passwordHash !== input.passwordHash) {
-            return {
-              success: false,
-              error: "Invalid email address or password.",
-            };
-          }
-
-          if (!driver.emailVerified) {
-            return {
-              success: false,
-              verificationRequired: true,
-              email,
-              error: "Please verify your email address before signing in.",
-            };
-          }
-
-          const hasOtherActiveDevice =
-            Boolean(driver.activeSessionTokenHash) &&
-            driver.activeDeviceId &&
-            driver.activeDeviceId !== input.deviceId;
-
-          if (hasOtherActiveDevice && !input.forceContinue) {
-            return {
-              success: false,
-              sessionConflict: true,
-              error: "This account is currently active on another device.",
-            };
-          }
-
-          const sessionToken = createSessionToken();
-          const sessionTokenHash = hashSessionToken(sessionToken);
-
-          await query(
-            `
-            UPDATE drivers
-            SET
-              activeSessionTokenHash = ?,
-              activeDeviceId = ?,
-              activeDeviceLabel = ?,
-              activeSessionUpdatedAt = NOW(),
-              updatedAt = NOW()
-            WHERE localUserId = ?
-            LIMIT 1
-            `,
-            [
-              sessionTokenHash,
-              input.deviceId,
-              input.deviceLabel,
-              driver.localUserId,
-            ],
-          );
-
-          return {
-            success: true,
-            sessionToken,
-            driver: {
-              ...toDriverPayload(driver),
-            },
-          };
+          });
         } catch (error) {
           console.error("[DriverAuth] Login failed:", error);
 
@@ -600,6 +644,7 @@ export const appRouter = t.router({
           return {
             success: false,
             revoked: true,
+            sessionInvalid: session.sessionInvalid,
             error: session.error,
           };
         }
@@ -1020,6 +1065,7 @@ export const appRouter = t.router({
           if (session.ok === false) {
             return {
               success: false,
+              sessionInvalid: session.sessionInvalid,
               error: session.error,
             };
           }
@@ -1103,6 +1149,7 @@ export const appRouter = t.router({
           if (session.ok === false) {
             return {
               success: false,
+              sessionInvalid: session.sessionInvalid,
               error: session.error,
             };
           }
@@ -1173,6 +1220,7 @@ export const appRouter = t.router({
           plan: z.enum(["monthly", "annual"]).nullable().optional(),
           subscriptionId: z.string().max(255).nullable().optional(),
           currentPeriodEnd: z.string().max(64).nullable().optional(),
+          appAccountToken: z.string().uuid().nullable().optional(),
         }),
       )
       .mutation(async ({ ctx, input }) => {
@@ -1182,8 +1230,27 @@ export const appRouter = t.router({
           if (session.ok === false) {
             return {
               success: false,
+              sessionInvalid: session.sessionInvalid,
               error: session.error,
             };
+          }
+
+          if (input.status === "active") {
+            if (!input.appAccountToken) {
+              return {
+                success: false,
+                error:
+                  "This Apple subscription is not linked to the authenticated Drive Legal account.",
+              };
+            }
+
+            if (session.driver.appAccountToken !== input.appAccountToken) {
+              return {
+                success: false,
+                error:
+                  "This Apple subscription belongs to a different Drive Legal account.",
+              };
+            }
           }
 
           await query(
@@ -1263,6 +1330,7 @@ export const appRouter = t.router({
               success: false,
               inserted,
               skipped,
+              sessionInvalid: session.sessionInvalid,
               error: session.error,
             };
           }
@@ -1349,6 +1417,7 @@ export const appRouter = t.router({
             return {
               success: false,
               logs: [],
+              sessionInvalid: session.sessionInvalid,
               error: session.error,
             };
           }
@@ -1409,6 +1478,7 @@ export const appRouter = t.router({
           if (session.ok === false) {
             return {
               success: false,
+              sessionInvalid: session.sessionInvalid,
               error: session.error,
             };
           }
@@ -1457,6 +1527,7 @@ export const appRouter = t.router({
             return {
               success: false,
               shift: null,
+              sessionInvalid: session.sessionInvalid,
               error: session.error,
             };
           }
@@ -1515,6 +1586,7 @@ export const appRouter = t.router({
           if (session.ok === false) {
             return {
               success: false,
+              sessionInvalid: session.sessionInvalid,
               error: session.error,
             };
           }
