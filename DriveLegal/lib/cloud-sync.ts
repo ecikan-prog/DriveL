@@ -14,6 +14,7 @@ import {
   type ActiveShift,
 } from "./logbook-storage";
 import type { DriverType } from "@/lib/local-auth";
+import { getAuthSession } from "./app-session";
 
 const SYNC_STATUS_KEY = "dl_sync_status";
 
@@ -78,6 +79,17 @@ async function trpcCall(
   method: "query" | "mutation" = "mutation"
 ): Promise<any> {
   try {
+    const authSession = await getAuthSession();
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    };
+
+    if (authSession?.sessionToken) {
+      headers.Authorization =
+        "Bearer " + authSession.sessionToken;
+    }
+
     let response: Response;
 
     if (method === "query") {
@@ -89,19 +101,13 @@ async function trpcCall(
         `${API_BASE}/${path}?input=${encodedInput}`,
         {
           method: "GET",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
+          headers,
         }
       );
     } else {
       response = await fetch(`${API_BASE}/${path}`, {
         method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify(input),
       });
     }
@@ -324,11 +330,21 @@ export async function registerDriverCloud(params: {
  * Authenticate a driver against the cloud DB.
  * Returns driver profile if successful, null otherwise.
  */
-export async function loginDriverCloud(email: string, passwordHash: string): Promise<{
+export async function loginDriverCloud(
+  email: string,
+  passwordHash: string,
+  options: {
+    deviceId: string;
+    deviceLabel: string;
+    forceContinue?: boolean;
+  }
+): Promise<{
   success: boolean;
   error?: string;
   verificationRequired?: boolean;
+  sessionConflict?: boolean;
   email?: string;
+  sessionToken?: string;
   driver?: {
     localUserId: string;
     email: string;
@@ -351,8 +367,73 @@ export async function loginDriverCloud(email: string, passwordHash: string): Pro
     currentPeriodEnd: string | null;
   };
 }> {
-  const result = await trpcCall("driverAuth.login", { email, passwordHash });
+  const result = await trpcCall("driverAuth.login", {
+    email,
+    passwordHash,
+    ...options,
+  });
   if (!result) return { success: false, error: "Network error. Using local account." };
+  return result;
+}
+
+export async function restoreDriverSessionCloud(): Promise<{
+  success: boolean;
+  revoked?: boolean;
+  error?: string;
+  driver?: {
+    localUserId: string;
+    email: string;
+    name: string;
+    dateOfBirth: string | null;
+    tslNumber: string | null;
+    operatorName: string | null;
+    licenceNumber: string | null;
+    licenceClass: string | null;
+    licenceExpiry: string | null;
+    vehicleRegistration: string | null;
+    vehicleType: string | null;
+    driverType: DriverType;
+    trialStartDate: string | null;
+    createdAt: string | null;
+    trialEndDate: string | null;
+    subscriptionStatus: "trial" | "active" | "expired" | "cancelled";
+    subscriptionPlan: "monthly" | "annual" | null;
+    subscriptionId: string | null;
+    currentPeriodEnd: string | null;
+  };
+}> {
+  const result = await trpcCall("driverAuth.currentSession", {}, "query");
+
+  if (!result) {
+    return { success: false, error: "Network error." };
+  }
+
+  return result;
+}
+
+export async function logoutDriverCloud(): Promise<void> {
+  await trpcCall("driverAuth.logout", {});
+}
+
+export async function syncSubscriptionToCloud(params: {
+  status: "trial" | "active" | "expired" | "cancelled";
+  plan?: "monthly" | "annual" | null;
+  subscriptionId?: string | null;
+  currentPeriodEnd?: string | null;
+}): Promise<{
+  success: boolean;
+  error?: string;
+  subscriptionStatus?: "trial" | "active" | "expired" | "cancelled";
+  subscriptionPlan?: "monthly" | "annual" | null;
+  subscriptionId?: string | null;
+  currentPeriodEnd?: string | null;
+}> {
+  const result = await trpcCall("driverAuth.syncSubscription", params);
+
+  if (!result) {
+    return { success: false, error: "Network error." };
+  }
+
   return result;
 }
 

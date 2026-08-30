@@ -1,6 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -18,6 +19,7 @@ import {
 
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuthContext } from "@/lib/auth-context";
+import { consumePendingLogoutNotice } from "@/lib/app-session";
 import {
   hasPin,
   removePin,
@@ -59,6 +61,25 @@ export default function LoginScreen() {
     password.trim().length > 0 &&
     !loading;
 
+  useEffect(() => {
+    consumePendingLogoutNotice()
+      .then((message) => {
+        if (!message) {
+          return;
+        }
+
+        setError(message);
+
+        if (Platform.OS !== "web") {
+          Alert.alert(
+            "Signed Out",
+            message
+          );
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const handleLogin = async () => {
     if (loading) {
       return;
@@ -87,6 +108,78 @@ export default function LoginScreen() {
         normalizedEmail,
         password
       );
+
+      if (result.sessionConflict) {
+        Alert.alert(
+          "Account Active Elsewhere",
+          "This account is currently active on another device.",
+          [
+            {
+              text: "Cancel",
+              style: "cancel",
+            },
+            {
+              text: "Continue on this device",
+              onPress: () => {
+                void (async () => {
+                  setLoading(true);
+
+                  try {
+                    const confirmed =
+                      await login(
+                        normalizedEmail,
+                        password,
+                        {
+                          forceContinue: true,
+                        }
+                      );
+
+                    if (
+                      confirmed.success &&
+                      confirmed.userId
+                    ) {
+                      if (resetPinRequested) {
+                        await removePin(
+                          confirmed.userId
+                        );
+
+                        router.replace(
+                          "/setup-pin?next=/" as any
+                        );
+                        return;
+                      }
+
+                      const pinExists =
+                        await hasPin(
+                          confirmed.userId
+                        );
+
+                      if (!pinExists) {
+                        router.replace(
+                          "/setup-pin?next=/" as any
+                        );
+                      } else {
+                        router.replace(
+                          "/pin-login" as any
+                        );
+                      }
+                      return;
+                    }
+
+                    setError(
+                      confirmed.error ??
+                        "Unable to sign in. Please try again."
+                    );
+                  } finally {
+                    setLoading(false);
+                  }
+                })();
+              },
+            },
+          ]
+        );
+        return;
+      }
 
       if (result.success) {
         if (!result.userId) {

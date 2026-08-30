@@ -196,6 +196,7 @@ export async function updateUserProfile(
   updates: Partial<
   Pick<
     Driver,
+    | "name"
     | "vehicleRegistration"
     | "vehicleType"
     | "driverType"
@@ -208,6 +209,18 @@ export async function updateUserProfile(
   const users = await getAllUsers();
   const idx = users.findIndex((u) => u.id === userId);
   if (idx === -1) return { success: false, error: "User not found." };
+  if (updates.name !== undefined) {
+  const name = updates.name.trim();
+
+  if (!name) {
+    return {
+      success: false,
+      error: "Name cannot be empty.",
+    };
+  }
+
+  updates.name = name;
+}
   const validDriverTypes: DriverType[] = [
   "goods",
   "large_passenger",
@@ -313,7 +326,7 @@ export async function createLocalAccountFromCloud(params: {
   email: string;
   name: string;
   dateOfBirth: string;
-  passwordHash: string;
+  passwordHash?: string;
   tslNumber: string;
   licenceNumber: string;
   vehicleRegistration: string;
@@ -337,7 +350,9 @@ export async function createLocalAccountFromCloud(params: {
       ...existing,
       name: params.name,
       dateOfBirth: params.dateOfBirth,
-      passwordHash: params.passwordHash,
+      passwordHash:
+        params.passwordHash ??
+        existing.passwordHash,
       tslNumber: params.tslNumber,
       licenceNumber: params.licenceNumber,
       vehicleRegistration: params.vehicleRegistration,
@@ -359,7 +374,7 @@ export async function createLocalAccountFromCloud(params: {
     name: params.name,
     dateOfBirth: params.dateOfBirth,
     email: emailLower,
-    passwordHash: params.passwordHash,
+    passwordHash: params.passwordHash ?? "",
     tslNumber: params.tslNumber,
     licenceNumber: params.licenceNumber,
     vehicleRegistration: params.vehicleRegistration,

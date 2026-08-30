@@ -2,17 +2,16 @@
  * Subscription management for Drive Legal.
  *
  * Source-of-truth hierarchy (highest → lowest):
- *   1. StoreKit / react-native-iap  (iOS production entitlement)
- *   2. Railway/MySQL server              (synced on login via syncSubscriptionFromServer)
- *   3. AsyncStorage cache                (display only — never overrides StoreKit)
+ *   1. Authenticated Drive Legal account on Railway/MySQL
+ *   2. Explicit StoreKit purchase / restore action for that authenticated account
+ *   3. AsyncStorage cache
  *
  * Rules
  * ─────
- * • AsyncStorage is ONLY a display cache.  It is always overwritten by the
- *   real StoreKit state; it never upgrades status on its own.
+ * • AsyncStorage is ONLY an account-scoped cache.
  * • activateSubscriptionFromIAP() is the only function that marks a
- *   subscription "active" from within the app.  It requires a verified
- *   StoreKit transaction ID — there is no fake/demo activation path.
+ *   subscription "active" from within the app after an explicit purchase or
+ *   restore for the authenticated account.
  * • The 21-day free trial is an Apple introductory offer configured in
  *   App Store Connect.  The local trialEndDate field is kept for
  *   backward-compatibility with the server schema; it is NOT the gating
@@ -60,6 +59,7 @@ export async function syncSubscriptionFromServer(params: {
   subscriptionId?: string | null;
   currentPeriodEnd?: string | null;
   plan?: "monthly" | "annual" | null;
+  iapVerified?: boolean;
 }): Promise<SubscriptionState> {
   const existingRaw = await AsyncStorage.getItem(`${SUBSCRIPTION_KEY}_${params.userId}`);
   const existingState = existingRaw
@@ -97,7 +97,7 @@ export async function syncSubscriptionFromServer(params: {
     plan: params.plan ?? undefined,
     lastChecked: new Date().toISOString(),
     lastServerSync: new Date().toISOString(),
-    iapVerified: false,
+    iapVerified: params.iapVerified ?? false,
   };
 
   await saveSubscriptionState(state);

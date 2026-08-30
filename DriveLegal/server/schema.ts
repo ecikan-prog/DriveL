@@ -49,6 +49,25 @@ export const drivers = mysqlTable("drivers", {
   /** Whether the driver has verified their email address */
   emailVerified: boolean("emailVerified").default(false).notNull(),
   trialStartDate: varchar("trialStartDate", { length: 32 }),
+  trialEndDate: varchar("trialEndDate", { length: 32 }),
+  subscriptionStatus: mysqlEnum("subscriptionStatus", [
+    "trial",
+    "active",
+    "expired",
+    "cancelled",
+  ]).default("trial").notNull(),
+  subscriptionPlan: mysqlEnum("subscriptionPlan", [
+    "monthly",
+    "annual",
+  ]),
+  subscriptionId: varchar("subscriptionId", { length: 255 }),
+  currentPeriodEnd: varchar("currentPeriodEnd", { length: 32 }),
+  activeSessionTokenHash: varchar("activeSessionTokenHash", {
+    length: 128,
+  }),
+  activeDeviceId: varchar("activeDeviceId", { length: 128 }),
+  activeDeviceLabel: varchar("activeDeviceLabel", { length: 255 }),
+  activeSessionUpdatedAt: timestamp("activeSessionUpdatedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

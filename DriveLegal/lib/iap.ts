@@ -287,6 +287,10 @@ export async function checkCurrentEntitlement(): Promise<EntitlementResult> {
 
   await ensureConnected();
 
+  await IAP.getSubscriptions({
+    skus: Object.values(IAP_PRODUCT_IDS),
+  });
+
   const purchases = await IAP.getAvailablePurchases();
 
   const knownSkus = Object.values(IAP_PRODUCT_IDS) as string[];

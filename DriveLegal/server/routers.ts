@@ -55,6 +55,132 @@ function createExpiry(hours: number): Date {
   return new Date(Date.now() + hours * 60 * 60 * 1000);
 }
 
+function createSessionToken(): string {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+function hashSessionToken(token: string): string {
+  return crypto
+    .createHash("sha256")
+    .update(token)
+    .digest("hex");
+}
+
+function extractSessionToken(
+  authHeader: string | undefined
+): string | null {
+  if (!authHeader) {
+    return null;
+  }
+
+  const match = /^Bearer\s+(.+)$/.exec(authHeader.trim());
+  return match?.[1]?.trim() || null;
+}
+
+async function getDriverForSessionToken(
+  authHeader: string | undefined
+): Promise<any | null> {
+  const sessionToken =
+    extractSessionToken(authHeader);
+
+  if (!sessionToken) {
+    return null;
+  }
+
+  const rows = await query<any[]>(
+    `
+    SELECT
+      localUserId,
+      email,
+      name,
+      dateOfBirth,
+      tslNumber,
+      operatorName,
+      licenceNumber,
+      licenceClass,
+      licenceExpiry,
+      vehicleRegistration,
+      vehicleType,
+      driverType,
+      trialStartDate,
+      createdAt,
+      trialEndDate,
+      subscriptionStatus,
+      subscriptionPlan,
+      subscriptionId,
+      currentPeriodEnd,
+      activeSessionTokenHash,
+      activeDeviceId,
+      activeDeviceLabel
+    FROM drivers
+    WHERE activeSessionTokenHash = ?
+      AND deletedAt IS NULL
+    LIMIT 1
+    `,
+    [hashSessionToken(sessionToken)]
+  );
+
+  return rows[0] ?? null;
+}
+
+async function requireDriverSession(
+  authHeader: string | undefined,
+  expectedLocalUserId?: string
+): Promise<
+  | { ok: true; driver: any }
+  | { ok: false; error: string }
+> {
+  const driver =
+    await getDriverForSessionToken(authHeader);
+
+  if (!driver) {
+    return {
+      ok: false,
+      error:
+        "Your Drive Legal session has expired. Please sign in again.",
+    };
+  }
+
+  if (
+    expectedLocalUserId &&
+    driver.localUserId !== expectedLocalUserId
+  ) {
+    return {
+      ok: false,
+      error: "You are not authorised for this account.",
+    };
+  }
+
+  return {
+    ok: true,
+    driver,
+  };
+}
+
+function toDriverPayload(driver: any) {
+  return {
+    localUserId: driver.localUserId,
+    email: driver.email,
+    name: driver.name,
+    dateOfBirth: driver.dateOfBirth,
+    tslNumber: driver.tslNumber,
+    operatorName: driver.operatorName,
+    licenceNumber: driver.licenceNumber,
+    licenceClass: driver.licenceClass,
+    licenceExpiry: driver.licenceExpiry,
+    vehicleRegistration: driver.vehicleRegistration,
+    vehicleType: driver.vehicleType,
+    driverType: driver.driverType,
+    trialStartDate: driver.trialStartDate,
+    createdAt: driver.createdAt,
+    trialEndDate: driver.trialEndDate,
+    subscriptionStatus: driver.subscriptionStatus,
+    subscriptionPlan: driver.subscriptionPlan,
+    subscriptionId: driver.subscriptionId,
+    currentPeriodEnd: driver.currentPeriodEnd,
+  };
+}
+
 console.log("ROUTERS FILE LOADED");
 
 export const appRouter = t.router({
@@ -358,6 +484,9 @@ export const appRouter = t.router({
         z.object({
           email: z.string().email(),
           passwordHash: z.string().min(1),
+          deviceId: z.string().min(1).max(128),
+          deviceLabel: z.string().min(1).max(255),
+          forceContinue: z.boolean().optional(),
         })
       )
       .mutation(async ({ input }) => {
@@ -387,7 +516,10 @@ export const appRouter = t.router({
               subscriptionPlan,
               subscriptionId,
               currentPeriodEnd,
-            emailVerified
+              emailVerified,
+              activeSessionTokenHash,
+              activeDeviceId,
+              activeDeviceLabel
             FROM drivers
             WHERE email = ?
               AND deletedAt IS NULL
@@ -421,28 +553,53 @@ export const appRouter = t.router({
             };
           }
 
+          const hasOtherActiveDevice =
+            Boolean(driver.activeSessionTokenHash) &&
+            driver.activeDeviceId &&
+            driver.activeDeviceId !== input.deviceId;
+
+          if (
+            hasOtherActiveDevice &&
+            !input.forceContinue
+          ) {
+            return {
+              success: false,
+              sessionConflict: true,
+              error:
+                "This account is currently active on another device.",
+            };
+          }
+
+          const sessionToken =
+            createSessionToken();
+          const sessionTokenHash =
+            hashSessionToken(sessionToken);
+
+          await query(
+            `
+            UPDATE drivers
+            SET
+              activeSessionTokenHash = ?,
+              activeDeviceId = ?,
+              activeDeviceLabel = ?,
+              activeSessionUpdatedAt = NOW(),
+              updatedAt = NOW()
+            WHERE localUserId = ?
+            LIMIT 1
+            `,
+            [
+              sessionTokenHash,
+              input.deviceId,
+              input.deviceLabel,
+              driver.localUserId,
+            ]
+          );
+
           return {
             success: true,
+            sessionToken,
             driver: {
-              localUserId: driver.localUserId,
-              email: driver.email,
-              name: driver.name,
-              dateOfBirth: driver.dateOfBirth,
-              tslNumber: driver.tslNumber,
-              operatorName: driver.operatorName,
-              licenceNumber: driver.licenceNumber,
-              licenceClass: driver.licenceClass,
-              licenceExpiry: driver.licenceExpiry,
-              vehicleRegistration: driver.vehicleRegistration,
-              vehicleType: driver.vehicleType,
-              driverType: driver.driverType,
-              trialStartDate: driver.trialStartDate,
-              createdAt: driver.createdAt,
-              trialEndDate: driver.trialEndDate,
-              subscriptionStatus: driver.subscriptionStatus,
-              subscriptionPlan: driver.subscriptionPlan,
-              subscriptionId: driver.subscriptionId,
-              currentPeriodEnd: driver.currentPeriodEnd,
+              ...toDriverPayload(driver),
             },
           };
         } catch (error) {
@@ -451,6 +608,84 @@ export const appRouter = t.router({
           return {
             success: false,
             error: "Unable to sign in. Please try again.",
+          };
+        }
+      }),
+
+    currentSession: t.procedure
+      .query(async ({ ctx }) => {
+        try {
+          const session =
+            await requireDriverSession(
+              ctx.authHeader
+            );
+
+          if (!session.ok) {
+            return {
+              success: false,
+              revoked: true,
+              error: session.error,
+            };
+          }
+
+          return {
+            success: true,
+            driver: toDriverPayload(
+              session.driver
+            ),
+          };
+        } catch (error) {
+          console.error(
+            "[DriverAuth] Current session failed:",
+            error
+          );
+
+          return {
+            success: false,
+            error:
+              "Unable to validate your session. Please try again.",
+          };
+        }
+      }),
+
+    logout: t.procedure
+      .mutation(async ({ ctx }) => {
+        try {
+          const sessionToken =
+            extractSessionToken(
+              ctx.authHeader
+            );
+
+          if (!sessionToken) {
+            return { success: true };
+          }
+
+          await query(
+            `
+            UPDATE drivers
+            SET
+              activeSessionTokenHash = NULL,
+              activeDeviceId = NULL,
+              activeDeviceLabel = NULL,
+              activeSessionUpdatedAt = NULL,
+              updatedAt = NOW()
+            WHERE activeSessionTokenHash = ?
+            LIMIT 1
+            `,
+            [hashSessionToken(sessionToken)]
+          );
+
+          return { success: true };
+        } catch (error) {
+          console.error(
+            "[DriverAuth] Logout failed:",
+            error
+          );
+
+          return {
+            success: false,
+            error:
+              "Unable to end the current session.",
           };
         }
       }),
@@ -822,10 +1057,29 @@ export const appRouter = t.router({
           email: z.string().email(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const email = normaliseEmail(input.email);
 
         try {
+          const session =
+            await requireDriverSession(
+              ctx.authHeader
+            );
+
+          if (!session.ok) {
+            return {
+              success: false,
+              error: session.error,
+            };
+          }
+
+          if (session.driver.email !== email) {
+            return {
+              success: false,
+              error: "You are not authorised for this account.",
+            };
+          }
+
           const rows = await query<any[]>(
             `
             SELECT localUserId, email
@@ -849,7 +1103,11 @@ export const appRouter = t.router({
             SET
               status = 'deleted',
               deletedAt = NOW(),
-              passwordHash = ''
+              passwordHash = '',
+              activeSessionTokenHash = NULL,
+              activeDeviceId = NULL,
+              activeDeviceLabel = NULL,
+              activeSessionUpdatedAt = NULL
             WHERE email = ?
             LIMIT 1
             `,
@@ -884,8 +1142,21 @@ export const appRouter = t.router({
           driverType: driverTypeSchema.optional(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         try {
+          const session =
+            await requireDriverSession(
+              ctx.authHeader,
+              input.localUserId
+            );
+
+          if (!session.ok) {
+            return {
+              success: false,
+              error: session.error,
+            };
+          }
+
           const existing = await query<any[]>(
             `
             SELECT id
@@ -944,6 +1215,90 @@ export const appRouter = t.router({
           };
         }
       }),
+
+    syncSubscription: t.procedure
+      .input(
+        z.object({
+          status: z.enum([
+            "trial",
+            "active",
+            "expired",
+            "cancelled",
+          ]),
+          plan: z
+            .enum(["monthly", "annual"])
+            .nullable()
+            .optional(),
+          subscriptionId: z
+            .string()
+            .max(255)
+            .nullable()
+            .optional(),
+          currentPeriodEnd: z
+            .string()
+            .max(64)
+            .nullable()
+            .optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        try {
+          const session =
+            await requireDriverSession(
+              ctx.authHeader
+            );
+
+          if (!session.ok) {
+            return {
+              success: false,
+              error: session.error,
+            };
+          }
+
+          await query(
+            `
+            UPDATE drivers
+            SET
+              subscriptionStatus = ?,
+              subscriptionPlan = ?,
+              subscriptionId = ?,
+              currentPeriodEnd = ?,
+              updatedAt = NOW()
+            WHERE localUserId = ?
+            LIMIT 1
+            `,
+            [
+              input.status,
+              input.plan ?? null,
+              input.subscriptionId ?? null,
+              input.currentPeriodEnd ?? null,
+              session.driver.localUserId,
+            ]
+          );
+
+          return {
+            success: true,
+            subscriptionStatus: input.status,
+            subscriptionPlan:
+              input.plan ?? null,
+            subscriptionId:
+              input.subscriptionId ?? null,
+            currentPeriodEnd:
+              input.currentPeriodEnd ?? null,
+          };
+        } catch (error) {
+          console.error(
+            "[DriverAuth] Subscription sync failed:",
+            error
+          );
+
+          return {
+            success: false,
+            error:
+              "Unable to save your subscription status.",
+          };
+        }
+      }),
   }),
 
   /**
@@ -969,11 +1324,26 @@ export const appRouter = t.router({
           ),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         let inserted = 0;
         let skipped = 0;
 
         try {
+          const session =
+            await requireDriverSession(
+              ctx.authHeader,
+              input.driverLocalUserId
+            );
+
+          if (!session.ok) {
+            return {
+              success: false,
+              inserted,
+              skipped,
+              error: session.error,
+            };
+          }
+
           for (const log of input.logs) {
             const existing = await query<any[]>(
               `
@@ -1045,8 +1415,22 @@ export const appRouter = t.router({
           driverLocalUserId: z.string().min(1),
         })
       )
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         try {
+          const session =
+            await requireDriverSession(
+              ctx.authHeader,
+              input.driverLocalUserId
+            );
+
+          if (!session.ok) {
+            return {
+              success: false,
+              logs: [],
+              error: session.error,
+            };
+          }
+
           const rows = await query<any[]>(
             `
             SELECT
@@ -1094,8 +1478,21 @@ export const appRouter = t.router({
           startTime: z.string().min(1),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         try {
+          const session =
+            await requireDriverSession(
+              ctx.authHeader,
+              input.driverLocalUserId
+            );
+
+          if (!session.ok) {
+            return {
+              success: false,
+              error: session.error,
+            };
+          }
+
           await query(
             `
             INSERT INTO active_shifts (
@@ -1132,8 +1529,22 @@ export const appRouter = t.router({
       driverLocalUserId: z.string().min(1),
     })
   )
-  .query(async ({ input }) => {
+  .query(async ({ ctx, input }) => {
     try {
+      const session =
+        await requireDriverSession(
+          ctx.authHeader,
+          input.driverLocalUserId
+        );
+
+      if (!session.ok) {
+        return {
+          success: false,
+          shift: null,
+          error: session.error,
+        };
+      }
+
       const rows = await query<any[]>(
         `
         SELECT
@@ -1181,8 +1592,21 @@ export const appRouter = t.router({
       driverLocalUserId: z.string().min(1),
     })
   )
-  .mutation(async ({ input }) => {
+  .mutation(async ({ ctx, input }) => {
     try {
+      const session =
+        await requireDriverSession(
+          ctx.authHeader,
+          input.driverLocalUserId
+        );
+
+      if (!session.ok) {
+        return {
+          success: false,
+          error: session.error,
+        };
+      }
+
       await query(
         `
         DELETE FROM active_shifts

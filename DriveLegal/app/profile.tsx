@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
+import { syncProfileToCloud } from "@/lib/cloud-sync";
 import { useAuthContext } from "@/lib/auth-context";
 import { useShiftContext } from "@/lib/shift-context";
 import {
@@ -23,7 +24,6 @@ import {
 } from "@/lib/local-auth";
 import {
   getSubscriptionState,
-  refreshIAPEntitlement,
   getTrialDaysLeft,
   type SubscriptionState,
 } from "@/lib/subscription";
@@ -366,9 +366,7 @@ export default function ProfileScreen() {
         setSubscriptionState(cached);
       }
 
-      const refreshed = await refreshIAPEntitlement(user.id).catch(() => cached);
       if (isMounted) {
-        setSubscriptionState(refreshed);
         setSubscriptionStatusLoading(false);
       }
     };
@@ -424,6 +422,7 @@ export default function ProfileScreen() {
     setSaving(true);
     try {
       const result = await updateUserProfile(user.id, {
+        name: form.name.trim(),
         operatorName: form.operatorName.trim() || undefined,
         licenceClass: form.licenceClass.trim() || undefined,
         licenceExpiry: form.licenceExpiry.trim() || undefined,
@@ -433,6 +432,26 @@ export default function ProfileScreen() {
       });
 
       if (result.success) {
+        await syncProfileToCloud({
+          localUserId: user.id,
+          name: form.name.trim(),
+          operatorName:
+            form.operatorName.trim() ||
+            undefined,
+          licenceClass:
+            form.licenceClass.trim() ||
+            undefined,
+          licenceExpiry:
+            form.licenceExpiry.trim() ||
+            undefined,
+          vehicleRegistration:
+            form.vehicleRegistration
+              .trim()
+              .toUpperCase(),
+          vehicleType: form.vehicleType,
+          driverType:
+            form.driverType as DriverType,
+        });
         await refreshUser();
         setEditing(false);
       } else {

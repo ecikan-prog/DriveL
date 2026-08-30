@@ -11,20 +11,31 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 
 import * as LocalAuth from "./local-auth";
 import type { DriverType } from "./local-auth";
 
 import {
   loginDriverCloud,
+  logoutDriverCloud,
   pullLogsFromCloud,
   pushLogsToCloud,
   registerDriverCloud,
   deleteDriverCloud,
+  restoreDriverSessionCloud,
 } from "./cloud-sync";
+import {
+  clearAuthSession,
+  getAuthSession,
+  getDeviceLabel,
+  getOrCreateDeviceId,
+  saveAuthSession,
+  setPendingLogoutNotice,
+} from "./app-session";
 
 import { migrateLogCalculations } from "./logbook-storage";
 import { lockPinSession } from "./pin-security";
@@ -38,6 +49,7 @@ type LoginResult = {
   userId?: string;
   error?: string;
   verificationRequired?: boolean;
+  sessionConflict?: boolean;
   email?: string;
 };
 
@@ -68,7 +80,8 @@ type AuthContextValue = {
   loading: boolean;
   login: (
     email: string,
-    password: string
+    password: string,
+    options?: { forceContinue?: boolean }
   ) => Promise<LoginResult>;
   register: (
     params: RegisterParams
@@ -109,125 +122,33 @@ export function AuthProvider({
   const [loading, setLoading] =
     useState(true);
 
-  /**
-   * Restore the currently authenticated local session.
-   */
-  const refreshUser = useCallback(async () => {
-    const currentUser =
-      await LocalAuth.getCurrentUser();
+  const sessionCheckInFlightRef =
+    useRef(false);
 
-    setUser(currentUser);
-  }, []);
-
-  /**
-   * Restore a previously verified session when the app starts.
-   */
-  useEffect(() => {
-    let mounted = true;
-
-    async function initialiseAuth() {
-      try {
-        const currentUser =
-          await LocalAuth.getCurrentUser();
-
-        if (!mounted) return;
-
-        setUser(currentUser);
-
-        if (currentUser) {
-          migrateLogCalculations(
-            currentUser.id
-          ).catch((error) => {
-            console.error(
-              "[Auth] Log migration failed:",
-              error
-            );
-          });
-
-          pushLogsToCloud(
-            currentUser.id
-          ).catch((error) => {
-            console.error(
-              "[Auth] Background log sync failed:",
-              error
-            );
-          });
-        }
-      } catch (error) {
-        console.error(
-          "[Auth] Initialisation failed:",
-          error
-        );
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    initialiseAuth();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  /**
-   * Sign in through the Railway backend.
-   *
-   * Important:
-   * We do not fall back to local authentication when cloud login fails.
-   * That fallback previously allowed unverified accounts to enter the app.
-   */
-  const login = useCallback(
-    async (
-      email: string,
-      password: string
-    ): Promise<LoginResult> => {
-      const normalisedEmail =
-        normaliseEmail(email);
-      lockPinSession();
-
-      const passwordHash =
-        LocalAuth.hashPassword(password);
-
-      try {
-        const cloudResult =
-          await loginDriverCloud(
-            normalisedEmail,
-            passwordHash
-          );
-
-        if (
-          !cloudResult.success &&
-          cloudResult.verificationRequired
-        ) {
-          return {
-            success: false,
-            verificationRequired: true,
-            email:
-              cloudResult.email ??
-              normalisedEmail,
-            error:
-              cloudResult.error ??
-              "Please verify your email address before signing in.",
-          };
-        }
-
-        if (
-          !cloudResult.success ||
-          !cloudResult.driver
-        ) {
+  const applyAuthenticatedDriver =
+    useCallback(
+      async (
+        driver: Awaited<
+          ReturnType<typeof restoreDriverSessionCloud>
+        >["driver"],
+        passwordHash?: string
+      ): Promise<
+        | {
+            success: true;
+            user: LocalAuth.AuthUser;
+          }
+        | {
+            success: false;
+            error: string;
+          }
+      > => {
+        if (!driver) {
           return {
             success: false,
             error:
-              cloudResult.error ??
-              "Unable to sign in. Please check your email and password.",
+              "Your account could not be loaded. Please sign in again.",
           };
         }
-
-        const driver =
-          cloudResult.driver;
 
         const localResult =
           await LocalAuth.createLocalAccountFromCloud(
@@ -235,7 +156,8 @@ export function AuthProvider({
               id: driver.localUserId,
               email: driver.email,
               name: driver.name,
-              dateOfBirth: driver.dateOfBirth ?? "",
+              dateOfBirth:
+                driver.dateOfBirth ?? "",
               passwordHash,
               tslNumber:
                 driver.tslNumber ?? "",
@@ -258,8 +180,7 @@ export function AuthProvider({
                 driver.trialStartDate ??
                 driver.createdAt ??
                 undefined,
-
-                createdAt:
+              createdAt:
                 driver.createdAt ??
                 driver.trialStartDate ??
                 undefined,
@@ -277,49 +198,353 @@ export function AuthProvider({
               "Your account was verified, but it could not be restored on this device.",
           };
         }
+
         await syncSubscriptionFromServer({
-  userId: driver.localUserId,
-  status: driver.subscriptionStatus,
-  trialStartDate:
-    driver.trialStartDate ??
-    driver.createdAt ??
-    localResult.user.trialStartDate ??
-    localResult.user.createdAt,
-  trialEndDate: driver.trialEndDate,
-  subscriptionId: driver.subscriptionId,
-  currentPeriodEnd: driver.currentPeriodEnd,
-  plan: driver.subscriptionPlan,
-});
+          userId: driver.localUserId,
+          status: driver.subscriptionStatus,
+          trialStartDate:
+            driver.trialStartDate ??
+            driver.createdAt ??
+            localResult.user.trialStartDate ??
+            localResult.user.createdAt,
+          trialEndDate: driver.trialEndDate,
+          subscriptionId:
+            driver.subscriptionId,
+          currentPeriodEnd:
+            driver.currentPeriodEnd,
+          plan: driver.subscriptionPlan,
+        });
 
- await syncSubscriptionFromServer({
-  userId: driver.localUserId,
-  status: driver.subscriptionStatus,
-  trialStartDate:
-    driver.trialStartDate ??
-    driver.createdAt ??
-    localResult.user.trialStartDate ??
-    localResult.user.createdAt,
-  trialEndDate: driver.trialEndDate,
-  subscriptionId: driver.subscriptionId,
-  currentPeriodEnd: driver.currentPeriodEnd,
-  plan: driver.subscriptionPlan,
-});
+        await pullLogsFromCloud(
+          driver.localUserId
+        );
+        await migrateLogCalculations(
+          driver.localUserId
+        );
 
- await pullLogsFromCloud(driver.localUserId);
+        setUser(localResult.user);
 
- await migrateLogCalculations(driver.localUserId);
+        return {
+          success: true,
+          user: localResult.user,
+        };
+      },
+      []
+    );
 
- setUser(localResult.user);
+  const clearAuthenticatedState =
+    useCallback(async () => {
+      lockPinSession();
+      await LocalAuth.logoutUser();
+      await clearAuthSession();
+      setUser(null);
+    }, []);
+
+  const forceLogout =
+    useCallback(
+      async (message?: string) => {
+        if (message) {
+          await setPendingLogoutNotice(
+            message
+          );
+        }
+
+        await clearAuthenticatedState();
+      },
+      [clearAuthenticatedState]
+    );
+
+  /**
+   * Restore the currently authenticated local session.
+   */
+  const refreshUser = useCallback(async () => {
+    const currentUser =
+      await LocalAuth.getCurrentUser();
+
+    setUser(currentUser);
+  }, []);
+
+  const validateAuthenticatedSession =
+    useCallback(async (): Promise<boolean> => {
+      if (sessionCheckInFlightRef.current) {
+        return true;
+      }
+
+      const currentUser =
+        await LocalAuth.getCurrentUser();
+      const authSession =
+        await getAuthSession();
+
+      if (
+        !currentUser ||
+        !authSession ||
+        authSession.userId !== currentUser.id
+      ) {
+        if (currentUser) {
+          await forceLogout(
+            "Please sign in again."
+          );
+        }
+
+        return false;
+      }
+
+      sessionCheckInFlightRef.current = true;
+
+      try {
+        const result =
+          await restoreDriverSessionCloud();
+
+        if (
+          result.success &&
+          result.driver
+        ) {
+          const applied =
+            await applyAuthenticatedDriver(
+              result.driver
+            );
+
+          return applied.success;
+        }
+
+        if (result.revoked) {
+          await forceLogout(
+            "You’ve been signed out because this account was signed in on another device."
+          );
+          return false;
+        }
+
+        return true;
+      } catch (error) {
+        console.error(
+          "[Auth] Session validation failed:",
+          error
+        );
+        return true;
+      } finally {
+        sessionCheckInFlightRef.current = false;
+      }
+    }, [
+      applyAuthenticatedDriver,
+      forceLogout,
+    ]);
+
+  /**
+   * Restore a previously verified session when the app starts.
+   */
+  useEffect(() => {
+    let mounted = true;
+
+    async function initialiseAuth() {
+      try {
+        const currentUser =
+          await LocalAuth.getCurrentUser();
+        const authSession =
+          await getAuthSession();
+
+        if (!mounted) return;
+
+        if (currentUser) {
+          setUser(currentUser);
+
+          if (
+            !authSession ||
+            authSession.userId !==
+              currentUser.id
+          ) {
+            await forceLogout(
+              "Please sign in again."
+            );
+            return;
+          }
+
+          const valid =
+            await validateAuthenticatedSession();
+
+          if (valid) {
+            pushLogsToCloud(
+              currentUser.id
+            ).catch((error) => {
+              console.error(
+                "[Auth] Background log sync failed:",
+                error
+              );
+            });
+          }
+        }
+      } catch (error) {
+        console.error(
+          "[Auth] Initialisation failed:",
+          error
+        );
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    initialiseAuth();
+
+    return () => {
+      mounted = false;
+    };
+  }, [
+    forceLogout,
+    validateAuthenticatedSession,
+  ]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      return;
+    }
+
+    const subscription =
+      AppState.addEventListener(
+        "change",
+        (nextState) => {
+          if (nextState === "active") {
+            void validateAuthenticatedSession();
+          }
+        }
+      );
+
+    return () => {
+      subscription.remove();
+    };
+  }, [
+    user?.id,
+    validateAuthenticatedSession,
+  ]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      void validateAuthenticatedSession();
+    }, 30000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [
+    user?.id,
+    validateAuthenticatedSession,
+  ]);
+
+  /**
+   * Sign in through the Railway backend.
+   *
+   * Important:
+   * We do not fall back to local authentication when cloud login fails.
+   * That fallback previously allowed unverified accounts to enter the app.
+   */
+  const login = useCallback(
+    async (
+      email: string,
+      password: string,
+      options?: { forceContinue?: boolean }
+    ): Promise<LoginResult> => {
+      const normalisedEmail =
+        normaliseEmail(email);
+      lockPinSession();
+
+      const passwordHash =
+        LocalAuth.hashPassword(password);
+
+      try {
+        const deviceId =
+          await getOrCreateDeviceId();
+        const deviceLabel =
+          getDeviceLabel();
+        const cloudResult =
+          await loginDriverCloud(
+            normalisedEmail,
+            passwordHash,
+            {
+              deviceId,
+              deviceLabel,
+              forceContinue:
+                options?.forceContinue,
+            }
+          );
+
+        if (
+          !cloudResult.success &&
+          cloudResult.verificationRequired
+        ) {
+          return {
+            success: false,
+            verificationRequired: true,
+            email:
+              cloudResult.email ??
+              normalisedEmail,
+            error:
+              cloudResult.error ??
+              "Please verify your email address before signing in.",
+          }
+        }
+
+        if (
+          !cloudResult.success &&
+          cloudResult.sessionConflict
+        ) {
+          return {
+            success: false,
+            sessionConflict: true,
+            error:
+              cloudResult.error ??
+              "This account is currently active on another device.",
+          };
+        }
+
+        if (
+          !cloudResult.success ||
+          !cloudResult.driver ||
+          !cloudResult.sessionToken
+        ) {
+          return {
+            success: false,
+            error:
+              cloudResult.error ??
+              "Unable to sign in. Please check your email and password.",
+          };
+        }
+
+ const driver =
+   cloudResult.driver;
+ await saveAuthSession({
+   userId: driver.localUserId,
+   sessionToken:
+     cloudResult.sessionToken,
+   deviceId,
+   deviceLabel,
+ });
+ const applied =
+   await applyAuthenticatedDriver(
+     driver,
+     passwordHash
+   );
+
+ if (!applied.success) {
+   await clearAuthSession();
+   return {
+     success: false,
+     error: applied.error,
+   };
+ }
 
  return {
-  success: true,
-  userId: localResult.user.id,
-};
+   success: true,
+   userId: applied.user.id,
+ };
 
-          } catch (error) {
-        console.error(
-          "[Auth] Login failed:",
-          error
+      } catch (error) {
+ console.error(
+   "[Auth] Login failed:",
+   error
         );
 
         return {
@@ -329,7 +554,7 @@ export function AuthProvider({
         };
       }
     },
-    []
+    [applyAuthenticatedDriver]
   );
 
   /**
@@ -486,10 +711,12 @@ export function AuthProvider({
         });
       }
 
-      await LocalAuth.logoutUser();
-      setUser(null);
+      await logoutDriverCloud().catch(
+        () => {}
+      );
+      await clearAuthenticatedState();
     },
-    [user]
+    [clearAuthenticatedState, user]
   );
 
   /**

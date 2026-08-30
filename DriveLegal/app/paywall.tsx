@@ -28,11 +28,12 @@ import {
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuthContext } from "@/lib/auth-context";
+import { syncSubscriptionToCloud } from "@/lib/cloud-sync";
 import {
   activateSubscriptionFromIAP,
   getSubscriptionState,
-  refreshIAPEntitlement,
   getTrialDaysLeft,
+  syncSubscriptionFromServer,
 } from "@/lib/subscription";
 import {
   loadIAPProducts,
@@ -180,15 +181,10 @@ export default function PaywallScreen() {
           setSubscriptionState(cached);
         }
 
-        // Await StoreKit entitlement refresh and product fetch together so
-        // that the authoritative Apple status is shown on first render.
-        const [refreshed] = await Promise.all([
-          refreshIAPEntitlement(user.id).catch(() => cached),
-          storeProductsPromise,
-        ]);
+        await storeProductsPromise;
 
         if (isMounted) {
-          setSubscriptionState(refreshed);
+          setSubscriptionState(cached);
         }
       } catch (error) {
         console.error("[Paywall] Initialisation error:", error);
@@ -314,6 +310,50 @@ export default function PaywallScreen() {
           result.purchaseTime
         );
 
+        const currentPeriodEnd = new Date(
+          result.plan === "annual"
+            ? new Date(result.purchaseTime).setFullYear(
+                new Date(result.purchaseTime).getFullYear() + 1
+              )
+            : new Date(result.purchaseTime).setMonth(
+                new Date(result.purchaseTime).getMonth() + 1
+              )
+        ).toISOString();
+
+        const serverResult =
+          await syncSubscriptionToCloud({
+            status: "active",
+            plan: result.plan,
+            subscriptionId:
+              result.transactionId,
+            currentPeriodEnd,
+          });
+
+        if (!serverResult.success) {
+          throw new Error(
+            serverResult.error ??
+              "Unable to save your subscription to your account."
+          );
+        }
+
+        await syncSubscriptionFromServer({
+          userId: user.id,
+          status:
+            serverResult.subscriptionStatus ??
+            "active",
+          trialStartDate:
+            subscriptionState?.trialStartDate,
+          trialEndDate:
+            subscriptionState?.trialEndDate,
+          subscriptionId:
+            serverResult.subscriptionId,
+          currentPeriodEnd:
+            serverResult.currentPeriodEnd,
+          plan:
+            serverResult.subscriptionPlan,
+          iapVerified: true,
+        });
+
         const updated = await getSubscriptionState(user.id);
         setSubscriptionState(updated);
         setSelectedPlan(result.plan);
@@ -361,6 +401,43 @@ export default function PaywallScreen() {
           entitlement.transactionId ?? entitlement.plan,
           Date.now()
         );
+
+        const serverResult =
+          await syncSubscriptionToCloud({
+            status: "active",
+            plan: entitlement.plan,
+            subscriptionId:
+              entitlement.transactionId ??
+              entitlement.plan,
+            currentPeriodEnd:
+              entitlement.expiryDate?.toISOString() ??
+              null,
+          });
+
+        if (!serverResult.success) {
+          throw new Error(
+            serverResult.error ??
+              "Unable to save your subscription to your account."
+          );
+        }
+
+        await syncSubscriptionFromServer({
+          userId: user.id,
+          status:
+            serverResult.subscriptionStatus ??
+            "active",
+          trialStartDate:
+            subscriptionState?.trialStartDate,
+          trialEndDate:
+            subscriptionState?.trialEndDate,
+          subscriptionId:
+            serverResult.subscriptionId,
+          currentPeriodEnd:
+            serverResult.currentPeriodEnd,
+          plan:
+            serverResult.subscriptionPlan,
+          iapVerified: true,
+        });
 
         const updated = await getSubscriptionState(user.id);
         setSubscriptionState(updated);

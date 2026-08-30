@@ -26,7 +26,8 @@ try {
   // Module unavailable — notifications will be silently skipped
 }
 import { Platform } from "react-native";
-import { getSubscriptionState, canLogShifts, refreshIAPEntitlement, type SubscriptionState } from "./subscription";
+import { AppState } from "react-native";
+import { getSubscriptionState, canLogShifts, type SubscriptionState } from "./subscription";
 import { addToHashChain } from "./integrity";
 import { captureLocation, type LocationData } from "./location";
 import { validateRestPeriod, type RestValidationResult } from "./rest-validation";
@@ -278,12 +279,32 @@ const newCompliance = evaluateCompliance(
       setSubscriptionState(null);
       return;
     }
-    getSubscriptionState(user.id).then((cached) => {
-      setSubscriptionState(cached);
-      // Refresh from StoreKit in the background so the UI always reflects
-      // the real Apple entitlement, not just the cached server state.
-      refreshIAPEntitlement(user.id).then(setSubscriptionState).catch(() => {/* offline — use cached */});
-    });
+    const reloadSubscription = () => {
+      getSubscriptionState(user.id).then(
+        setSubscriptionState
+      );
+    };
+
+    reloadSubscription();
+
+    const appStateSubscription =
+      AppState.addEventListener(
+        "change",
+        (nextState) => {
+          if (nextState === "active") {
+            reloadSubscription();
+          }
+        }
+      );
+
+    const interval = setInterval(() => {
+      reloadSubscription();
+    }, 30000);
+
+    return () => {
+      appStateSubscription.remove();
+      clearInterval(interval);
+    };
 
   }, [user]);
 
@@ -302,8 +323,7 @@ const newCompliance = evaluateCompliance(
 
   const startShift = useCallback(async (odometer?: number, restOverrideNote?: string, driverType?: "goods" | "large_passenger" | "small_passenger" | "vehicle_recovery", vehicleType?: string, vehicleRegistration?: string): Promise<{ success: boolean; error?: string }> => {
     if (!user) return { success: false, error: "Not logged in." };
-    // Refresh subscription state before allowing shift start
-   const subState = await refreshIAPEntitlement(user.id);
+    const subState = await getSubscriptionState(user.id);
 
     setSubscriptionState(subState);
     if (!canLogShifts(subState)) {
