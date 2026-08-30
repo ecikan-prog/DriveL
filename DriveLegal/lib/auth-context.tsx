@@ -11,9 +11,10 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
-import { Platform } from "react-native";
+import { Alert, AppState, AppStateStatus, Platform } from "react-native";
 
 import * as LocalAuth from "./local-auth";
 import type { DriverType } from "./local-auth";
@@ -24,6 +25,14 @@ import {
   pushLogsToCloud,
   registerDriverCloud,
   deleteDriverCloud,
+  getOrCreateDeviceId,
+  createDriverSession,
+  takeoverDriverSession,
+  checkDriverSession,
+  invalidateDriverSession,
+  storeSessionToken,
+  getStoredSessionToken,
+  clearSessionToken,
 } from "./cloud-sync";
 
 import { migrateLogCalculations } from "./logbook-storage";
@@ -109,6 +118,60 @@ export function AuthProvider({
   const [loading, setLoading] =
     useState(true);
 
+  // Holds the active session token for the logged-in user.
+  // Persisted via AsyncStorage (keyed by userId); restored on app start.
+  const sessionTokenRef = useRef<string | null>(null);
+  // AppState subscription ref for cleanup
+  const appStateSubRef = useRef<ReturnType<typeof AppState.addEventListener> | null>(null);
+
+  /**
+   * Perform a server-side session validity check.
+   * If the session has been invalidated by another device, force-log out
+   * and surface the "signed out on another device" message.
+   */
+  const checkSessionValidity = useCallback(async () => {
+    const token = sessionTokenRef.current;
+    if (!token) return;
+
+    const valid = await checkDriverSession(token);
+    // null = network error → do not log out
+    if (valid === false) {
+      // Session invalidated by another device (takeover)
+      sessionTokenRef.current = null;
+      await LocalAuth.logoutUser();
+      setUser(null);
+      Alert.alert(
+        "Signed Out",
+        "You've been signed out because this account was signed in on another device.",
+        [{ text: "OK" }]
+      );
+    }
+  }, []);
+
+  /**
+   * Start the AppState listener that checks session validity whenever
+   * the app comes to the foreground.
+   */
+  const startSessionMonitor = useCallback(() => {
+    if (appStateSubRef.current) return; // already running
+
+    appStateSubRef.current = AppState.addEventListener(
+      "change",
+      (nextState: AppStateStatus) => {
+        if (nextState === "active") {
+          checkSessionValidity();
+        }
+      }
+    );
+  }, [checkSessionValidity]);
+
+  const stopSessionMonitor = useCallback(() => {
+    if (appStateSubRef.current) {
+      appStateSubRef.current.remove();
+      appStateSubRef.current = null;
+    }
+  }, []);
+
   /**
    * Restore the currently authenticated local session.
    */
@@ -135,6 +198,13 @@ export function AuthProvider({
         setUser(currentUser);
 
         if (currentUser) {
+          // Restore the session token and start monitoring
+          const token = await getStoredSessionToken(currentUser.id);
+          if (token) {
+            sessionTokenRef.current = token;
+            startSessionMonitor();
+          }
+
           migrateLogCalculations(
             currentUser.id
           ).catch((error) => {
@@ -169,8 +239,9 @@ export function AuthProvider({
 
     return () => {
       mounted = false;
+      stopSessionMonitor();
     };
-  }, []);
+  }, [stopSessionMonitor]);
 
   /**
    * Sign in through the Railway backend.
@@ -291,23 +362,65 @@ export function AuthProvider({
   plan: driver.subscriptionPlan,
 });
 
- await syncSubscriptionFromServer({
-  userId: driver.localUserId,
-  status: driver.subscriptionStatus,
-  trialStartDate:
-    driver.trialStartDate ??
-    driver.createdAt ??
-    localResult.user.trialStartDate ??
-    localResult.user.createdAt,
-  trialEndDate: driver.trialEndDate,
-  subscriptionId: driver.subscriptionId,
-  currentPeriodEnd: driver.currentPeriodEnd,
-  plan: driver.subscriptionPlan,
-});
-
  await pullLogsFromCloud(driver.localUserId);
 
  await migrateLogCalculations(driver.localUserId);
+
+ // ── Single-device session enforcement ─────────────────────────────────
+ // Register this device as the active session for the account.
+ // If another device holds an active session, prompt the user to either
+ // cancel or take over.
+ const deviceId = await getOrCreateDeviceId();
+ const sessionResult = await createDriverSession({
+   localUserId: driver.localUserId,
+   deviceId,
+   deviceLabel: Platform.OS === "ios" ? "iPhone" : Platform.OS === "android" ? "Android" : "device",
+ });
+
+ if (sessionResult.conflict) {
+   // Another device has an active session — ask the user what to do.
+   const conflictLabel = sessionResult.conflictDeviceLabel ?? "another device";
+   const shouldTakeOver = await new Promise<boolean>((resolve) => {
+     Alert.alert(
+       "Account Active on Another Device",
+       `This account is currently active on ${conflictLabel}. You can continue here and sign out the other device, or cancel.`,
+       [
+         {
+           text: "Cancel",
+           style: "cancel",
+           onPress: () => resolve(false),
+         },
+         {
+           text: "Continue on this device",
+           onPress: () => resolve(true),
+         },
+       ]
+     );
+   });
+
+   if (!shouldTakeOver) {
+     // User chose Cancel — do not start a session on this device.
+     await LocalAuth.logoutUser();
+     return { success: false, error: "Login cancelled." };
+   }
+
+   // User chose Continue — take over the session.
+   const takeoverResult = await takeoverDriverSession({
+     localUserId: driver.localUserId,
+     deviceId,
+     deviceLabel: Platform.OS === "ios" ? "iPhone" : Platform.OS === "android" ? "Android" : "device",
+   });
+
+   if (takeoverResult.success && takeoverResult.sessionToken) {
+     sessionTokenRef.current = takeoverResult.sessionToken;
+     await storeSessionToken(driver.localUserId, takeoverResult.sessionToken);
+   }
+ } else if (sessionResult.success && sessionResult.sessionToken) {
+   sessionTokenRef.current = sessionResult.sessionToken;
+   await storeSessionToken(driver.localUserId, sessionResult.sessionToken);
+ }
+
+ startSessionMonitor();
 
  setUser(localResult.user);
 
@@ -329,7 +442,7 @@ export function AuthProvider({
         };
       }
     },
-    []
+    [startSessionMonitor]
   );
 
   /**
@@ -484,12 +597,21 @@ export function AuthProvider({
             error
           );
         });
+
+        // Invalidate the active session on the server
+        const token = sessionTokenRef.current;
+        if (token) {
+          invalidateDriverSession(token).catch(() => {/* best-effort */});
+          sessionTokenRef.current = null;
+          await clearSessionToken(user.id);
+        }
       }
 
+      stopSessionMonitor();
       await LocalAuth.logoutUser();
       setUser(null);
     },
-    [user]
+    [user, stopSessionMonitor]
   );
 
   /**
@@ -544,6 +666,12 @@ export function AuthProvider({
         }
 
         // If server deletion succeeds, clear local session
+        const token = sessionTokenRef.current;
+        if (token) {
+          invalidateDriverSession(token).catch(() => {/* best-effort */});
+          sessionTokenRef.current = null;
+        }
+        stopSessionMonitor();
         await LocalAuth.logoutUser();
         setUser(null);
 
@@ -556,7 +684,7 @@ export function AuthProvider({
         };
       }
     },
-    [user]
+    [user, stopSessionMonitor]
   );
 
   return (

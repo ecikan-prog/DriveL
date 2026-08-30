@@ -72,20 +72,9 @@ export async function syncSubscriptionFromServer(params: {
       new Date(trialStartDate).getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000
     ).toISOString();
 
-  if (
-    existingState?.status === "active" &&
-    existingState.iapVerified &&
-    params.status !== "active"
-  ) {
-    const preserved: SubscriptionState = {
-      ...existingState,
-      userId: params.userId,
-      lastServerSync: new Date().toISOString(),
-    };
-
-    await saveSubscriptionState(preserved);
-    return preserved;
-  }
+  // Always accept the authoritative server state on login.
+  // refreshIAPEntitlement() is responsible for confirming or revoking
+  // the active status via StoreKit after login completes.
 
   const state: SubscriptionState = {
     userId: params.userId,
@@ -121,8 +110,43 @@ export async function refreshIAPEntitlement(userId: string): Promise<Subscriptio
     const entitlement = await checkCurrentEntitlement();
 
     if (entitlement.isActive && entitlement.plan) {
-      // StoreKit confirms an active subscription — mark as active regardless
-      // of what the AsyncStorage cache or server said.
+      // ── Account-binding guard ─────────────────────────────────────────────
+      // StoreKit returns purchases bound to the device's Apple ID, NOT to the
+      // Drive Legal account.  We must verify that the active StoreKit
+      // transaction actually belongs to this Drive Legal account before
+      // applying it.
+      //
+      // The server-sync step (syncSubscriptionFromServer) stores the
+      // account's known subscriptionId from the server.  Only accept the
+      // StoreKit result when:
+      //   (a) we have a server-known subscriptionId AND it matches the
+      //       StoreKit transactionId, OR
+      //   (b) the subscription was just purchased on this device (local cache
+      //       already has the transactionId from activateSubscriptionFromIAP,
+      //       which writes subscriptionId before this path is reached).
+      //
+      // This prevents another account's Apple subscription from leaking into
+      // the current session (Test C / Test A / Test B).
+      const accountSubscriptionId = cached.subscriptionId;
+
+      if (!accountSubscriptionId) {
+        // No subscription ID on record for this account.  We cannot verify
+        // that this StoreKit transaction belongs here — do not apply.
+        return cached;
+      }
+
+      if (entitlement.transactionId && entitlement.transactionId !== accountSubscriptionId) {
+        // The StoreKit transaction ID does not match this account's known
+        // subscription.  Reject to prevent cross-account entitlement leak.
+        console.warn("[IAP] StoreKit transactionId does not match account subscriptionId — rejecting.", {
+          storeKitTransactionId: entitlement.transactionId,
+          accountSubscriptionId,
+          userId,
+        });
+        return cached;
+      }
+
+      // Transaction belongs to this account — apply StoreKit confirmation.
       const periodEnd = entitlement.expiryDate
         ? entitlement.expiryDate.toISOString()
         : estimatePeriodEnd(entitlement.plan, Date.now()).toISOString();

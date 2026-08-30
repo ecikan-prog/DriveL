@@ -1202,6 +1202,145 @@ export const appRouter = t.router({
     }
   }),
 }),
+
+// ─── Session router (single-active-device) ───────────────────────────────────
+session: t.router({
+  /**
+   * Create a new session for the authenticated driver.
+   *
+   * If an active session already exists for a DIFFERENT deviceId, return
+   * `conflict: true` instead of creating a new session.  The client must
+   * then either cancel or call `takeover` to displace the other device.
+   *
+   * If the same device is re-logging in (same deviceId), the old session is
+   * silently replaced.
+   */
+  create: t.procedure
+    .input(
+      z.object({
+        localUserId: z.string().min(1),
+        deviceId: z.string().min(1),
+        deviceLabel: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      try {
+        // Check for an active session on a different device
+        const existing = await query<any[]>(
+          `
+          SELECT sessionToken, deviceId, deviceLabel, createdAt
+          FROM driver_sessions
+          WHERE localUserId = ?
+            AND invalidatedAt IS NULL
+            AND deviceId != ?
+          ORDER BY createdAt DESC
+          LIMIT 1
+          `,
+          [input.localUserId, input.deviceId]
+        );
+
+        if (existing.length > 0) {
+          return {
+            success: false,
+            conflict: true,
+            conflictDeviceLabel: existing[0].deviceLabel ?? "another device",
+          };
+        }
+
+        // Invalidate any lingering session for the same device (re-login)
+        await query(
+          `UPDATE driver_sessions SET invalidatedAt = NOW() WHERE localUserId = ? AND deviceId = ? AND invalidatedAt IS NULL`,
+          [input.localUserId, input.deviceId]
+        );
+
+        const crypto = await import("crypto");
+        const token = crypto.randomBytes(32).toString("hex");
+
+        await query(
+          `INSERT INTO driver_sessions (localUserId, sessionToken, deviceId, deviceLabel) VALUES (?, ?, ?, ?)`,
+          [input.localUserId, token, input.deviceId, input.deviceLabel ?? null]
+        );
+
+        return { success: true, conflict: false, sessionToken: token };
+      } catch (error) {
+        console.error("[Session] create failed:", error);
+        return { success: false, conflict: false, error: "Session creation failed." };
+      }
+    }),
+
+  /**
+   * Check whether a session token is still valid (not invalidated).
+   * Called when the app resumes from background.
+   */
+  check: t.procedure
+    .input(z.object({ sessionToken: z.string().min(1) }))
+    .query(async ({ input }) => {
+      try {
+        const rows = await query<any[]>(
+          `SELECT id FROM driver_sessions WHERE sessionToken = ? AND invalidatedAt IS NULL LIMIT 1`,
+          [input.sessionToken]
+        );
+        return { valid: rows.length > 0 };
+      } catch (error) {
+        console.error("[Session] check failed:", error);
+        // Fail open on DB error — do not log the user out due to infra issues.
+        return { valid: true };
+      }
+    }),
+
+  /**
+   * Invalidate all other active sessions for this driver and create a new
+   * session for this device.  Called when the user confirms "Continue on
+   * this device" after a conflict is detected.
+   */
+  takeover: t.procedure
+    .input(
+      z.object({
+        localUserId: z.string().min(1),
+        deviceId: z.string().min(1),
+        deviceLabel: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      try {
+        // Invalidate ALL active sessions for this account
+        await query(
+          `UPDATE driver_sessions SET invalidatedAt = NOW() WHERE localUserId = ? AND invalidatedAt IS NULL`,
+          [input.localUserId]
+        );
+
+        const crypto = await import("crypto");
+        const token = crypto.randomBytes(32).toString("hex");
+
+        await query(
+          `INSERT INTO driver_sessions (localUserId, sessionToken, deviceId, deviceLabel) VALUES (?, ?, ?, ?)`,
+          [input.localUserId, token, input.deviceId, input.deviceLabel ?? null]
+        );
+
+        return { success: true, sessionToken: token };
+      } catch (error) {
+        console.error("[Session] takeover failed:", error);
+        return { success: false, error: "Takeover failed." };
+      }
+    }),
+
+  /**
+   * Explicitly invalidate the session token on logout.
+   */
+  invalidate: t.procedure
+    .input(z.object({ sessionToken: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      try {
+        await query(
+          `UPDATE driver_sessions SET invalidatedAt = NOW() WHERE sessionToken = ?`,
+          [input.sessionToken]
+        );
+        return { success: true };
+      } catch {
+        return { success: false };
+      }
+    }),
+}),
 });
 
 export type AppRouter = typeof appRouter;

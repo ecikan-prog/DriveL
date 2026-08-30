@@ -353,7 +353,29 @@ export default function PaywallScreen() {
       const entitlement = await checkCurrentEntitlement();
 
       if (entitlement.isActive && entitlement.plan) {
-        // Confirmed active entitlement via StoreKit — activate locally.
+        // ── Account-binding guard ──────────────────────────────────────────
+        // Restore is user-initiated, but we must still ensure the StoreKit
+        // transaction belongs to this Drive Legal account.  Check the
+        // server-synced subscriptionId: if one is recorded and it does NOT
+        // match the StoreKit transactionId, this transaction belongs to a
+        // different account — reject it.
+        const cached = await getSubscriptionState(user.id);
+        const accountSubscriptionId = cached.subscriptionId;
+
+        if (
+          accountSubscriptionId &&
+          entitlement.transactionId &&
+          entitlement.transactionId !== accountSubscriptionId
+        ) {
+          Alert.alert(
+            "Subscription Mismatch",
+            "The subscription found on this device belongs to a different Drive Legal account and cannot be restored here. Please contact support if you need help."
+          );
+          return;
+        }
+
+        // Confirmed — the transaction belongs to this account (or there is
+        // no prior server-recorded subscription, meaning it is a new restore).
         // Use the real product identifier as the transactionId.
         await activateSubscriptionFromIAP(
           user.id,

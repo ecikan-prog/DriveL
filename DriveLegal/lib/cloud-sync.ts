@@ -474,3 +474,108 @@ export async function deleteDriverCloud(email: string): Promise<{ success: boole
   if (!result) return { success: false, error: "Network error." };
   return result;
 }
+
+// ─── Device identity ──────────────────────────────────────────────────────────
+
+const DEVICE_ID_KEY = "dl_device_id";
+
+/**
+ * Return a stable per-device UUID, creating one on first call.
+ * This is stored in AsyncStorage and survives app restarts but not re-installs.
+ */
+export async function getOrCreateDeviceId(): Promise<string> {
+  try {
+    const stored = await AsyncStorage.getItem(DEVICE_ID_KEY);
+    if (stored) return stored;
+
+    const id =
+      Date.now().toString(36) +
+      "-" +
+      Math.random().toString(36).slice(2) +
+      "-" +
+      Math.random().toString(36).slice(2);
+
+    await AsyncStorage.setItem(DEVICE_ID_KEY, id);
+    return id;
+  } catch {
+    return "unknown-device";
+  }
+}
+
+// ─── Session API ──────────────────────────────────────────────────────────────
+
+const SESSION_TOKEN_KEY = "dl_session_token";
+
+export async function storeSessionToken(userId: string, token: string): Promise<void> {
+  await AsyncStorage.setItem(`${SESSION_TOKEN_KEY}_${userId}`, token);
+}
+
+export async function getStoredSessionToken(userId: string): Promise<string | null> {
+  try {
+    return await AsyncStorage.getItem(`${SESSION_TOKEN_KEY}_${userId}`);
+  } catch {
+    return null;
+  }
+}
+
+export async function clearSessionToken(userId: string): Promise<void> {
+  await AsyncStorage.removeItem(`${SESSION_TOKEN_KEY}_${userId}`);
+}
+
+export type CreateSessionResult =
+  | { success: true; conflict: false; sessionToken: string }
+  | { success: false; conflict: true; conflictDeviceLabel: string }
+  | { success: false; conflict: false; error?: string };
+
+/**
+ * Register a new session for the Drive Legal account on this device.
+ * Returns a conflict result when another device has an active session.
+ */
+export async function createDriverSession(params: {
+  localUserId: string;
+  deviceId: string;
+  deviceLabel?: string;
+}): Promise<CreateSessionResult> {
+  const result = await trpcCall("session.create", params);
+  if (!result) return { success: false, conflict: false, error: "Network error." };
+  return result;
+}
+
+/**
+ * Invalidate all other active sessions and claim ownership for this device.
+ * Called after the user confirms "Continue on this device" in the conflict dialog.
+ */
+export async function takeoverDriverSession(params: {
+  localUserId: string;
+  deviceId: string;
+  deviceLabel?: string;
+}): Promise<{ success: boolean; sessionToken?: string; error?: string }> {
+  const result = await trpcCall("session.takeover", params);
+  if (!result) return { success: false, error: "Network error." };
+  return result;
+}
+
+/**
+ * Check whether a session token is still valid.
+ * Returns `null` on network error (treat as valid — do not log user out on infra issues).
+ */
+export async function checkDriverSession(sessionToken: string): Promise<boolean | null> {
+  try {
+    const result = await trpcCall("session.check", { sessionToken }, "query");
+    if (!result) return null;
+    return result.valid === true;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Explicitly invalidate the session token on logout.
+ */
+export async function invalidateDriverSession(sessionToken: string): Promise<void> {
+  try {
+    await trpcCall("session.invalidate", { sessionToken });
+  } catch {
+    // best-effort
+  }
+}
