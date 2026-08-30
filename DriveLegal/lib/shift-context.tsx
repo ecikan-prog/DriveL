@@ -74,6 +74,8 @@ type ShiftContextValue = {
   changeVehicle: (registration: string, odometer: number, reason?: string) => Promise<void>;
   loading: boolean;
   subscriptionState: SubscriptionState | null;
+  /** True while the StoreKit entitlement check is still in progress. */
+  subscriptionVerifying: boolean;
   isTrialExpired: boolean;
   currentLocation: LocationData | null;
   restValidation: RestValidationResult | null;
@@ -99,6 +101,7 @@ export function ShiftProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuthContext();
   const [activeShift, setActiveShift] = useState<Logbook.ActiveShift | null>(null);
   const [subscriptionState, setSubscriptionState] = useState<SubscriptionState | null>(null);
+  const [subscriptionVerifying, setSubscriptionVerifying] = useState(false);
   const [drivingSeconds, setDrivingSeconds] = useState(0);
   const [consecutiveDrivingSeconds, setConsecutiveDrivingSeconds] = useState(0);
   const [continuousWorkSeconds, setContinuousWorkSeconds] = useState(0);
@@ -276,13 +279,21 @@ const newCompliance = evaluateCompliance(
   useEffect(() => {
     if (!user) {
       setSubscriptionState(null);
+      setSubscriptionVerifying(false);
       return;
     }
+    setSubscriptionVerifying(true);
     getSubscriptionState(user.id).then((cached) => {
       setSubscriptionState(cached);
-      // Refresh from StoreKit in the background so the UI always reflects
-      // the real Apple entitlement, not just the cached server state.
-      refreshIAPEntitlement(user.id).then(setSubscriptionState).catch(() => {/* offline — use cached */});
+      // Refresh from StoreKit in the background — this is the authoritative check.
+      // subscriptionVerifying remains true until this resolves so that screens
+      // never render a stale "expired" state before Apple confirms the entitlement.
+      refreshIAPEntitlement(user.id)
+        .then((refreshed) => { setSubscriptionState(refreshed); })
+        .catch(() => { /* offline — keep cached state */ })
+        .finally(() => { setSubscriptionVerifying(false); });
+    }).catch(() => {
+      setSubscriptionVerifying(false);
     });
 
   }, [user]);
@@ -522,6 +533,7 @@ const newCompliance = evaluateCompliance(
         changeVehicle,
         loading,
         subscriptionState,
+        subscriptionVerifying,
         isTrialExpired,
         currentLocation,
         restValidation,
