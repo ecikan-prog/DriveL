@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Crypto from "expo-crypto";
 import { Platform } from "react-native";
 
 const AUTH_SESSION_KEY = "drivelegal_auth_session";
@@ -17,30 +18,27 @@ type SessionInvalidationListener = (message: string) => void;
 
 const sessionInvalidationListeners = new Set<SessionInvalidationListener>();
 
-function generateOpaqueId(): string {
-  if (typeof globalThis.crypto?.randomUUID === "function") {
-    return globalThis.crypto.randomUUID();
-  }
+function formatUuidFromBytes(bytes: Uint8Array): string {
+  const copy = new Uint8Array(bytes);
+  copy[6] = (copy[6] & 0x0f) | 0x40;
+  copy[8] = (copy[8] & 0x3f) | 0x80;
 
-  if (typeof globalThis.crypto?.getRandomValues === "function") {
-    const bytes = new Uint8Array(16);
-    globalThis.crypto.getRandomValues(bytes);
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    const hex = Array.from(bytes, (byte) =>
-      byte.toString(16).padStart(2, "0"),
-    ).join("");
+  const hex = Array.from(copy, (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
 
-    return [
-      hex.slice(0, 8),
-      hex.slice(8, 12),
-      hex.slice(12, 16),
-      hex.slice(16, 20),
-      hex.slice(20),
-    ].join("-");
-  }
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20),
+  ].join("-");
+}
 
-  throw new Error("Secure randomness is unavailable on this device.");
+async function generateOpaqueId(): Promise<string> {
+  const bytes = await Crypto.getRandomBytesAsync(16);
+  return formatUuidFromBytes(Uint8Array.from(bytes));
 }
 
 export async function getOrCreateDeviceId(): Promise<string> {
@@ -50,7 +48,7 @@ export async function getOrCreateDeviceId(): Promise<string> {
     return existing;
   }
 
-  const created = generateOpaqueId();
+  const created = await generateOpaqueId();
   await AsyncStorage.setItem(DEVICE_ID_KEY, created);
   return created;
 }
