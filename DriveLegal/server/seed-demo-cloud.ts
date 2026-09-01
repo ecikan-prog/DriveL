@@ -4,7 +4,7 @@
  */
 import "../scripts/load-env.js";
 import { drizzle } from "drizzle-orm/mysql2";
-import { drivers, shiftLogs } from "../drizzle/schema";
+import { drivers, shiftLogs } from "./schema";
 
 const DEMO_USER_ID = "demo_nzta_reviewer_2026";
 const DEMO_EMAIL = "nzta.demo@roadlog.nz";
@@ -191,7 +191,7 @@ async function main() {
       licenceNumber: "ZY987654",
       vehicleRegistration: "DEMO01",
       vehicleType: "Van",
-      driverType: "passenger",
+      driverType: "small_passenger",
       trialStartDate: trialStart.toISOString(),
     }).onDuplicateKeyUpdate({
       set: {
@@ -200,7 +200,7 @@ async function main() {
         licenceNumber: "ZY987654",
         vehicleRegistration: "DEMO01",
         vehicleType: "Van",
-        driverType: "passenger",
+        driverType: "small_passenger",
       },
     });
     console.log("✅ Demo driver upserted (Username: NZTA, Licence: ZY987654).");

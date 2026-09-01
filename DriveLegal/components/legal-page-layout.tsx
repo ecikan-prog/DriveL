@@ -21,7 +21,7 @@ type LegalPageLayoutProps = {
   lastUpdated: string;
   icon: keyof typeof MaterialIcons.glyphMap;
   summaryPoints: SummaryPoint[];
-  children: React.ReactNode;
+  children?: React.ReactNode;
 };
 
 const COLORS = {
@@ -340,7 +340,7 @@ export function LegalPageLayout({
 type LegalSectionProps = {
   number: number;
   title: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
 };
 
 export function LegalSection({

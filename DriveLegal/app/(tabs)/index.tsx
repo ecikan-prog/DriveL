@@ -579,13 +579,14 @@ const drivingLimitSeconds =
           {visibleWarnings.length > 0 && (
             <View style={{ marginBottom: 12 }}>
               {visibleWarnings.map((w) => (
-                <WarningBanner
-                  key={w.id}
-                  title={w.title}
-                  message={w.message}
-                  level={w.level}
-                  onDismiss={() => dismissWarning(w.id)}
-                />
+                <React.Fragment key={w.id}>
+                  <WarningBanner
+                    title={w.title}
+                    message={w.message}
+                    level={w.level}
+                    onDismiss={() => dismissWarning(w.id)}
+                  />
+                </React.Fragment>
               ))}
             </View>
           )}

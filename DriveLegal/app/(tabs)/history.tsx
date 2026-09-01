@@ -555,7 +555,7 @@ await Sharing.shareAsync(destinationFile.uri, {
               </Text>
             </View>
           ) : (
-            Object.entries(groupedLogs).map(
+            (Object.entries(groupedLogs) as [string, DailyLog[]][]).map(
               ([month, monthLogs]) => (
                 <View key={month} style={styles.monthGroup}>
                   <Text style={styles.monthTitle}>
@@ -563,19 +563,19 @@ await Sharing.shareAsync(destinationFile.uri, {
                   </Text>
 
                   {monthLogs.map((log) => (
-                    <LogCard
-                      key={log.id}
-                      log={log}
-                      
-                      onPress={() =>
-                        router.push({
-                          pathname: "/shift-detail",
-                          params: {
-                            logId: String(log.id),
-                          },
-                        } as any)
-                      }
-                    />
+                    <React.Fragment key={String(log.id)}>
+                      <LogCard
+                        log={log}
+                        onPress={() =>
+                          router.push({
+                            pathname: "/shift-detail",
+                            params: {
+                              logId: String(log.id),
+                            },
+                          } as any)
+                        }
+                      />
+                    </React.Fragment>
                   ))}
                 </View>
               )

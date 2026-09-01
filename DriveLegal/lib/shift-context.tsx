@@ -81,6 +81,8 @@ type ShiftContextValue = {
     restOverrideNote?: string,
     driverType?:
       "goods" | "large_passenger" | "small_passenger" | "vehicle_recovery",
+    vehicleType?: string,
+    vehicleRegistration?: string,
   ) => Promise<{ success: boolean; error?: string }>;
   endShift: (odometer?: number) => Promise<Logbook.DailyLog | null>;
   startBreak: () => Promise<void>;
@@ -115,7 +117,7 @@ const NULL_COMPLIANCE: ComplianceStatus = {
   isCwp5MinWarning: false,
 };
 
-export function ShiftProvider({ children }: { children: React.ReactNode }) {
+export function ShiftProvider({ children }: { children?: React.ReactNode }) {
   const { user } = useAuthContext();
   const [activeShift, setActiveShift] = useState<Logbook.ActiveShift | null>(
     null,

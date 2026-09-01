@@ -162,7 +162,9 @@ export async function generateAndSharePDF({
     destinationFile.delete();
   }
 
-  let downloadedFile: File;
+  let downloadedFile: Awaited<
+    ReturnType<typeof File.downloadFileAsync>
+  >;
 
   try {
     downloadedFile =

@@ -126,7 +126,7 @@ function getVerificationBaseUrl(): string {
   return LIVE_BACKEND;
 }
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children?: React.ReactNode }) {
   const [user, setUser] = useState<LocalAuth.AuthUser | null>(null);
 
   const [loading, setLoading] = useState(true);

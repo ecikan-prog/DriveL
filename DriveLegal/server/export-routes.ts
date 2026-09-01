@@ -492,7 +492,6 @@ const csv =
     {
       fit: [logoWidth, logoHeight],
       align: "right",
-      valign: "top",
     }
   );
 } else {
