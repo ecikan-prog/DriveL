@@ -1,27 +1,47 @@
-import { describe, it, expect } from "vitest";
-import * as nodemailer from "nodemailer";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-describe("Brevo SMTP Key Validation", () => {
-  it("should connect to Brevo SMTP relay with the configured key", async () => {
-    const smtpKey = process.env.BREVO_SMTP_KEY;
-    expect(smtpKey).toBeDefined();
-    expect(smtpKey!.length).toBeGreaterThan(5);
+import { sendVerificationEmail } from "../server/email";
 
-    // Brevo SMTP uses the API key as both user and pass
-    // The 'user' for Brevo SMTP relay is the account login email
-    // but with API keys, the login is the key itself
-    const transporter = nodemailer.createTransport({
-      host: "smtp-relay.brevo.com",
-      port: 587,
-      secure: false,
-      auth: {
-        user: process.env.BREVO_SMTP_LOGIN || "support@drivelegal.app",
-        pass: smtpKey,
-      },
+const originalBrevoApiKey = process.env.BREVO_API_KEY;
+
+afterEach(() => {
+  if (originalBrevoApiKey === undefined) {
+    delete process.env.BREVO_API_KEY;
+  } else {
+    process.env.BREVO_API_KEY = originalBrevoApiKey;
+  }
+  vi.restoreAllMocks();
+});
+
+describe("Brevo email delivery", () => {
+  it("sends verification email through the Brevo HTTP API", async () => {
+    process.env.BREVO_API_KEY = "test-brevo-api-key";
+
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      text: async () => JSON.stringify({ messageId: "abc123" }),
+    } as Response);
+
+    const result = await sendVerificationEmail(
+      "driver@example.com",
+      "Driver",
+      "verify-token",
+      "https://operators.drivelegal.app/"
+    );
+
+    expect(result).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(url).toBe("https://api.brevo.com/v3/smtp/email");
+    expect(init).toMatchObject({
+      method: "POST",
+      headers: expect.objectContaining({
+        "api-key": "test-brevo-api-key",
+        "Content-Type": "application/json",
+      }),
     });
-
-    // Verify connection — this checks credentials without sending an email
-    const verified = await transporter.verify();
-    expect(verified).toBe(true);
-  }, 15000);
+    expect(String(init?.body)).toContain(
+      "https://operators.drivelegal.app/verify-email?token=verify-token"
+    );
+  });
 });

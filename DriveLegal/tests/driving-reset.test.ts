@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { computeCurrentDrivingSeconds, ActiveShift } from "../lib/logbook-storage";
+import {
+  computeConsecutiveDrivingSeconds,
+  type ActiveShift,
+} from "../lib/logbook-storage";
 
-describe("computeCurrentDrivingSeconds - break reset", () => {
+describe("computeConsecutiveDrivingSeconds - break reset", () => {
   it("should reset driving to 0 after a 30-minute break", () => {
     const shiftStart = new Date("2025-01-01T08:00:00Z").getTime();
     // Drive for 12 minutes, then take a 30-minute break, then drive for 5 minutes
@@ -19,7 +22,7 @@ describe("computeCurrentDrivingSeconds - break reset", () => {
 
     // Now it's 5 minutes after break ended (08:47:00)
     const now = new Date("2025-01-01T08:47:00Z").getTime();
-    const result = computeCurrentDrivingSeconds(shift, now);
+    const result = computeConsecutiveDrivingSeconds(shift, now);
 
     // Should be 5 minutes (300 seconds) — NOT 17 minutes (12 + 5)
     // Because the 30-min break resets the driving accumulator
@@ -41,7 +44,7 @@ describe("computeCurrentDrivingSeconds - break reset", () => {
 
     // Now it's 5 minutes after break ended (08:37:00)
     const now = new Date("2025-01-01T08:37:00Z").getTime();
-    const result = computeCurrentDrivingSeconds(shift, now);
+    const result = computeConsecutiveDrivingSeconds(shift, now);
 
     // Should be 17 minutes (12 + 5 = 1020 seconds) — short break does NOT reset
     expect(result).toBe(1020);
@@ -62,7 +65,7 @@ describe("computeCurrentDrivingSeconds - break reset", () => {
 
     // Now is exactly when break ended (08:42:00) — 0 seconds of driving since reset
     const now = new Date("2025-01-01T08:42:00Z").getTime();
-    const result = computeCurrentDrivingSeconds(shift, now);
+    const result = computeConsecutiveDrivingSeconds(shift, now);
 
     // Should be 0 — just came off a qualifying break
     expect(result).toBe(0);
@@ -83,7 +86,7 @@ describe("computeCurrentDrivingSeconds - break reset", () => {
 
     // Now it's 5 minutes after other work ended (08:47:00)
     const now = new Date("2025-01-01T08:47:00Z").getTime();
-    const result = computeCurrentDrivingSeconds(shift, now);
+    const result = computeConsecutiveDrivingSeconds(shift, now);
 
     // Should be 17 minutes (12 + 5 = 1020 seconds) — other work does NOT reset driving
     expect(result).toBe(1020);
@@ -104,7 +107,7 @@ describe("computeCurrentDrivingSeconds - break reset", () => {
 
     // 10 minutes after break ended
     const now = new Date("2025-01-01T11:40:00Z").getTime();
-    const result = computeCurrentDrivingSeconds(shift, now);
+    const result = computeConsecutiveDrivingSeconds(shift, now);
 
     // Should be 10 minutes (600 seconds) — 5 hours of driving was reset by the 30-min break
     expect(result).toBe(600);
