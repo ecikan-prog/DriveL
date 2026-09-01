@@ -27,6 +27,7 @@ import {
   registerDriverCloud,
   deleteDriverCloud,
   restoreDriverSessionCloud,
+  storeSessionToken,
 } from "./cloud-sync";
 import {
   clearAuthSession,
@@ -469,6 +470,9 @@ export function AuthProvider({ children }: { children?: React.ReactNode }) {
           deviceId,
           deviceLabel,
           appAccountToken: driver.appAccountToken ?? undefined,
+        });
+        await storeSessionToken(driver.localUserId, cloudResult.sessionToken, {
+          appAccountToken: driver.appAccountToken ?? null,
         });
         const applied = await applyAuthenticatedDriver(driver, passwordHash, {
           pullLogs: true,

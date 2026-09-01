@@ -628,3 +628,45 @@ export async function deleteDriverCloud(
   if (!result) return { success: false, error: "Network error." };
   return result;
 }
+
+const SESSION_TOKEN_KEY = "dl_session_token";
+
+export async function storeSessionToken(
+  userId: string,
+  token: string,
+  options?: {
+    appAccountToken?: string | null;
+  },
+): Promise<void> {
+  await AsyncStorage.setItem(
+    `${SESSION_TOKEN_KEY}_${userId}`,
+    JSON.stringify({
+      sessionToken: token,
+      appAccountToken: options?.appAccountToken ?? null,
+    }),
+  );
+}
+
+export async function getStoredSessionToken(
+  userId: string,
+): Promise<string | null> {
+  try {
+    const raw = await AsyncStorage.getItem(`${SESSION_TOKEN_KEY}_${userId}`);
+
+    if (!raw) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+
+      if (parsed && typeof parsed.sessionToken === "string") {
+        return parsed.sessionToken;
+      }
+    } catch {}
+
+    return raw;
+  } catch {
+    return null;
+  }
+}
