@@ -1,12 +1,13 @@
 import {
+  boolean,
+  index,
   int,
+  json,
   mysqlEnum,
   mysqlTable,
   text,
   timestamp,
   varchar,
-  json,
-  boolean,
 } from "drizzle-orm/mysql-core";
 
 /**
@@ -66,6 +67,10 @@ export const drivers = mysqlTable("drivers", {
   emailVerified: boolean("emailVerified").default(false).notNull(),
   trialStartDate: varchar("trialStartDate", { length: 32 }),
   trialEndDate: varchar("trialEndDate", { length: 32 }),
+  status: mysqlEnum("status", ["active", "deleted"])
+    .default("active")
+    .notNull(),
+  deletedAt: timestamp("deletedAt"),
   subscriptionStatus: mysqlEnum("subscriptionStatus", [
     "trial",
     "active",
@@ -74,22 +79,35 @@ export const drivers = mysqlTable("drivers", {
   ])
     .default("trial")
     .notNull(),
-  appAccountToken: varchar("appAccountToken", { length: 36 }),
+  appAccountToken: varchar("appAccountToken", { length: 36 }).unique(),
   subscriptionPlan: mysqlEnum("subscriptionPlan", ["monthly", "annual"]),
   subscriptionId: varchar("subscriptionId", { length: 255 }),
   currentPeriodEnd: varchar("currentPeriodEnd", { length: 32 }),
-  activeSessionTokenHash: varchar("activeSessionTokenHash", {
-    length: 128,
-  }),
-  activeDeviceId: varchar("activeDeviceId", { length: 128 }),
-  activeDeviceLabel: varchar("activeDeviceLabel", { length: 255 }),
-  activeSessionUpdatedAt: timestamp("activeSessionUpdatedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type Driver = typeof drivers.$inferSelect;
 export type InsertDriver = typeof drivers.$inferInsert;
+
+export const driverSessions = mysqlTable(
+  "driver_sessions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    localUserId: varchar("localUserId", { length: 128 }).notNull(),
+    sessionToken: varchar("sessionToken", { length: 128 }).notNull().unique(),
+    deviceId: varchar("deviceId", { length: 128 }).notNull(),
+    deviceLabel: varchar("deviceLabel", { length: 255 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    invalidatedAt: timestamp("invalidatedAt"),
+  },
+  (table) => ({
+    localUserIdIdx: index("idx_driver_sessions_userId").on(table.localUserId),
+  }),
+);
+
+export type DriverSession = typeof driverSessions.$inferSelect;
+export type InsertDriverSession = typeof driverSessions.$inferInsert;
 
 /**
  * Completed shift logs — stores the full DailyLog JSON plus hash chain data.

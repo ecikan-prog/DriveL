@@ -61,10 +61,6 @@ function createAppAccountToken(): string {
   return crypto.randomUUID();
 }
 
-function hashSessionToken(token: string): string {
-  return crypto.createHash("sha256").update(token).digest("hex");
-}
-
 function extractSessionToken(authHeader: string | undefined): string | null {
   if (!authHeader) {
     return null;
@@ -86,35 +82,35 @@ async function getDriverForSessionToken(
   const rows = await query<any>(
     `
     SELECT
-      localUserId,
-      email,
-      name,
-      dateOfBirth,
-      tslNumber,
-      operatorName,
-      licenceNumber,
-      licenceClass,
-      licenceExpiry,
-      vehicleRegistration,
-      vehicleType,
-      driverType,
-      trialStartDate,
-      createdAt,
-      trialEndDate,
-      appAccountToken,
-      subscriptionStatus,
-      subscriptionPlan,
-      subscriptionId,
-      currentPeriodEnd,
-      activeSessionTokenHash,
-      activeDeviceId,
-      activeDeviceLabel
-    FROM drivers
-    WHERE activeSessionTokenHash = ?
-      AND deletedAt IS NULL
+      d.localUserId,
+      d.email,
+      d.name,
+      d.dateOfBirth,
+      d.tslNumber,
+      d.operatorName,
+      d.licenceNumber,
+      d.licenceClass,
+      d.licenceExpiry,
+      d.vehicleRegistration,
+      d.vehicleType,
+      d.driverType,
+      d.trialStartDate,
+      d.createdAt,
+      d.trialEndDate,
+      d.appAccountToken,
+      d.subscriptionStatus,
+      d.subscriptionPlan,
+      d.subscriptionId,
+      d.currentPeriodEnd
+    FROM driver_sessions s
+    INNER JOIN drivers d
+      ON d.localUserId = s.localUserId
+    WHERE s.sessionToken = ?
+      AND s.invalidatedAt IS NULL
+      AND d.deletedAt IS NULL
     LIMIT 1
     `,
-    [hashSessionToken(sessionToken)],
+    [sessionToken],
   );
 
   const driver = rows[0] ?? null;
@@ -505,8 +501,8 @@ export const appRouter = t.router({
         z.object({
           email: z.string().email(),
           passwordHash: z.string().min(1),
-          deviceId: z.string().min(1).max(128),
-          deviceLabel: z.string().min(1).max(255),
+          deviceId: z.string().min(1).max(128).optional(),
+          deviceLabel: z.string().min(1).max(255).optional(),
           forceContinue: z.boolean().optional(),
         }),
       )
@@ -539,10 +535,7 @@ export const appRouter = t.router({
                 subscriptionPlan,
                 subscriptionId,
                 currentPeriodEnd,
-                emailVerified,
-                activeSessionTokenHash,
-                activeDeviceId,
-                activeDeviceLabel
+                emailVerified
               FROM drivers
               WHERE email = ?
                 AND deletedAt IS NULL
@@ -560,6 +553,8 @@ export const appRouter = t.router({
             }
 
             const driver = rows[0];
+            const appAccountToken =
+              driver.appAccountToken || createAppAccountToken();
 
             if (driver.passwordHash !== input.passwordHash) {
               return {
@@ -577,10 +572,44 @@ export const appRouter = t.router({
               };
             }
 
-            const hasOtherActiveDevice =
-              Boolean(driver.activeSessionTokenHash) &&
-              driver.activeDeviceId &&
-              driver.activeDeviceId !== input.deviceId;
+            if (!input.deviceId) {
+              if (!driver.appAccountToken) {
+                await connection.execute(
+                  `
+                  UPDATE drivers
+                  SET
+                    appAccountToken = ?,
+                    updatedAt = NOW()
+                  WHERE localUserId = ?
+                  LIMIT 1
+                  `,
+                  [appAccountToken, driver.localUserId],
+                );
+              }
+
+              return {
+                success: true,
+                driver: toDriverPayload({
+                  ...driver,
+                  appAccountToken,
+                }),
+              };
+            }
+
+            const [sessionRows] = await connection.execute<any[]>(
+              `
+              SELECT sessionToken, deviceId, deviceLabel, createdAt
+              FROM driver_sessions
+              WHERE localUserId = ?
+                AND invalidatedAt IS NULL
+              ORDER BY createdAt DESC
+              `,
+              [driver.localUserId],
+            );
+
+            const hasOtherActiveDevice = sessionRows.some(
+              (sessionRow) => sessionRow.deviceId !== input.deviceId,
+            );
 
             if (hasOtherActiveDevice && !input.forceContinue) {
               return {
@@ -591,31 +620,61 @@ export const appRouter = t.router({
             }
 
             const sessionToken = createSessionToken();
-            const sessionTokenHash = hashSessionToken(sessionToken);
-            const appAccountToken =
-              driver.appAccountToken || createAppAccountToken();
+
+            if (hasOtherActiveDevice) {
+              await connection.execute(
+                `
+                UPDATE driver_sessions
+                SET invalidatedAt = NOW()
+                WHERE localUserId = ?
+                  AND invalidatedAt IS NULL
+                `,
+                [driver.localUserId],
+              );
+            } else {
+              await connection.execute(
+                `
+                UPDATE driver_sessions
+                SET invalidatedAt = NOW()
+                WHERE localUserId = ?
+                  AND deviceId = ?
+                  AND invalidatedAt IS NULL
+                `,
+                [driver.localUserId, input.deviceId],
+              );
+            }
 
             await connection.execute(
               `
-              UPDATE drivers
-              SET
-                activeSessionTokenHash = ?,
-                activeDeviceId = ?,
-                activeDeviceLabel = ?,
-                activeSessionUpdatedAt = NOW(),
-                appAccountToken = ?,
-                updatedAt = NOW()
-              WHERE localUserId = ?
-              LIMIT 1
+              INSERT INTO driver_sessions (
+                localUserId,
+                sessionToken,
+                deviceId,
+                deviceLabel
+              )
+              VALUES (?, ?, ?, ?)
               `,
               [
-                sessionTokenHash,
-                input.deviceId,
-                input.deviceLabel,
-                appAccountToken,
                 driver.localUserId,
+                sessionToken,
+                input.deviceId,
+                input.deviceLabel ?? null,
               ],
             );
+
+            if (!driver.appAccountToken) {
+              await connection.execute(
+                `
+                UPDATE drivers
+                SET
+                  appAccountToken = ?,
+                  updatedAt = NOW()
+                WHERE localUserId = ?
+                LIMIT 1
+                `,
+                [appAccountToken, driver.localUserId],
+              );
+            }
 
             return {
               success: true,
@@ -672,18 +731,14 @@ export const appRouter = t.router({
         }
 
         await query(
-          `
-            UPDATE drivers
-            SET
-              activeSessionTokenHash = NULL,
-              activeDeviceId = NULL,
-              activeDeviceLabel = NULL,
-              activeSessionUpdatedAt = NULL,
-              updatedAt = NOW()
-            WHERE activeSessionTokenHash = ?
-            LIMIT 1
+            `
+              UPDATE driver_sessions
+              SET
+                invalidatedAt = NOW()
+              WHERE sessionToken = ?
+                AND invalidatedAt IS NULL
             `,
-          [hashSessionToken(sessionToken)],
+            [sessionToken],
         );
 
         return { success: true };
@@ -1100,15 +1155,21 @@ export const appRouter = t.router({
             SET
               status = 'deleted',
               deletedAt = NOW(),
-              passwordHash = '',
-              activeSessionTokenHash = NULL,
-              activeDeviceId = NULL,
-              activeDeviceLabel = NULL,
-              activeSessionUpdatedAt = NULL
+              passwordHash = ''
             WHERE email = ?
             LIMIT 1
             `,
             [email],
+          );
+
+          await query(
+            `
+            UPDATE driver_sessions
+            SET invalidatedAt = NOW()
+            WHERE localUserId = ?
+              AND invalidatedAt IS NULL
+            `,
+            [rows[0].localUserId],
           );
 
           return { success: true };
