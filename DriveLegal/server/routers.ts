@@ -51,6 +51,10 @@ function createSecureToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }
 
+function createAppAccountToken(): string {
+  return crypto.randomUUID();
+}
+
 function createExpiry(hours: number): Date {
   return new Date(Date.now() + hours * 60 * 60 * 1000);
 }
@@ -154,7 +158,8 @@ export const appRouter = t.router({
             SELECT
               id,
               emailVerified,
-              deletedAt
+              deletedAt,
+              appAccountToken
             FROM drivers
             WHERE email = ?
             LIMIT 1
@@ -172,6 +177,9 @@ export const appRouter = t.router({
           if (existing.length > 0) {
             const ex = existing[0];
             if (ex.deletedAt) {
+              const appAccountToken =
+                ex.appAccountToken ?? createAppAccountToken();
+
               // Reactivate soft-deleted account
               await query(
                 `
@@ -182,7 +190,8 @@ export const appRouter = t.router({
                   localUserId = ?,
                   passwordHash = ?,
                   trialStartDate = ?,
-                  trialEndDate = ?
+                  trialEndDate = ?,
+                  appAccountToken = ?
                 WHERE id = ?
                 `,
                 [
@@ -190,6 +199,7 @@ export const appRouter = t.router({
                   input.passwordHash,
                   trialStartDate,
                   trialEndDate,
+                  appAccountToken,
                   ex.id,
                 ]
               );
@@ -245,6 +255,8 @@ export const appRouter = t.router({
             };
           }
 
+          const appAccountToken = createAppAccountToken();
+
           await query(
             `
             INSERT INTO drivers (
@@ -261,12 +273,13 @@ export const appRouter = t.router({
               licenceExpiry,
               dateOfBirth,
               operatorName,
+              appAccountToken,
               emailVerified,
               trialStartDate,
               trialEndDate,
               subscriptionStatus
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, ?, ?, ?)
             `,
             [
               input.localUserId,
@@ -282,6 +295,7 @@ export const appRouter = t.router({
               input.licenceExpiry?.trim() || null,
               input.dateOfBirth.trim(),
               input.operatorName?.trim() || null,
+              appAccountToken,
               trialStartDate,
               trialEndDate,
               "trial",
@@ -387,7 +401,8 @@ export const appRouter = t.router({
               subscriptionPlan,
               subscriptionId,
               currentPeriodEnd,
-            emailVerified
+              appAccountToken,
+              emailVerified
             FROM drivers
             WHERE email = ?
               AND deletedAt IS NULL
@@ -410,6 +425,20 @@ export const appRouter = t.router({
               success: false,
               error: "Invalid email address or password.",
             };
+          }
+
+          if (!driver.appAccountToken) {
+            driver.appAccountToken = createAppAccountToken();
+
+            await query(
+              `
+              UPDATE drivers
+              SET appAccountToken = ?
+              WHERE localUserId = ?
+                AND deletedAt IS NULL
+              `,
+              [driver.appAccountToken, driver.localUserId]
+            );
           }
 
           if (!driver.emailVerified) {
@@ -443,6 +472,7 @@ export const appRouter = t.router({
               subscriptionPlan: driver.subscriptionPlan,
               subscriptionId: driver.subscriptionId,
               currentPeriodEnd: driver.currentPeriodEnd,
+              appAccountToken: driver.appAccountToken,
             },
           };
         } catch (error) {

@@ -32,6 +32,7 @@ import {
   invalidateDriverSession,
   storeSessionToken,
   getStoredSessionToken,
+  getStoredAppAccountToken,
   clearSessionToken,
 } from "./cloud-sync";
 
@@ -74,6 +75,7 @@ type RegisterParams = {
 
 type AuthContextValue = {
   user: LocalAuth.AuthUser | null;
+  appAccountToken: string | null;
   loading: boolean;
   login: (
     email: string,
@@ -114,6 +116,8 @@ export function AuthProvider({
 }) {
   const [user, setUser] =
     useState<LocalAuth.AuthUser | null>(null);
+  const [appAccountToken, setAppAccountToken] =
+    useState<string | null>(null);
 
   const [loading, setLoading] =
     useState(true);
@@ -138,6 +142,7 @@ export function AuthProvider({
     if (valid === false) {
       // Session invalidated by another device (takeover)
       sessionTokenRef.current = null;
+      setAppAccountToken(null);
       await LocalAuth.logoutUser();
       setUser(null);
       Alert.alert(
@@ -200,9 +205,14 @@ export function AuthProvider({
         if (currentUser) {
           // Restore the session token and start monitoring
           const token = await getStoredSessionToken(currentUser.id);
+          const storedAppAccountToken =
+            await getStoredAppAccountToken(currentUser.id);
           if (token) {
             sessionTokenRef.current = token;
+            setAppAccountToken(storedAppAccountToken);
             startSessionMonitor();
+          } else {
+            setAppAccountToken(null);
           }
 
           migrateLogCalculations(
@@ -222,6 +232,8 @@ export function AuthProvider({
               error
             );
           });
+        } else {
+          setAppAccountToken(null);
         }
       } catch (error) {
         console.error(
@@ -341,6 +353,7 @@ export function AuthProvider({
           !localResult.success ||
           !localResult.user
         ) {
+          setAppAccountToken(null);
           return {
             success: false,
             error:
@@ -348,6 +361,7 @@ export function AuthProvider({
               "Your account was verified, but it could not be restored on this device.",
           };
         }
+        setAppAccountToken(driver.appAccountToken);
         await syncSubscriptionFromServer({
   userId: driver.localUserId,
   status: driver.subscriptionStatus,
@@ -400,6 +414,7 @@ export function AuthProvider({
 
    if (!shouldTakeOver) {
      // User chose Cancel — do not start a session on this device.
+     setAppAccountToken(null);
      await LocalAuth.logoutUser();
      return { success: false, error: "Login cancelled." };
    }
@@ -413,11 +428,19 @@ export function AuthProvider({
 
    if (takeoverResult.success && takeoverResult.sessionToken) {
      sessionTokenRef.current = takeoverResult.sessionToken;
-     await storeSessionToken(driver.localUserId, takeoverResult.sessionToken);
+     await storeSessionToken(
+       driver.localUserId,
+       takeoverResult.sessionToken,
+       driver.appAccountToken
+     );
    }
  } else if (sessionResult.success && sessionResult.sessionToken) {
    sessionTokenRef.current = sessionResult.sessionToken;
-   await storeSessionToken(driver.localUserId, sessionResult.sessionToken);
+   await storeSessionToken(
+     driver.localUserId,
+     sessionResult.sessionToken,
+     driver.appAccountToken
+   );
  }
 
  startSessionMonitor();
@@ -608,6 +631,7 @@ export function AuthProvider({
       }
 
       stopSessionMonitor();
+      setAppAccountToken(null);
       await LocalAuth.logoutUser();
       setUser(null);
     },
@@ -672,6 +696,7 @@ export function AuthProvider({
           sessionTokenRef.current = null;
         }
         stopSessionMonitor();
+        setAppAccountToken(null);
         await LocalAuth.logoutUser();
         setUser(null);
 
@@ -691,6 +716,7 @@ export function AuthProvider({
     <AuthContext.Provider
       value={{
         user,
+        appAccountToken,
         loading,
         login,
         register,
