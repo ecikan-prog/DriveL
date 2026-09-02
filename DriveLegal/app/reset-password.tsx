@@ -11,14 +11,10 @@ import {
   View,
 } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import {
-  useLocalSearchParams,
-  useRouter,
-} from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { resetPasswordWithToken } from "@/lib/cloud-sync";
-import { hashPassword } from "@/lib/local-auth";
 
 const COLORS = {
   blue: "#3658D8",
@@ -52,12 +48,9 @@ export default function ResetPasswordScreen() {
 
   const [token, setToken] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] =
-    useState("");
-  const [showPassword, setShowPassword] =
-    useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] =
-    useState(false);
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
@@ -67,23 +60,14 @@ export default function ResetPasswordScreen() {
       ? params.token[0]
       : params.token;
 
-    setToken(
-      typeof suppliedToken === "string"
-        ? suppliedToken.trim()
-        : ""
-    );
+    setToken(typeof suppliedToken === "string" ? suppliedToken.trim() : "");
   }, [params.token]);
 
   const passwordValid = password.length >= 10;
-  const passwordsMatch =
-    password.length > 0 &&
-    password === confirmPassword;
+  const passwordsMatch = password.length > 0 && password === confirmPassword;
 
   const canSubmit =
-    Boolean(token) &&
-    passwordValid &&
-    passwordsMatch &&
-    !loading;
+    Boolean(token) && passwordValid && passwordsMatch && !loading;
 
   const handleSubmit = async () => {
     if (loading) {
@@ -94,7 +78,7 @@ export default function ResetPasswordScreen() {
 
     if (!token) {
       setError(
-        "This password-reset link is invalid or incomplete. Please request a new reset link."
+        "This password-reset link is invalid or incomplete. Please request a new reset link.",
       );
       return;
     }
@@ -105,9 +89,7 @@ export default function ResetPasswordScreen() {
     }
 
     if (password.length < 10) {
-      setError(
-        "Your new password must contain at least 10 characters."
-      );
+      setError("Your new password must contain at least 10 characters.");
       return;
     }
 
@@ -119,17 +101,11 @@ export default function ResetPasswordScreen() {
     setLoading(true);
 
     try {
-      const passwordHash = hashPassword(password);
-
-      const result = await resetPasswordWithToken(
-        token,
-        passwordHash
-      );
+      const result = await resetPasswordWithToken(token, password);
 
       if (!result.success) {
         throw new Error(
-          result.error ||
-            "Drive Legal could not reset your password."
+          result.error || "Drive Legal could not reset your password.",
         );
       }
 
@@ -139,7 +115,7 @@ export default function ResetPasswordScreen() {
     } catch (e: any) {
       setError(
         e?.message ||
-          "Unable to reset your password. Please request a new reset link and try again."
+          "Unable to reset your password. Please request a new reset link and try again.",
       );
     } finally {
       setLoading(false);
@@ -157,9 +133,7 @@ export default function ResetPasswordScreen() {
       safeAreaClassName="bg-[#3658D8]"
     >
       <KeyboardAvoidingView
-        behavior={
-          Platform.OS === "ios" ? "padding" : "height"
-        }
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.flex}
       >
         <ScrollView
@@ -171,50 +145,33 @@ export default function ResetPasswordScreen() {
           <View style={styles.header}>
             <View style={styles.lockContainer}>
               <MaterialIcons
-                name={
-                  success
-                    ? "check-circle-outline"
-                    : "lock-reset"
-                }
+                name={success ? "check-circle-outline" : "lock-reset"}
                 size={42}
                 color={COLORS.blue}
               />
             </View>
 
             <Text style={styles.brand}>
-              <Text style={styles.brandWhite}>
-                DRIVE{" "}
-              </Text>
+              <Text style={styles.brandWhite}>DRIVE </Text>
 
-              <Text style={styles.brandGreen}>
-                LEGAL
-              </Text>
+              <Text style={styles.brandGreen}>LEGAL</Text>
             </Text>
 
-            <Text style={styles.brandSubtitle}>
-              DRIVER LOGBOOK
-            </Text>
+            <Text style={styles.brandSubtitle}>DRIVER LOGBOOK</Text>
           </View>
 
           <View style={styles.content}>
             {success ? (
               <>
                 <View style={styles.successIcon}>
-                  <MaterialIcons
-                    name="check"
-                    size={42}
-                    color={COLORS.white}
-                  />
+                  <MaterialIcons name="check" size={42} color={COLORS.white} />
                 </View>
 
-                <Text style={styles.successTitle}>
-                  Password Updated
-                </Text>
+                <Text style={styles.successTitle}>Password Updated</Text>
 
                 <Text style={styles.successText}>
-                  Your Drive Legal password has been reset
-                  successfully. You can now sign in using your
-                  new password.
+                  Your Drive Legal password has been reset successfully. You can
+                  now sign in using your new password.
                 </Text>
 
                 <View style={styles.successBox}>
@@ -225,8 +182,7 @@ export default function ResetPasswordScreen() {
                   />
 
                   <Text style={styles.successBoxText}>
-                    Your previous password can no longer be used
-                    to sign in.
+                    Your previous password can no longer be used to sign in.
                   </Text>
                 </View>
 
@@ -235,27 +191,18 @@ export default function ResetPasswordScreen() {
                   activeOpacity={0.85}
                   style={styles.primaryButton}
                 >
-                  <MaterialIcons
-                    name="login"
-                    size={21}
-                    color={COLORS.white}
-                  />
+                  <MaterialIcons name="login" size={21} color={COLORS.white} />
 
-                  <Text style={styles.primaryButtonText}>
-                    Sign In
-                  </Text>
+                  <Text style={styles.primaryButtonText}>Sign In</Text>
                 </TouchableOpacity>
               </>
             ) : (
               <>
                 <View style={styles.titleSection}>
-                  <Text style={styles.title}>
-                    Reset Password
-                  </Text>
+                  <Text style={styles.title}>Reset Password</Text>
 
                   <Text style={styles.subtitle}>
-                    Enter a secure new password for your Drive
-                    Legal account.
+                    Enter a secure new password for your Drive Legal account.
                   </Text>
                 </View>
 
@@ -268,8 +215,8 @@ export default function ResetPasswordScreen() {
                     />
 
                     <Text style={styles.errorText}>
-                      This reset link is invalid or incomplete.
-                      Please request a new password-reset email.
+                      This reset link is invalid or incomplete. Please request a
+                      new password-reset email.
                     </Text>
                   </View>
                 ) : null}
@@ -282,16 +229,12 @@ export default function ResetPasswordScreen() {
                       color={COLORS.error}
                     />
 
-                    <Text style={styles.errorText}>
-                      {error}
-                    </Text>
+                    <Text style={styles.errorText}>{error}</Text>
                   </View>
                 ) : null}
 
                 <View style={styles.field}>
-                  <Text style={styles.label}>
-                    NEW PASSWORD
-                  </Text>
+                  <Text style={styles.label}>NEW PASSWORD</Text>
 
                   <View style={styles.inputContainer}>
                     <MaterialIcons
@@ -319,29 +262,19 @@ export default function ResetPasswordScreen() {
                       textContentType="newPassword"
                       returnKeyType="next"
                       editable={!loading && Boolean(token)}
-                      onSubmitEditing={() =>
-                        confirmInputRef.current?.focus()
-                      }
+                      onSubmitEditing={() => confirmInputRef.current?.focus()}
                     />
 
                     <TouchableOpacity
-                      onPress={() =>
-                        setShowPassword((current) => !current)
-                      }
+                      onPress={() => setShowPassword((current) => !current)}
                       disabled={loading}
                       accessibilityLabel={
-                        showPassword
-                          ? "Hide new password"
-                          : "Show new password"
+                        showPassword ? "Hide new password" : "Show new password"
                       }
                       style={styles.visibilityButton}
                     >
                       <MaterialIcons
-                        name={
-                          showPassword
-                            ? "visibility-off"
-                            : "visibility"
-                        }
+                        name={showPassword ? "visibility-off" : "visibility"}
                         size={21}
                         color="#71809F"
                       />
@@ -356,18 +289,13 @@ export default function ResetPasswordScreen() {
                           : "radio-button-unchecked"
                       }
                       size={16}
-                      color={
-                        passwordValid
-                          ? COLORS.success
-                          : COLORS.muted
-                      }
+                      color={passwordValid ? COLORS.success : COLORS.muted}
                     />
 
                     <Text
                       style={[
                         styles.requirementText,
-                        passwordValid &&
-                          styles.requirementTextValid,
+                        passwordValid && styles.requirementTextValid,
                       ]}
                     >
                       At least 10 characters
@@ -376,9 +304,7 @@ export default function ResetPasswordScreen() {
                 </View>
 
                 <View style={styles.field}>
-                  <Text style={styles.label}>
-                    CONFIRM PASSWORD
-                  </Text>
+                  <Text style={styles.label}>CONFIRM PASSWORD</Text>
 
                   <View style={styles.inputContainer}>
                     <MaterialIcons
@@ -416,9 +342,7 @@ export default function ResetPasswordScreen() {
 
                     <TouchableOpacity
                       onPress={() =>
-                        setShowConfirmPassword(
-                          (current) => !current
-                        )
+                        setShowConfirmPassword((current) => !current)
                       }
                       disabled={loading}
                       accessibilityLabel={
@@ -430,9 +354,7 @@ export default function ResetPasswordScreen() {
                     >
                       <MaterialIcons
                         name={
-                          showConfirmPassword
-                            ? "visibility-off"
-                            : "visibility"
+                          showConfirmPassword ? "visibility-off" : "visibility"
                         }
                         size={21}
                         color="#71809F"
@@ -443,17 +365,9 @@ export default function ResetPasswordScreen() {
                   {confirmPassword.length > 0 ? (
                     <View style={styles.requirementRow}>
                       <MaterialIcons
-                        name={
-                          passwordsMatch
-                            ? "check-circle"
-                            : "cancel"
-                        }
+                        name={passwordsMatch ? "check-circle" : "cancel"}
                         size={16}
-                        color={
-                          passwordsMatch
-                            ? COLORS.success
-                            : COLORS.error
-                        }
+                        color={passwordsMatch ? COLORS.success : COLORS.error}
                       />
 
                       <Text
@@ -478,21 +392,14 @@ export default function ResetPasswordScreen() {
                   activeOpacity={0.85}
                   style={[
                     styles.primaryButton,
-                    !canSubmit &&
-                      styles.primaryButtonDisabled,
+                    !canSubmit && styles.primaryButtonDisabled,
                   ]}
                 >
                   {loading ? (
                     <>
-                      <ActivityIndicator
-                        color={COLORS.white}
-                      />
+                      <ActivityIndicator color={COLORS.white} />
 
-                      <Text
-                        style={
-                          styles.primaryButtonLoadingText
-                        }
-                      >
+                      <Text style={styles.primaryButtonLoadingText}>
                         Updating Password...
                       </Text>
                     </>
@@ -504,9 +411,7 @@ export default function ResetPasswordScreen() {
                         color={COLORS.white}
                       />
 
-                      <Text
-                        style={styles.primaryButtonText}
-                      >
+                      <Text style={styles.primaryButtonText}>
                         Update Password
                       </Text>
                     </>
@@ -524,9 +429,7 @@ export default function ResetPasswordScreen() {
                     color={COLORS.blue}
                   />
 
-                  <Text style={styles.backButtonText}>
-                    Back to Sign In
-                  </Text>
+                  <Text style={styles.backButtonText}>Back to Sign In</Text>
                 </TouchableOpacity>
 
                 <View style={styles.infoBox}>
@@ -537,8 +440,8 @@ export default function ResetPasswordScreen() {
                   />
 
                   <Text style={styles.infoText}>
-                    For your security, use a password that you
-                    have not used for another account.
+                    For your security, use a password that you have not used for
+                    another account.
                   </Text>
                 </View>
               </>

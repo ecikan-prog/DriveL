@@ -189,9 +189,7 @@ async function trpcCall(
 /**
  * Get the hash chain entries for a user from AsyncStorage.
  */
-async function getHashChain(
-  userId: string,
-): Promise<
+async function getHashChain(userId: string): Promise<
   Array<{
     logId: string;
     hash: string;
@@ -360,7 +358,7 @@ export async function pullLogsFromCloud(
 export async function registerDriverCloud(params: {
   localUserId: string;
   email: string;
-  passwordHash: string;
+  password: string;
   name: string;
   dateOfBirth: string;
   tslNumber?: string;
@@ -386,7 +384,7 @@ export async function registerDriverCloud(params: {
  */
 export async function loginDriverCloud(
   email: string,
-  passwordHash: string,
+  password: string,
   options: {
     deviceId: string;
     deviceLabel: string;
@@ -424,7 +422,7 @@ export async function loginDriverCloud(
 }> {
   const result = await trpcCall("driverAuth.login", {
     email,
-    passwordHash,
+    password,
     ...options,
   });
   if (!result)
@@ -536,11 +534,11 @@ export async function forgotPasswordRequest(email: string): Promise<void> {
  */
 export async function resetPasswordWithToken(
   token: string,
-  newPasswordHash: string,
+  newPassword: string,
 ): Promise<{ success: boolean; error?: string }> {
   const result = await trpcCall("driverAuth.resetPassword", {
     token,
-    newPasswordHash,
+    newPassword,
   });
   if (!result) return { success: false, error: "Network error." };
   return result;
