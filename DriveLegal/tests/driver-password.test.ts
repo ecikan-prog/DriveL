@@ -60,19 +60,19 @@ describe("driver password verification", () => {
       matches: false,
       needsMigration: false,
     });
+  });
 
-    it("registration stores only canonical scrypt hashes", () => {
-      const registrationHash = hashDriverPassword("RegistrationPassword2026!");
+  it("registration stores only canonical scrypt hashes", () => {
+    const registrationHash = hashDriverPassword("RegistrationPassword2026!");
 
-      expect(registrationHash.startsWith("s1$")).toBe(true);
-      expect(registrationHash).not.toMatch(/^[a-f0-9]{64}$/);
-    });
+    expect(registrationHash.startsWith("s1$")).toBe(true);
+    expect(registrationHash).not.toMatch(/^[a-f0-9]{64}$/);
+  });
 
-    it("password reset stores only canonical scrypt hashes", () => {
-      const resetHash = hashDriverPassword("ResetPassword2026!");
+  it("password reset stores only canonical scrypt hashes", () => {
+    const resetHash = hashDriverPassword("ResetPassword2026!");
 
-      expect(resetHash.startsWith("s1$")).toBe(true);
-      expect(resetHash).not.toMatch(/^[a-f0-9]{64}$/);
-    });
+    expect(resetHash.startsWith("s1$")).toBe(true);
+    expect(resetHash).not.toMatch(/^[a-f0-9]{64}$/);
   });
 });
