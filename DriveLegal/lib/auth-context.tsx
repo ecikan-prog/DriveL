@@ -44,7 +44,7 @@ import { migrateLogCalculations } from "./logbook-storage";
 import { lockPinSession } from "./pin-security";
 import { syncSubscriptionFromServer } from "./subscription";
 
-const LIVE_BACKEND = "https://operators.drivelegal.app";
+const LIVE_BACKEND = "https://drivel-production.up.railway.app";
 
 type LoginResult = {
   success: boolean;
