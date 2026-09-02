@@ -14,6 +14,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import * as Crypto from "expo-crypto";
 import { AppState, Platform } from "react-native";
 
 import * as LocalAuth from "./local-auth";
@@ -423,20 +424,22 @@ export function AuthProvider({ children }: { children?: React.ReactNode }) {
       const normalisedEmail = normaliseEmail(email);
       lockPinSession();
 
-      const passwordHash = LocalAuth.hashPassword(password);
+      const localPasswordHash = LocalAuth.hashPassword(password);
 
       try {
+        const legacyPasswordSha256 = await Crypto.digestStringAsync(
+          Crypto.CryptoDigestAlgorithm.SHA256,
+          password,
+        );
         const deviceId = await getOrCreateDeviceId();
         const deviceLabel = getDeviceLabel();
-        const cloudResult = await loginDriverCloud(
-          normalisedEmail,
-          passwordHash,
-          {
-            deviceId,
-            deviceLabel,
-            forceContinue: options?.forceContinue,
-          },
-        );
+        const cloudResult = await loginDriverCloud(normalisedEmail, password, {
+          legacyPasswordHash: localPasswordHash,
+          legacyPasswordSha256,
+          deviceId,
+          deviceLabel,
+          forceContinue: options?.forceContinue,
+        });
 
         if (!cloudResult.success && cloudResult.verificationRequired) {
           return {
@@ -483,9 +486,13 @@ export function AuthProvider({ children }: { children?: React.ReactNode }) {
         await storeSessionToken(driver.localUserId, cloudResult.sessionToken, {
           appAccountToken: driver.appAccountToken ?? null,
         });
-        const applied = await applyAuthenticatedDriver(driver, passwordHash, {
-          pullLogs: true,
-        });
+        const applied = await applyAuthenticatedDriver(
+          driver,
+          localPasswordHash,
+          {
+            pullLogs: true,
+          },
+        );
 
         if (!applied.success) {
           await clearAuthSession();
@@ -538,13 +545,11 @@ export function AuthProvider({ children }: { children?: React.ReactNode }) {
 
       const trialStartDate = new Date().toISOString();
 
-      const passwordHash = LocalAuth.hashPassword(params.password);
-
       try {
         const cloudResult = await registerDriverCloud({
           localUserId,
           email,
-          passwordHash,
+          password: params.password,
           name: cleanedParams.name,
           dateOfBirth: cleanedParams.dateOfBirth,
           tslNumber: cleanedParams.tslNumber,

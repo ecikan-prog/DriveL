@@ -4,6 +4,7 @@ import crypto from "crypto";
 
 import { query, withTransaction } from "./db";
 import type { Context } from "./context";
+import { hashDriverPassword, verifyDriverPassword } from "./driver-password";
 import { sendPasswordResetEmail, sendVerificationEmail } from "./email";
 
 const t = initTRPC.context<Context>().create();
@@ -227,7 +228,7 @@ export const appRouter = t.router({
         z.object({
           localUserId: z.string().min(1).max(128),
           email: z.string().email(),
-          passwordHash: z.string().min(1).max(128),
+          password: z.string().min(1).max(256),
           name: z.string().min(2).max(255),
           dateOfBirth: z
             .string()
@@ -254,6 +255,7 @@ export const appRouter = t.router({
       .mutation(async ({ input }) => {
         const email = normaliseEmail(input.email);
         const dateOfBirth = parseIsoDate(input.dateOfBirth);
+        const passwordHash = hashDriverPassword(input.password);
 
         if (!dateOfBirth) {
           return {
@@ -332,7 +334,7 @@ export const appRouter = t.router({
                 `,
                 [
                   input.localUserId,
-                  input.passwordHash,
+                  passwordHash,
                   trialStartDate,
                   trialEndDate,
                   appAccountToken,
@@ -421,7 +423,7 @@ export const appRouter = t.router({
             [
               input.localUserId,
               email,
-              input.passwordHash,
+              passwordHash,
               input.name.trim(),
               input.licenceNumber?.trim() || null,
               input.vehicleRegistration?.trim() || null,
@@ -502,13 +504,15 @@ export const appRouter = t.router({
       }),
 
     /**
-     * Login using the password hash supplied by the app.
+     * Login using the plaintext password supplied by the app over HTTPS.
      */
     login: t.procedure
       .input(
         z.object({
           email: z.string().email(),
-          passwordHash: z.string().min(1),
+          password: z.string().min(1).max(256),
+          legacyPasswordHash: z.string().min(1).max(128).optional(),
+          legacyPasswordSha256: z.string().length(64).optional(),
           deviceId: z.string().min(1).max(128).optional(),
           deviceLabel: z.string().min(1).max(255).optional(),
           forceContinue: z.boolean().optional(),
@@ -563,8 +567,16 @@ export const appRouter = t.router({
             const driver = rows[0];
             const appAccountToken =
               driver.appAccountToken || createAppAccountToken();
+            const passwordCheck = verifyDriverPassword(
+              input.password,
+              driver.passwordHash,
+              {
+                simpleHash: input.legacyPasswordHash,
+                sha256Hex: input.legacyPasswordSha256,
+              },
+            );
 
-            if (driver.passwordHash !== input.passwordHash) {
+            if (!passwordCheck.matches) {
               return {
                 success: false,
                 error: "Invalid email address or password.",
@@ -581,18 +593,27 @@ export const appRouter = t.router({
             }
 
             if (!input.deviceId) {
-              if (!driver.appAccountToken) {
+              if (passwordCheck.needsMigration || !driver.appAccountToken) {
                 await connection.execute(
                   `
                   UPDATE drivers
                   SET
+                    passwordHash = ?,
                     appAccountToken = ?,
                     updatedAt = NOW()
                   WHERE localUserId = ?
                   LIMIT 1
                   `,
-                  [appAccountToken, driver.localUserId],
+                  [
+                    passwordCheck.nextHash ?? driver.passwordHash,
+                    appAccountToken,
+                    driver.localUserId,
+                  ],
                 );
+              }
+
+              if (!driver.appAccountToken) {
+                driver.appAccountToken = appAccountToken;
               }
 
               return {
@@ -670,17 +691,22 @@ export const appRouter = t.router({
               ],
             );
 
-            if (!driver.appAccountToken) {
+            if (passwordCheck.needsMigration || !driver.appAccountToken) {
               await connection.execute(
                 `
                 UPDATE drivers
                 SET
+                  passwordHash = ?,
                   appAccountToken = ?,
                   updatedAt = NOW()
                 WHERE localUserId = ?
                 LIMIT 1
                 `,
-                [appAccountToken, driver.localUserId],
+                [
+                  passwordCheck.nextHash ?? driver.passwordHash,
+                  appAccountToken,
+                  driver.localUserId,
+                ],
               );
             }
 
@@ -739,14 +765,14 @@ export const appRouter = t.router({
         }
 
         await query(
-            `
+          `
               UPDATE driver_sessions
               SET
                 invalidatedAt = NOW()
               WHERE sessionToken = ?
                 AND invalidatedAt IS NULL
             `,
-            [sessionToken],
+          [sessionToken],
         );
 
         return { success: true };
@@ -1036,11 +1062,12 @@ export const appRouter = t.router({
       .input(
         z.object({
           token: z.string().min(1),
-          newPasswordHash: z.string().min(1),
+          newPassword: z.string().min(1).max(256),
         }),
       )
       .mutation(async ({ input }) => {
         try {
+          const newPasswordHash = hashDriverPassword(input.newPassword);
           const tokenRows = await query<any>(
             `
             SELECT
@@ -1087,7 +1114,7 @@ export const appRouter = t.router({
             SET passwordHash = ?
             WHERE email = ?
             `,
-            [input.newPasswordHash, tokenRecord.email],
+            [newPasswordHash, tokenRecord.email],
           );
 
           await query(
