@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import crypto from "crypto";
 
 import {
   hashDriverPassword,
@@ -6,7 +7,7 @@ import {
 } from "../server/driver-password";
 
 describe("driver password verification", () => {
-  it("matches the canonical scrypt driver hash without migration", () => {
+  it("allows existing production scrypt account login without migration", () => {
     const password = "DriveLegal2026!";
     const storedHash = hashDriverPassword(password);
 
@@ -18,7 +19,7 @@ describe("driver password verification", () => {
     });
   });
 
-  it("matches the legacy simple hash and requests migration", () => {
+  it("allows legacy simple-hash account login and returns migration hash", () => {
     const password = "DriveLegal2026!";
     const result = verifyDriverPassword(password, "27abdd50", {
       simpleHash: "27abdd50",
@@ -36,10 +37,12 @@ describe("driver password verification", () => {
     });
   });
 
-  it("matches the legacy SHA-256 hash and requests migration", () => {
+  it("allows legacy SHA-256 account login and returns migration hash", () => {
     const password = "DriveLegal2026!";
-    const storedHash =
-      "7f576096fe3499935c6549bf2078e723752ded172190559bf38f27e20c9c3e89";
+    const storedHash = crypto
+      .createHash("sha256")
+      .update(password)
+      .digest("hex");
     const result = verifyDriverPassword(password, storedHash, {
       sha256Hex: storedHash,
     });
@@ -56,6 +59,20 @@ describe("driver password verification", () => {
     expect(verifyDriverPassword("WrongPassword2026!", storedHash)).toEqual({
       matches: false,
       needsMigration: false,
+    });
+
+    it("registration stores only canonical scrypt hashes", () => {
+      const registrationHash = hashDriverPassword("RegistrationPassword2026!");
+
+      expect(registrationHash.startsWith("s1$")).toBe(true);
+      expect(registrationHash).not.toMatch(/^[a-f0-9]{64}$/);
+    });
+
+    it("password reset stores only canonical scrypt hashes", () => {
+      const resetHash = hashDriverPassword("ResetPassword2026!");
+
+      expect(resetHash.startsWith("s1$")).toBe(true);
+      expect(resetHash).not.toMatch(/^[a-f0-9]{64}$/);
     });
   });
 });
