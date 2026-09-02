@@ -349,6 +349,7 @@ export async function loginDriverCloud(email: string, passwordHash: string): Pro
     subscriptionPlan: "monthly" | "annual" | null;
     subscriptionId: string | null;
     currentPeriodEnd: string | null;
+    appAccountToken: string;
   };
 }> {
   const result = await trpcCall("driverAuth.login", { email, passwordHash });
@@ -506,13 +507,73 @@ export async function getOrCreateDeviceId(): Promise<string> {
 
 const SESSION_TOKEN_KEY = "dl_session_token";
 
-export async function storeSessionToken(userId: string, token: string): Promise<void> {
-  await AsyncStorage.setItem(`${SESSION_TOKEN_KEY}_${userId}`, token);
+type StoredSessionData = {
+  sessionToken: string;
+  appAccountToken?: string | null;
+};
+
+function parseStoredSessionData(raw: string | null): StoredSessionData | null {
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      typeof parsed.sessionToken === "string"
+    ) {
+      return {
+        sessionToken: parsed.sessionToken,
+        appAccountToken:
+          typeof parsed.appAccountToken === "string"
+            ? parsed.appAccountToken
+            : null,
+      };
+    }
+  } catch {
+    // Backward compatibility with existing raw session token storage.
+  }
+
+  return {
+    sessionToken: raw,
+    appAccountToken: null,
+  };
+}
+
+export async function storeSessionToken(
+  userId: string,
+  token: string,
+  appAccountToken?: string | null
+): Promise<void> {
+  await AsyncStorage.setItem(
+    `${SESSION_TOKEN_KEY}_${userId}`,
+    JSON.stringify({
+      sessionToken: token,
+      appAccountToken: appAccountToken ?? null,
+    })
+  );
 }
 
 export async function getStoredSessionToken(userId: string): Promise<string | null> {
   try {
-    return await AsyncStorage.getItem(`${SESSION_TOKEN_KEY}_${userId}`);
+    const stored = parseStoredSessionData(
+      await AsyncStorage.getItem(`${SESSION_TOKEN_KEY}_${userId}`)
+    );
+    return stored?.sessionToken ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getStoredAppAccountToken(userId: string): Promise<string | null> {
+  try {
+    const stored = parseStoredSessionData(
+      await AsyncStorage.getItem(`${SESSION_TOKEN_KEY}_${userId}`)
+    );
+    return stored?.appAccountToken ?? null;
   } catch {
     return null;
   }
