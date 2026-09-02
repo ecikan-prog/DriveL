@@ -39,7 +39,7 @@ export const drivers = mysqlTable("drivers", {
   localUserId: varchar("localUserId", { length: 128 }).notNull().unique(),
   /** Email used for local auth login */
   email: varchar("email", { length: 320 }).notNull().unique(),
-  /** Driver password hash stored as hex; legacy simple hashes are migrated on login */
+  /** Driver password hash; canonical format is s1$... scrypt, with legacy hashes migrated on login */
   passwordHash: varchar("passwordHash", { length: 64 }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   licenceNumber: varchar("licenceNumber", { length: 64 }),
