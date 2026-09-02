@@ -9,8 +9,8 @@ const USERS_KEY = "gnzl_users";
 const CURRENT_USER_KEY = "gnzl_current_user";
 export const TRIAL_DAYS = 21;
 
-
-export type DriverType = "goods" | "large_passenger" | "small_passenger" | "vehicle_recovery";
+export type DriverType =
+  "goods" | "large_passenger" | "small_passenger" | "vehicle_recovery";
 
 export type Driver = {
   id: string;
@@ -113,21 +113,23 @@ export async function registerUser(params: {
   operatorName?: string;
   licenceClass?: string;
   licenceExpiry?: string;
-}): Promise<{ success: true; user: AuthUser } | { success: false; error: string }> {
-  
+}): Promise<
+  { success: true; user: AuthUser } | { success: false; error: string }
+> {
   let users = await getAllUsers();
-const emailLower = params.email.toLowerCase().trim();
+  const emailLower = params.email.toLowerCase().trim();
 
-/*
- * Remove any stale local account.
- * The cloud database is the source of truth.
- */
-users = users.filter(
-  (u) => u.email.toLowerCase().trim() !== emailLower
-);
+  /*
+   * Remove any stale local account.
+   * The cloud database is the source of truth.
+   */
+  users = users.filter((u) => u.email.toLowerCase().trim() !== emailLower);
 
   if (params.password.length < 10) {
-    return { success: false, error: "Password must be at least 10 characters." };
+    return {
+      success: false,
+      error: "Password must be at least 10 characters.",
+    };
   }
 
   const now = new Date().toISOString();
@@ -159,8 +161,10 @@ users = users.filter(
 
 export async function loginUser(
   email: string,
-  password: string
-): Promise<{ success: true; user: AuthUser } | { success: false; error: string }> {
+  password: string,
+): Promise<
+  { success: true; user: AuthUser } | { success: false; error: string }
+> {
   const users = await getAllUsers();
   const emailLower = email.toLowerCase().trim();
   const user = users.find((u) => u.email.toLowerCase() === emailLower);
@@ -194,94 +198,109 @@ export async function logoutUser(): Promise<void> {
 export async function updateUserProfile(
   userId: string,
   updates: Partial<
-  Pick<
-    Driver,
-    | "vehicleRegistration"
-    | "vehicleType"
-    | "driverType"
-    | "operatorName"
-    | "licenceClass"
-    | "licenceExpiry"
-  >
->
-): Promise<{ success: true; user: AuthUser } | { success: false; error: string }> {
+    Pick<
+      Driver,
+      | "name"
+      | "vehicleRegistration"
+      | "vehicleType"
+      | "driverType"
+      | "operatorName"
+      | "licenceClass"
+      | "licenceExpiry"
+    >
+  >,
+): Promise<
+  { success: true; user: AuthUser } | { success: false; error: string }
+> {
   const users = await getAllUsers();
   const idx = users.findIndex((u) => u.id === userId);
   if (idx === -1) return { success: false, error: "User not found." };
+  if (updates.name !== undefined) {
+    const name = updates.name.trim();
+
+    if (!name) {
+      return {
+        success: false,
+        error: "Name cannot be empty.",
+      };
+    }
+
+    updates.name = name;
+  }
   const validDriverTypes: DriverType[] = [
-  "goods",
-  "large_passenger",
-  "small_passenger",
-  "vehicle_recovery",
-];
+    "goods",
+    "large_passenger",
+    "small_passenger",
+    "vehicle_recovery",
+  ];
 
-if (
-  updates.driverType !== undefined &&
-  !validDriverTypes.includes(updates.driverType)
-) {
-  return {
-    success: false,
-    error: "Invalid driver service type.",
-  };
-}
-if (updates.vehicleRegistration !== undefined) {
-  const rego = updates.vehicleRegistration.trim().toUpperCase();
-
-  if (!rego) {
+  if (
+    updates.driverType !== undefined &&
+    !validDriverTypes.includes(updates.driverType)
+  ) {
     return {
       success: false,
-      error: "Vehicle registration cannot be empty.",
+      error: "Invalid driver service type.",
     };
   }
+  if (updates.vehicleRegistration !== undefined) {
+    const rego = updates.vehicleRegistration.trim().toUpperCase();
 
-  if (!/^[A-Z0-9-]{2,10}$/.test(rego)) {
-    return {
-      success: false,
-      error: "Enter a valid vehicle registration.",
-    };
+    if (!rego) {
+      return {
+        success: false,
+        error: "Vehicle registration cannot be empty.",
+      };
+    }
+
+    if (!/^[A-Z0-9-]{2,10}$/.test(rego)) {
+      return {
+        success: false,
+        error: "Enter a valid vehicle registration.",
+      };
+    }
+
+    updates.vehicleRegistration = rego;
+    if (updates.vehicleType !== undefined) {
+      const vehicleType = updates.vehicleType.trim();
+
+      if (!vehicleType) {
+        return {
+          success: false,
+          error: "Please select a vehicle type.",
+        };
+      }
+
+      updates.vehicleType = vehicleType;
+    }
   }
-
-  updates.vehicleRegistration = rego;
-  if (updates.vehicleType !== undefined) {
-  const vehicleType = updates.vehicleType.trim();
-
-  if (!vehicleType) {
-    return {
-      success: false,
-      error: "Please select a vehicle type.",
-    };
-  }
-
-  updates.vehicleType = vehicleType;
-}
-}
   if (updates.licenceExpiry !== undefined) {
-  const expiry = parseStrictDate(updates.licenceExpiry);
+    const expiry = parseStrictDate(updates.licenceExpiry);
 
-  if (!expiry) {
-    return {
-      success: false,
-      error: "Invalid licence expiry date.",
-    };
+    if (!expiry) {
+      return {
+        success: false,
+        error: "Invalid licence expiry date.",
+      };
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (expiry < today) {
+      return {
+        success: false,
+        error: "Licence has expired.",
+      };
+    }
+
+    updates.licenceExpiry = expiry.toISOString().split("T")[0];
   }
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  if (expiry < today) {
-    return {
-      success: false,
-      error: "Licence has expired.",
-    };
-  }
-
-  updates.licenceExpiry = expiry.toISOString().split("T")[0];
-}
   users[idx] = {
-  ...users[idx],
-  ...updates,
-  lastProfileUpdate: new Date().toISOString(),
-};
+    ...users[idx],
+    ...updates,
+    lastProfileUpdate: new Date().toISOString(),
+  };
   await saveAllUsers(users);
 
   const { passwordHash: _, ...authUser } = users[idx];
@@ -297,8 +316,6 @@ export function getTrialDaysRemaining(trialStartDate: string): number {
   return Math.max(0, Math.ceil(TRIAL_DAYS - elapsed));
 }
 
-
-
 /** Expose the hash function for cloud auth integration */
 export function hashPassword(password: string): string {
   return simpleHash(password);
@@ -313,7 +330,7 @@ export async function createLocalAccountFromCloud(params: {
   email: string;
   name: string;
   dateOfBirth: string;
-  passwordHash: string;
+  passwordHash?: string;
   tslNumber: string;
   licenceNumber: string;
   vehicleRegistration: string;
@@ -324,12 +341,16 @@ export async function createLocalAccountFromCloud(params: {
   licenceExpiry?: string;
   trialStartDate: string;
   createdAt?: string;
-}): Promise<{ success: true; user: AuthUser } | { success: false; error: string }> {
+}): Promise<
+  { success: true; user: AuthUser } | { success: false; error: string }
+> {
   const users = await getAllUsers();
   const emailLower = params.email.toLowerCase().trim();
 
   // Check if already exists locally
-  const existing = users.find((u) => u.email.toLowerCase() === emailLower || u.id === params.id);
+  const existing = users.find(
+    (u) => u.email.toLowerCase() === emailLower || u.id === params.id,
+  );
   if (existing) {
     // Update existing local account
     const idx = users.indexOf(existing);
@@ -337,7 +358,7 @@ export async function createLocalAccountFromCloud(params: {
       ...existing,
       name: params.name,
       dateOfBirth: params.dateOfBirth,
-      passwordHash: params.passwordHash,
+      passwordHash: params.passwordHash ?? existing.passwordHash,
       tslNumber: params.tslNumber,
       licenceNumber: params.licenceNumber,
       vehicleRegistration: params.vehicleRegistration,
@@ -359,7 +380,7 @@ export async function createLocalAccountFromCloud(params: {
     name: params.name,
     dateOfBirth: params.dateOfBirth,
     email: emailLower,
-    passwordHash: params.passwordHash,
+    passwordHash: params.passwordHash ?? "",
     tslNumber: params.tslNumber,
     licenceNumber: params.licenceNumber,
     vehicleRegistration: params.vehicleRegistration,
@@ -369,9 +390,7 @@ export async function createLocalAccountFromCloud(params: {
     licenceClass: params.licenceClass || undefined,
     licenceExpiry: params.licenceExpiry || undefined,
     createdAt:
-    params.createdAt ??
-    params.trialStartDate ??
-    new Date().toISOString(),
+      params.createdAt ?? params.trialStartDate ?? new Date().toISOString(),
     trialStartDate: params.trialStartDate,
   };
 

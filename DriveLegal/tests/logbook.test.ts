@@ -5,6 +5,7 @@ import {
   logsToCSV,
   buildDailyLog,
   computeCurrentDrivingSeconds,
+  computeConsecutiveDrivingSeconds,
   computeCurrentWorkSeconds,
   isCurrentlyOnBreak,
   type DailyLog,
@@ -90,11 +91,21 @@ describe("getDrivingProgressPercent", () => {
   });
 
   it("returns 50 at 3.5 hours", () => {
-    expect(getDrivingProgressPercent(3.5 * 3600)).toBeCloseTo(50, 0);
+    expect(
+      getDrivingProgressPercent(
+        3.5 * 3600,
+        "sps_short_fares_7_hour"
+      )
+    ).toBeCloseTo(50, 0);
   });
 
   it("returns 100 at 7 hours", () => {
-    expect(getDrivingProgressPercent(7 * 3600)).toBe(100);
+    expect(
+      getDrivingProgressPercent(
+        7 * 3600,
+        "sps_short_fares_7_hour"
+      )
+    ).toBe(100);
   });
 
   it("caps at 100 when over limit", () => {
@@ -135,17 +146,26 @@ describe("evaluateCompliance", () => {
   });
 
   it("triggers driving warning at exactly 7 hours", () => {
-    const result = evaluateCompliance(7 * 3600, 7 * 3600, 10 * 3600);
+    const result = evaluateCompliance(
+      7 * 3600,
+      7 * 3600,
+      10 * 3600,
+      "sps_short_fares_7_hour"
+    );
     expect(result.isDrivingWarning).toBe(true);
-    const drivingWarn = result.warnings.find((w) => w.id === "driving_limit");
+    const drivingWarn = result.warnings.find(
+      (w) => w.id === "continuous_work_limit"
+    );
     expect(drivingWarn).toBeDefined();
-    expect(drivingWarn?.level).toBe("warning");
+    expect(drivingWarn?.level).toBe("critical");
   });
 
   it("triggers work warning at exactly 13 hours", () => {
     const result = evaluateCompliance(5 * 3600, 13 * 3600, 10 * 3600);
     expect(result.isWorkWarning).toBe(true);
-    const workWarn = result.warnings.find((w) => w.id === "work_limit");
+    const workWarn = result.warnings.find(
+      (w) => w.id === "cumulative_work_day_limit"
+    );
     expect(workWarn).toBeDefined();
     expect(workWarn?.level).toBe("critical");
   });
@@ -162,7 +182,12 @@ describe("evaluateCompliance", () => {
   });
 
   it("does NOT trigger driving warning before 7 hours", () => {
-    const result = evaluateCompliance(6.9 * 3600, 6.9 * 3600, 0);
+    const result = evaluateCompliance(
+      6.9 * 3600,
+      6.9 * 3600,
+      0,
+      "sps_short_fares_7_hour"
+    );
     expect(result.isDrivingWarning).toBe(false);
   });
 
@@ -231,7 +256,7 @@ describe("computeCurrentDrivingSeconds", () => {
     expect(computeCurrentDrivingSeconds(shift, nowMs)).toBe(2 * 3600);
   });
 
-  it("resets driving after a 30-min break (NZTA rule)", () => {
+  it("resets consecutive driving after a 30-min break (NZTA rule)", () => {
     const shift: ActiveShift = {
       userId: "u1",
       startTime: "2026-05-01T08:00:00.000Z",
@@ -243,7 +268,7 @@ describe("computeCurrentDrivingSeconds", () => {
     };
     const nowMs = new Date("2026-05-01T12:00:00.000Z").getTime();
     // 30-min break resets driving. Post-break driving = 12:00 - 10:30 = 1.5h
-    expect(computeCurrentDrivingSeconds(shift, nowMs)).toBe(1.5 * 3600);
+    expect(computeConsecutiveDrivingSeconds(shift, nowMs)).toBe(1.5 * 3600);
   });
 
   it("does NOT reset driving after a short break (< 30 min)", () => {

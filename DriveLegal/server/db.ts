@@ -25,6 +25,29 @@ export async function query<T = any>(sql: string, params: any[] = []): Promise<T
   return rows as T[];
 }
 
+export async function withTransaction<T>(
+  work: (connection: mysql.PoolConnection) => Promise<T>,
+): Promise<T> {
+  if (!pool) throw new Error("Database not configured");
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+    const result = await work(connection);
+    await connection.commit();
+    return result;
+  } catch (error) {
+    try {
+      await connection.rollback();
+    } catch {}
+
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 /* ─────────────────────────────────────────────
    EMAIL VERIFICATION HELPERS
    ───────────────────────────────────────────── */
@@ -61,6 +84,49 @@ export async function deleteEmailVerificationToken(token: string) {
 export async function getDriverByEmail(email: string) {
   const rows = await query<any>(
     "SELECT * FROM drivers WHERE email = ? LIMIT 1",
+    [email]
+  );
+
+  return rows[0] || null;
+}
+
+type OperatorInput = {
+  email: string;
+  passwordHash: string;
+  companyName: string;
+  contactName: string;
+};
+
+type OperatorRow = OperatorInput & {
+  id: number;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export async function createOperator(input: OperatorInput) {
+  await query(
+    `
+    INSERT INTO operators (email, passwordHash, companyName, contactName)
+    VALUES (?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      passwordHash = VALUES(passwordHash),
+      companyName = VALUES(companyName),
+      contactName = VALUES(contactName)
+    `,
+    [
+      input.email,
+      input.passwordHash,
+      input.companyName,
+      input.contactName,
+    ]
+  );
+
+  return getOperatorByEmail(input.email);
+}
+
+export async function getOperatorByEmail(email: string) {
+  const rows = await query<OperatorRow>(
+    "SELECT * FROM operators WHERE email = ? LIMIT 1",
     [email]
   );
 

@@ -1,4 +1,14 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, json, boolean } from "drizzle-orm/mysql-core";
+import {
+  boolean,
+  index,
+  int,
+  json,
+  mysqlEnum,
+  mysqlTable,
+  text,
+  timestamp,
+  varchar,
+} from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing Manus OAuth auth flow.
@@ -35,7 +45,14 @@ export const drivers = mysqlTable("drivers", {
   licenceNumber: varchar("licenceNumber", { length: 64 }),
   vehicleRegistration: varchar("vehicleRegistration", { length: 32 }),
   vehicleType: varchar("vehicleType", { length: 64 }),
-  driverType: mysqlEnum("driverType", ["goods", "large_passenger", "small_passenger", "vehicle_recovery"]).default("small_passenger").notNull(),
+  driverType: mysqlEnum("driverType", [
+    "goods",
+    "large_passenger",
+    "small_passenger",
+    "vehicle_recovery",
+  ])
+    .default("small_passenger")
+    .notNull(),
   /** Transport Service Licence number (e.g. 0342026 — no TSL- prefix) */
   tslNumber: varchar("tslNumber", { length: 64 }),
   /** NZ Driver Licence Class (e.g. 1, 2, 4, P) */
@@ -43,18 +60,54 @@ export const drivers = mysqlTable("drivers", {
   /** Licence expiry date (YYYY-MM-DD) */
   licenceExpiry: varchar("licenceExpiry", { length: 10 }),
   /** Driver date of birth (YYYY-MM-DD) */
- dateOfBirth: varchar("dateOfBirth", { length: 10 }),
+  dateOfBirth: varchar("dateOfBirth", { length: 10 }),
   /** Operator/Company name (TSL holder — may differ from driver name) */
   operatorName: varchar("operatorName", { length: 255 }),
   /** Whether the driver has verified their email address */
   emailVerified: boolean("emailVerified").default(false).notNull(),
   trialStartDate: varchar("trialStartDate", { length: 32 }),
+  trialEndDate: varchar("trialEndDate", { length: 32 }),
+  status: mysqlEnum("status", ["active", "deleted"])
+    .default("active")
+    .notNull(),
+  deletedAt: timestamp("deletedAt"),
+  subscriptionStatus: mysqlEnum("subscriptionStatus", [
+    "trial",
+    "active",
+    "expired",
+    "cancelled",
+  ])
+    .default("trial")
+    .notNull(),
+  appAccountToken: varchar("appAccountToken", { length: 36 }).unique(),
+  subscriptionPlan: mysqlEnum("subscriptionPlan", ["monthly", "annual"]),
+  subscriptionId: varchar("subscriptionId", { length: 255 }),
+  currentPeriodEnd: varchar("currentPeriodEnd", { length: 32 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type Driver = typeof drivers.$inferSelect;
 export type InsertDriver = typeof drivers.$inferInsert;
+
+export const driverSessions = mysqlTable(
+  "driver_sessions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    localUserId: varchar("localUserId", { length: 128 }).notNull(),
+    sessionToken: varchar("sessionToken", { length: 128 }).notNull().unique(),
+    deviceId: varchar("deviceId", { length: 128 }).notNull(),
+    deviceLabel: varchar("deviceLabel", { length: 255 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    invalidatedAt: timestamp("invalidatedAt"),
+  },
+  (table) => ({
+    localUserIdIdx: index("idx_driver_sessions_userId").on(table.localUserId),
+  }),
+);
+
+export type DriverSession = typeof driverSessions.$inferSelect;
+export type InsertDriverSession = typeof driverSessions.$inferInsert;
 
 /**
  * Completed shift logs — stores the full DailyLog JSON plus hash chain data.
@@ -153,5 +206,7 @@ export const emailVerificationTokens = mysqlTable("email_verification_tokens", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
-export type EmailVerificationToken = typeof emailVerificationTokens.$inferSelect;
-export type InsertEmailVerificationToken = typeof emailVerificationTokens.$inferInsert;
+export type EmailVerificationToken =
+  typeof emailVerificationTokens.$inferSelect;
+export type InsertEmailVerificationToken =
+  typeof emailVerificationTokens.$inferInsert;

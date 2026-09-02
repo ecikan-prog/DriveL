@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   View,
   Text,
@@ -27,6 +27,7 @@ type FieldProps = {
   keyboardType?: "default" | "email-address" | "phone-pad" | "numeric";
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
   returnKeyType?: "next" | "done";
+  optional?: boolean;
   maxLength?: number;
 };
 
@@ -186,7 +187,7 @@ function CheckboxRow({
 }: {
   checked: boolean;
   onPress: () => void;
-  children: React.ReactNode;
+  children?: ReactNode;
 }) {
   return (
     <TouchableOpacity

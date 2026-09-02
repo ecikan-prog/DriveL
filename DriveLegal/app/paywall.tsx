@@ -7,9 +7,9 @@
  *   2. User selects Monthly or Annual plan.
  *   3. "Subscribe Now" calls purchasePlan() which triggers Apple's native
  *      payment sheet via StoreKit (react-native-iap).
- *   4. On a successful verified transaction, activateSubscriptionFromIAP()
- *      writes the StoreKit-verified state to cache.
- *   5. Paywall closes.
+ *   4. The resulting Apple transaction must match the authenticated
+ *      Drive Legal account before the server and local cache are updated.
+ *   5. Paywall closes only after account sync succeeds.
  *
  * There is NO Stripe integration, NO "Simulate Subscribe" dialog, and NO
  * demo/fake activation path in this file.
@@ -28,11 +28,12 @@ import {
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuthContext } from "@/lib/auth-context";
+import { getAuthSession } from "@/lib/app-session";
+import { syncSubscriptionToCloud } from "@/lib/cloud-sync";
 import {
-  activateSubscriptionFromIAP,
   getSubscriptionState,
-  refreshIAPEntitlement,
   getTrialDaysLeft,
+  syncSubscriptionFromServer,
 } from "@/lib/subscription";
 import {
   loadIAPProducts,
@@ -66,7 +67,7 @@ const PLANS: PlanOption[] = [
 
 function formatCurrencyFromMicros(
   priceAmountMicros: number,
-  currencyCode: string
+  currencyCode: string,
 ): string {
   const amount = priceAmountMicros / 1_000_000;
 
@@ -89,8 +90,9 @@ export default function PaywallScreen() {
   const [products, setProducts] = useState<IAPProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(Platform.OS === "ios");
   const [productsUnavailable, setProductsUnavailable] = useState(false);
-  const [subscriptionState, setSubscriptionState] =
-    useState<Awaited<ReturnType<typeof getSubscriptionState>> | null>(null);
+  const [subscriptionState, setSubscriptionState] = useState<Awaited<
+    ReturnType<typeof getSubscriptionState>
+  > | null>(null);
   const [subscriptionLoading, setSubscriptionLoading] = useState(true);
 
   // Load subscription state and StoreKit products on mount
@@ -115,10 +117,10 @@ export default function PaywallScreen() {
       try {
         const storeProducts = await loadIAPProducts();
         const monthlyProduct = storeProducts.find(
-          (product) => product.productId === IAP_PRODUCT_IDS.monthly
+          (product) => product.productId === IAP_PRODUCT_IDS.monthly,
         );
         const annualProduct = storeProducts.find(
-          (product) => product.productId === IAP_PRODUCT_IDS.annual
+          (product) => product.productId === IAP_PRODUCT_IDS.annual,
         );
 
         console.log("[Paywall] StoreKit products fetched:", {
@@ -180,15 +182,10 @@ export default function PaywallScreen() {
           setSubscriptionState(cached);
         }
 
-        // Await StoreKit entitlement refresh and product fetch together so
-        // that the authoritative Apple status is shown on first render.
-        const [refreshed] = await Promise.all([
-          refreshIAPEntitlement(user.id).catch(() => cached),
-          storeProductsPromise,
-        ]);
+        await storeProductsPromise;
 
         if (isMounted) {
-          setSubscriptionState(refreshed);
+          setSubscriptionState(cached);
         }
       } catch (error) {
         console.error("[Paywall] Initialisation error:", error);
@@ -206,16 +203,18 @@ export default function PaywallScreen() {
 
   const monthlyProduct = useMemo(
     () =>
-      products.find((product) => product.productId === IAP_PRODUCT_IDS.monthly) ??
-      null,
-    [products]
+      products.find(
+        (product) => product.productId === IAP_PRODUCT_IDS.monthly,
+      ) ?? null,
+    [products],
   );
 
   const annualProduct = useMemo(
     () =>
-      products.find((product) => product.productId === IAP_PRODUCT_IDS.annual) ??
-      null,
-    [products]
+      products.find(
+        (product) => product.productId === IAP_PRODUCT_IDS.annual,
+      ) ?? null,
+    [products],
   );
 
   useEffect(() => {
@@ -261,7 +260,9 @@ export default function PaywallScreen() {
     !productsUnavailable &&
     Boolean(selectedProduct);
 
-  const trialDaysLeft = subscriptionState ? getTrialDaysLeft(subscriptionState) : 0;
+  const trialDaysLeft = subscriptionState
+    ? getTrialDaysLeft(subscriptionState)
+    : 0;
   const isTrial = subscriptionState?.status === "trial";
   const isActive = subscriptionState?.status === "active";
   const isExpired =
@@ -287,7 +288,7 @@ export default function PaywallScreen() {
     if (Platform.OS !== "ios") {
       Alert.alert(
         "iOS Only",
-        "Subscriptions are managed through the App Store on iOS devices."
+        "Subscriptions are managed through the App Store on iOS devices.",
       );
       return;
     }
@@ -295,7 +296,17 @@ export default function PaywallScreen() {
     if (!selectedProduct) {
       Alert.alert(
         "Subscription Unavailable",
-        "We couldn't load the latest App Store pricing right now. Please try again in a moment."
+        "We couldn't load the latest App Store pricing right now. Please try again in a moment.",
+      );
+      return;
+    }
+
+    const authSession = await getAuthSession();
+
+    if (!authSession?.appAccountToken) {
+      Alert.alert(
+        "Session Refresh Required",
+        "Please sign out and sign back into this Drive Legal account before purchasing.",
       );
       return;
     }
@@ -303,16 +314,56 @@ export default function PaywallScreen() {
     setPurchasing(true);
 
     try {
-      const result = await purchasePlan(selectedPlan);
+      const result = await purchasePlan(
+        selectedPlan,
+        authSession.appAccountToken,
+      );
 
       if (result.success) {
-        // Verified StoreKit transaction — activate entitlement
-        await activateSubscriptionFromIAP(
-          user.id,
-          result.plan,
-          result.transactionId,
-          result.purchaseTime
-        );
+        if (
+          !result.appAccountToken ||
+          result.appAccountToken !== authSession.appAccountToken
+        ) {
+          throw new Error(
+            "This Apple transaction is not linked to the authenticated Drive Legal account.",
+          );
+        }
+
+        const currentPeriodEnd = new Date(
+          result.plan === "annual"
+            ? new Date(result.purchaseTime).setFullYear(
+                new Date(result.purchaseTime).getFullYear() + 1,
+              )
+            : new Date(result.purchaseTime).setMonth(
+                new Date(result.purchaseTime).getMonth() + 1,
+              ),
+        ).toISOString();
+
+        const serverResult = await syncSubscriptionToCloud({
+          status: "active",
+          plan: result.plan,
+          subscriptionId: result.originalTransactionId ?? result.transactionId,
+          currentPeriodEnd,
+          appAccountToken: result.appAccountToken,
+        });
+
+        if (!serverResult.success) {
+          throw new Error(
+            serverResult.error ??
+              "Your App Store purchase completed, but Drive Legal could not confirm it for this account. Stay signed into this account and tap Restore Purchases, or contact support.",
+          );
+        }
+
+        await syncSubscriptionFromServer({
+          userId: user.id,
+          status: serverResult.subscriptionStatus ?? "active",
+          trialStartDate: subscriptionState?.trialStartDate,
+          trialEndDate: subscriptionState?.trialEndDate,
+          subscriptionId: serverResult.subscriptionId,
+          currentPeriodEnd: serverResult.currentPeriodEnd,
+          plan: serverResult.subscriptionPlan,
+          iapVerified: true,
+        });
 
         const updated = await getSubscriptionState(user.id);
         setSubscriptionState(updated);
@@ -321,17 +372,24 @@ export default function PaywallScreen() {
         Alert.alert(
           "Subscription Active ✓",
           `Your ${result.plan} plan is now active. Thank you for subscribing to Drive Legal.`,
-          [{ text: "Continue", onPress: () => router.replace("/(tabs)") }]
+          [{ text: "Continue", onPress: () => router.replace("/(tabs)") }],
         );
       } else {
-        const failure = result as { success: false; cancelled: boolean; error: string };
+        const failure = result as {
+          success: false;
+          cancelled: boolean;
+          error: string;
+        };
         if (!failure.cancelled) {
           Alert.alert("Purchase Failed", failure.error);
         }
         // If cancelled, user dismissed the payment sheet — no action needed
       }
     } catch (error: any) {
-      Alert.alert("Purchase Error", error?.message ?? "An unexpected error occurred. Please try again.");
+      Alert.alert(
+        "Purchase Error",
+        error?.message ?? "An unexpected error occurred. Please try again.",
+      );
     } finally {
       setPurchasing(false);
     }
@@ -343,7 +401,20 @@ export default function PaywallScreen() {
     if (!user) return;
 
     if (Platform.OS !== "ios") {
-      Alert.alert("iOS Only", "Restore Purchase is only available on iOS devices.");
+      Alert.alert(
+        "iOS Only",
+        "Restore Purchase is only available on iOS devices.",
+      );
+      return;
+    }
+
+    const authSession = await getAuthSession();
+
+    if (!authSession?.appAccountToken) {
+      Alert.alert(
+        "Session Refresh Required",
+        "Please sign out and sign back into this Drive Legal account before restoring purchases.",
+      );
       return;
     }
 
@@ -353,36 +424,45 @@ export default function PaywallScreen() {
       const entitlement = await checkCurrentEntitlement();
 
       if (entitlement.isActive && entitlement.plan) {
-        // ── Account-binding guard ──────────────────────────────────────────
-        // Restore is user-initiated, but we must still ensure the StoreKit
-        // transaction belongs to this Drive Legal account.  Check the
-        // server-synced subscriptionId: if one is recorded and it does NOT
-        // match the StoreKit transactionId, this transaction belongs to a
-        // different account — reject it.
-        const cached = await getSubscriptionState(user.id);
-        const accountSubscriptionId = cached.subscriptionId;
-
         if (
-          accountSubscriptionId &&
-          entitlement.transactionId &&
-          entitlement.transactionId !== accountSubscriptionId
+          !entitlement.appAccountToken ||
+          entitlement.appAccountToken !== authSession.appAccountToken
         ) {
           Alert.alert(
-            "Subscription Mismatch",
-            "The subscription found on this device belongs to a different Drive Legal account and cannot be restored here. Please contact support if you need help."
+            "Restore Unavailable",
+            "This Apple subscription is not linked to the currently signed-in Drive Legal account, so it cannot be restored here automatically.",
           );
           return;
         }
 
-        // Confirmed — the transaction belongs to this account (or there is
-        // no prior server-recorded subscription, meaning it is a new restore).
-        // Use the real product identifier as the transactionId.
-        await activateSubscriptionFromIAP(
-          user.id,
-          entitlement.plan,
-          entitlement.transactionId ?? entitlement.plan,
-          Date.now()
-        );
+        const serverResult = await syncSubscriptionToCloud({
+          status: "active",
+          plan: entitlement.plan,
+          subscriptionId:
+            entitlement.originalTransactionId ??
+            entitlement.transactionId ??
+            entitlement.plan,
+          currentPeriodEnd: entitlement.expiryDate?.toISOString() ?? null,
+          appAccountToken: entitlement.appAccountToken,
+        });
+
+        if (!serverResult.success) {
+          throw new Error(
+            serverResult.error ??
+              "Drive Legal could not confirm this Apple subscription for the authenticated account.",
+          );
+        }
+
+        await syncSubscriptionFromServer({
+          userId: user.id,
+          status: serverResult.subscriptionStatus ?? "active",
+          trialStartDate: subscriptionState?.trialStartDate,
+          trialEndDate: subscriptionState?.trialEndDate,
+          subscriptionId: serverResult.subscriptionId,
+          currentPeriodEnd: serverResult.currentPeriodEnd,
+          plan: serverResult.subscriptionPlan,
+          iapVerified: true,
+        });
 
         const updated = await getSubscriptionState(user.id);
         setSubscriptionState(updated);
@@ -391,18 +471,18 @@ export default function PaywallScreen() {
         Alert.alert(
           "Subscription Restored ✓",
           "Your previous subscription has been restored.",
-          [{ text: "Continue", onPress: () => router.replace("/(tabs)") }]
+          [{ text: "Continue", onPress: () => router.replace("/(tabs)") }],
         );
       } else {
         Alert.alert(
           "No Active Subscription",
-          "We couldn't find an active subscription on this Apple ID. If you believe this is an error, please contact support."
+          "We couldn't find an active subscription on this Apple ID. If you believe this is an error, please contact support.",
         );
       }
     } catch (error: any) {
       Alert.alert(
         "Restore Failed",
-        "Unable to restore your subscription. Please check your internet connection and try again."
+        "Unable to restore your subscription. Please check your internet connection and try again.",
       );
     } finally {
       setRestoring(false);
@@ -412,13 +492,23 @@ export default function PaywallScreen() {
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <ScreenContainer containerClassName="bg-[#003366]" safeAreaClassName="bg-[#003366]" edges={["top", "bottom", "left", "right"]}>
+    <ScreenContainer
+      containerClassName="bg-[#003366]"
+      safeAreaClassName="bg-[#003366]"
+      edges={["top", "bottom", "left", "right"]}
+    >
       <ScrollView
         style={{ flex: 1, backgroundColor: "#003366" }}
         contentContainerStyle={{ flexGrow: 1, backgroundColor: "#003366" }}
       >
         {/* Header */}
-        <View style={{ paddingHorizontal: 20, paddingTop: 12, alignItems: "flex-start" }}>
+        <View
+          style={{
+            paddingHorizontal: 20,
+            paddingTop: 12,
+            alignItems: "flex-start",
+          }}
+        >
           <TouchableOpacity
             onPress={() => {
               if (router.canGoBack()) {
@@ -429,22 +519,45 @@ export default function PaywallScreen() {
             }}
             style={{ paddingVertical: 8, paddingHorizontal: 4 }}
           >
-            <Text style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "700" }}>‹ Back</Text>
+            <Text style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "700" }}>
+              ‹ Back
+            </Text>
           </TouchableOpacity>
         </View>
 
         {/* Logo */}
-        <View style={{ alignItems: "center", paddingTop: 40, paddingBottom: 24 }}>
+        <View
+          style={{ alignItems: "center", paddingTop: 40, paddingBottom: 24 }}
+        >
           <Image
             source={require("@/assets/images/icon.png")}
-            style={{ width: 64, height: 64, borderRadius: 16, marginBottom: 16 }}
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: 16,
+              marginBottom: 16,
+            }}
             resizeMode="cover"
           />
-          <Text style={{ color: "#FFFFFF", fontSize: 22, fontWeight: "800", letterSpacing: 2 }}>
+          <Text
+            style={{
+              color: "#FFFFFF",
+              fontSize: 22,
+              fontWeight: "800",
+              letterSpacing: 2,
+            }}
+          >
             <Text style={{ color: "#FFFFFF" }}>DRIVE </Text>
             <Text style={{ color: "#4ADE80" }}>LEGAL</Text>
           </Text>
-          <Text style={{ color: "#8AACDA", fontSize: 10, letterSpacing: 1.5, marginTop: 4 }}>
+          <Text
+            style={{
+              color: "#8AACDA",
+              fontSize: 10,
+              letterSpacing: 1.5,
+              marginTop: 4,
+            }}
+          >
             DRIVER LOGBOOK
           </Text>
         </View>
@@ -452,31 +565,101 @@ export default function PaywallScreen() {
         {/* Subscription Status */}
         <View style={{ paddingHorizontal: 24, marginBottom: 24 }}>
           {subscriptionLoading ? (
-            <View style={{ backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 12, padding: 16, alignItems: "center" }}>
+            <View
+              style={{
+                backgroundColor: "rgba(255,255,255,0.08)",
+                borderRadius: 12,
+                padding: 16,
+                alignItems: "center",
+              }}
+            >
               <ActivityIndicator color="#FFFFFF" />
             </View>
           ) : isTrial ? (
-            <View style={{ backgroundColor: "rgba(34,197,94,0.15)", borderRadius: 12, padding: 16, borderWidth: 1, borderColor: "rgba(34,197,94,0.3)" }}>
-              <Text style={{ color: "#86EFAC", fontSize: 14, fontWeight: "700", textAlign: "center", marginBottom: 4 }}>
+            <View
+              style={{
+                backgroundColor: "rgba(34,197,94,0.15)",
+                borderRadius: 12,
+                padding: 16,
+                borderWidth: 1,
+                borderColor: "rgba(34,197,94,0.3)",
+              }}
+            >
+              <Text
+                style={{
+                  color: "#86EFAC",
+                  fontSize: 14,
+                  fontWeight: "700",
+                  textAlign: "center",
+                  marginBottom: 4,
+                }}
+              >
                 ✓ Free Trial Active
               </Text>
-              <Text style={{ color: "#D1D5DB", fontSize: 12, textAlign: "center", lineHeight: 18 }}>
-                You have {trialDaysLeft} day{trialDaysLeft !== 1 ? "s" : ""} remaining in your 21-day free trial.
+              <Text
+                style={{
+                  color: "#D1D5DB",
+                  fontSize: 12,
+                  textAlign: "center",
+                  lineHeight: 18,
+                }}
+              >
+                You have {trialDaysLeft} day{trialDaysLeft !== 1 ? "s" : ""}{" "}
+                remaining in your 21-day free trial.
               </Text>
             </View>
           ) : isActive ? (
-            <View style={{ backgroundColor: "rgba(34,197,94,0.15)", borderRadius: 12, padding: 16, borderWidth: 1, borderColor: "rgba(34,197,94,0.3)" }}>
-              <Text style={{ color: "#86EFAC", fontSize: 14, fontWeight: "700", textAlign: "center" }}>
+            <View
+              style={{
+                backgroundColor: "rgba(34,197,94,0.15)",
+                borderRadius: 12,
+                padding: 16,
+                borderWidth: 1,
+                borderColor: "rgba(34,197,94,0.3)",
+              }}
+            >
+              <Text
+                style={{
+                  color: "#86EFAC",
+                  fontSize: 14,
+                  fontWeight: "700",
+                  textAlign: "center",
+                }}
+              >
                 ✓ Subscription Active
               </Text>
             </View>
           ) : isExpired ? (
-            <View style={{ backgroundColor: "rgba(239,68,68,0.15)", borderRadius: 12, padding: 16, borderWidth: 1, borderColor: "rgba(239,68,68,0.3)" }}>
-              <Text style={{ color: "#FCA5A5", fontSize: 14, fontWeight: "700", textAlign: "center", marginBottom: 4 }}>
+            <View
+              style={{
+                backgroundColor: "rgba(239,68,68,0.15)",
+                borderRadius: 12,
+                padding: 16,
+                borderWidth: 1,
+                borderColor: "rgba(239,68,68,0.3)",
+              }}
+            >
+              <Text
+                style={{
+                  color: "#FCA5A5",
+                  fontSize: 14,
+                  fontWeight: "700",
+                  textAlign: "center",
+                  marginBottom: 4,
+                }}
+              >
                 ⏰ Free Trial Ended
               </Text>
-              <Text style={{ color: "#D1D5DB", fontSize: 12, textAlign: "center", lineHeight: 18 }}>
-                Your free trial has expired. Subscribe to continue logging your driving hours.
+              <Text
+                style={{
+                  color: "#D1D5DB",
+                  fontSize: 12,
+                  textAlign: "center",
+                  lineHeight: 18,
+                }}
+              >
+                Your free trial has expired. Subscribe to continue logging your
+                driving hours.
               </Text>
             </View>
           ) : null}
@@ -484,7 +667,15 @@ export default function PaywallScreen() {
 
         {/* Plan Options */}
         <View style={{ paddingHorizontal: 24, marginBottom: 24 }}>
-          <Text style={{ color: "#FFFFFF", fontSize: 18, fontWeight: "700", marginBottom: 16, textAlign: "center" }}>
+          <Text
+            style={{
+              color: "#FFFFFF",
+              fontSize: 18,
+              fontWeight: "700",
+              marginBottom: 16,
+              textAlign: "center",
+            }}
+          >
             Choose Your Plan
           </Text>
           {!productsLoading && productsUnavailable && (
@@ -498,15 +689,24 @@ export default function PaywallScreen() {
                 marginBottom: 12,
               }}
             >
-              <Text style={{ color: "#FCA5A5", fontSize: 12, textAlign: "center", lineHeight: 18 }}>
-                App Store pricing is temporarily unavailable. Please wait for the prices to load before subscribing.
+              <Text
+                style={{
+                  color: "#FCA5A5",
+                  fontSize: 12,
+                  textAlign: "center",
+                  lineHeight: 18,
+                }}
+              >
+                App Store pricing is temporarily unavailable. Please wait for
+                the prices to load before subscribing.
               </Text>
             </View>
           )}
 
           {PLANS.map((plan) => {
             const isSelected = selectedPlan === plan.id;
-            const product = plan.id === "monthly" ? monthlyProduct : annualProduct;
+            const product =
+              plan.id === "monthly" ? monthlyProduct : annualProduct;
             const planPrice = displayPrice(plan);
             const showUnavailable = !productsLoading && !product;
 
@@ -516,7 +716,9 @@ export default function PaywallScreen() {
                 onPress={() => setSelectedPlan(plan.id)}
                 disabled={productsLoading || showUnavailable}
                 style={{
-                  backgroundColor: isSelected ? "rgba(89,128,233,0.2)" : "rgba(255,255,255,0.05)",
+                  backgroundColor: isSelected
+                    ? "rgba(89,128,233,0.2)"
+                    : "rgba(255,255,255,0.05)",
                   borderRadius: 16,
                   padding: 20,
                   paddingLeft: 54,
@@ -528,24 +730,76 @@ export default function PaywallScreen() {
                 }}
               >
                 {plan.popular && (
-                  <View style={{ position: "absolute", top: -10, right: 16, backgroundColor: "#4ADE80", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 3 }}>
-                    <Text style={{ color: "#003366", fontSize: 10, fontWeight: "800" }}>BEST VALUE</Text>
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: -10,
+                      right: 16,
+                      backgroundColor: "#4ADE80",
+                      borderRadius: 8,
+                      paddingHorizontal: 10,
+                      paddingVertical: 3,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "#003366",
+                        fontSize: 10,
+                        fontWeight: "800",
+                      }}
+                    >
+                      BEST VALUE
+                    </Text>
                   </View>
                 )}
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    width: "100%",
+                  }}
+                >
                   <View>
-                    <Text style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "700" }}>{plan.name}</Text>
+                    <Text
+                      style={{
+                        color: "#FFFFFF",
+                        fontSize: 16,
+                        fontWeight: "700",
+                      }}
+                    >
+                      {plan.name}
+                    </Text>
                     {plan.id === "annual" && annualSavings && (
-                      <Text style={{ color: "#4ADE80", fontSize: 12, fontWeight: "600", marginTop: 2 }}>
+                      <Text
+                        style={{
+                          color: "#4ADE80",
+                          fontSize: 12,
+                          fontWeight: "600",
+                          marginTop: 2,
+                        }}
+                      >
                         {annualSavings}
                       </Text>
                     )}
                   </View>
-                  <View style={{ alignItems: "flex-end", flexShrink: 1, marginLeft: 12 }}>
+                  <View
+                    style={{
+                      alignItems: "flex-end",
+                      flexShrink: 1,
+                      marginLeft: 12,
+                    }}
+                  >
                     {productsLoading ? (
                       <View style={{ alignItems: "flex-end" }}>
                         <ActivityIndicator color="#FFFFFF" size="small" />
-                        <Text style={{ color: "#8AACDA", fontSize: 11, marginTop: 4 }}>
+                        <Text
+                          style={{
+                            color: "#8AACDA",
+                            fontSize: 11,
+                            marginTop: 4,
+                          }}
+                        >
                           Loading price…
                         </Text>
                       </View>
@@ -554,21 +808,57 @@ export default function PaywallScreen() {
                         numberOfLines={1}
                         adjustsFontSizeToFit
                         minimumFontScale={0.8}
-                        style={{ color: "#FFFFFF", fontSize: 18, fontWeight: "800", textAlign: "right" }}
+                        style={{
+                          color: "#FFFFFF",
+                          fontSize: 18,
+                          fontWeight: "800",
+                          textAlign: "right",
+                        }}
                       >
                         {planPrice}
                       </Text>
                     ) : (
-                      <Text style={{ color: "#FCA5A5", fontSize: 13, fontWeight: "700", textAlign: "right" }}>
+                      <Text
+                        style={{
+                          color: "#FCA5A5",
+                          fontSize: 13,
+                          fontWeight: "700",
+                          textAlign: "right",
+                        }}
+                      >
                         Price unavailable
                       </Text>
                     )}
-                    <Text style={{ color: "#8AACDA", fontSize: 11 }}>{plan.period}</Text>
+                    <Text style={{ color: "#8AACDA", fontSize: 11 }}>
+                      {plan.period}
+                    </Text>
                   </View>
                 </View>
                 {/* Radio indicator */}
-                <View style={{ position: "absolute", top: 20, left: 20, width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: isSelected ? "#5980E9" : "#4A6AB0", alignItems: "center", justifyContent: "center" }}>
-                  {isSelected && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#5980E9" }} />}
+                <View
+                  style={{
+                    position: "absolute",
+                    top: 20,
+                    left: 20,
+                    width: 20,
+                    height: 20,
+                    borderRadius: 10,
+                    borderWidth: 2,
+                    borderColor: isSelected ? "#5980E9" : "#4A6AB0",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {isSelected && (
+                    <View
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: 5,
+                        backgroundColor: "#5980E9",
+                      }}
+                    />
+                  )}
                 </View>
               </TouchableOpacity>
             );
@@ -577,7 +867,15 @@ export default function PaywallScreen() {
 
         {/* Features */}
         <View style={{ paddingHorizontal: 24, marginBottom: 32 }}>
-          <Text style={{ color: "#8AACDA", fontSize: 12, fontWeight: "600", marginBottom: 12, textAlign: "center" }}>
+          <Text
+            style={{
+              color: "#8AACDA",
+              fontSize: 12,
+              fontWeight: "600",
+              marginBottom: 12,
+              textAlign: "center",
+            }}
+          >
             WHAT YOU GET
           </Text>
           {[
@@ -588,8 +886,17 @@ export default function PaywallScreen() {
             "Offline-first — works without internet",
             "Priority support",
           ].map((feature, i) => (
-            <View key={i} style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-              <Text style={{ color: "#4ADE80", fontSize: 14, marginRight: 10 }}>✓</Text>
+            <View
+              key={i}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginBottom: 8,
+              }}
+            >
+              <Text style={{ color: "#4ADE80", fontSize: 14, marginRight: 10 }}>
+                ✓
+              </Text>
               <Text style={{ color: "#D1D5DB", fontSize: 13 }}>{feature}</Text>
             </View>
           ))}
@@ -601,7 +908,8 @@ export default function PaywallScreen() {
             onPress={handleSubscribe}
             disabled={purchasing || restoring || !canPurchase}
             style={{
-              backgroundColor: purchasing || restoring || !canPurchase ? "#3A5A9E" : "#5980E9",
+              backgroundColor:
+                purchasing || restoring || !canPurchase ? "#3A5A9E" : "#5980E9",
               borderRadius: 14,
               paddingVertical: 16,
               alignItems: "center",
@@ -615,7 +923,9 @@ export default function PaywallScreen() {
             {purchasing ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "800" }}>
+              <Text
+                style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "800" }}
+              >
                 {productsLoading
                   ? "Loading Prices…"
                   : productsUnavailable
@@ -627,7 +937,13 @@ export default function PaywallScreen() {
         </View>
 
         {/* Restore / Legal */}
-        <View style={{ paddingHorizontal: 24, paddingBottom: 40, alignItems: "center" }}>
+        <View
+          style={{
+            paddingHorizontal: 24,
+            paddingBottom: 40,
+            alignItems: "center",
+          }}
+        >
           <TouchableOpacity
             onPress={handleRestore}
             disabled={purchasing || restoring}
@@ -636,15 +952,25 @@ export default function PaywallScreen() {
             {restoring ? (
               <ActivityIndicator color="#5980E9" />
             ) : (
-              <Text style={{ color: "#5980E9", fontSize: 13, fontWeight: "600" }}>
+              <Text
+                style={{ color: "#5980E9", fontSize: 13, fontWeight: "600" }}
+              >
                 Restore Purchase
               </Text>
             )}
           </TouchableOpacity>
-          <Text style={{ color: "#6B7280", fontSize: 10, textAlign: "center", lineHeight: 16 }}>
-            Payment will be charged to your Apple ID account at confirmation of purchase. Subscription
-            automatically renews unless cancelled at least 24 hours before the end of the current period.
-            Manage or cancel your subscription in your Apple ID account settings.
+          <Text
+            style={{
+              color: "#6B7280",
+              fontSize: 10,
+              textAlign: "center",
+              lineHeight: 16,
+            }}
+          >
+            Payment will be charged to your Apple ID account at confirmation of
+            purchase. Subscription automatically renews unless cancelled at
+            least 24 hours before the end of the current period. Manage or
+            cancel your subscription in your Apple ID account settings.
           </Text>
         </View>
       </ScrollView>

@@ -517,7 +517,7 @@ function redirectWithMessage(
   path: string,
   message: string,
   tone: FlashTone = "success"
-): Response {
+): void {
   const separator = path.includes("?") ? "&" : "?";
 
   return res.redirect(

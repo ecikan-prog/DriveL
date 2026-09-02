@@ -2,7 +2,7 @@
  * Seed / fix the operator portal test account.
  * Run: npx tsx scripts/seed-operator-fix.ts
  */
-import "./load-env.js";
+import "../scripts/load-env.js";
 import { createOperator, getOperatorByEmail } from "../server/db";
 
 function simpleHash(str: string): string {

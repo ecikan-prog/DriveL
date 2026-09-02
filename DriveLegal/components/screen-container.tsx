@@ -3,7 +3,7 @@ import { View, StyleSheet } from "react-native";
 import { useSafeAreaInsets, Edge } from "react-native-safe-area-context";
 
 interface ScreenContainerProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   edges?: Edge[];
   style?: object;
   containerClassName?: string;

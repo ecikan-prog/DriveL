@@ -60,14 +60,21 @@ export type IAPProduct = {
   productId: string;
   title: string;
   description: string;
-  price: string;            // Apple-localised display string e.g. "NZ$6.99"
+  price: string; // Apple-localised display string e.g. "NZ$6.99"
   displayPrice: string;
   priceAmountMicros: number;
   priceCurrencyCode: string;
 };
 
 export type PurchaseResult =
-  | { success: true; plan: IAPPlan; transactionId: string; purchaseTime: number }
+  | {
+      success: true;
+      plan: IAPPlan;
+      transactionId: string;
+      originalTransactionId: string | null;
+      purchaseTime: number;
+      appAccountToken: string | null;
+    }
   | { success: false; cancelled: boolean; error: string };
 
 export type EntitlementResult = {
@@ -77,6 +84,8 @@ export type EntitlementResult = {
   expiryDate: Date | null;
   /** The App Store product identifier for the active purchase */
   transactionId: string | null;
+  originalTransactionId: string | null;
+  appAccountToken: string | null;
 };
 
 // ─── Connection ───────────────────────────────────────────────────────────────
@@ -135,7 +144,9 @@ export async function loadIAPProducts(): Promise<IAPProduct[]> {
       console.log("[IAP] StoreKit product loaded:", {
         productId: product.productId,
         displayPrice:
-          (product as any).displayPrice ?? (product as any).localizedPrice ?? null,
+          (product as any).displayPrice ??
+          (product as any).localizedPrice ??
+          null,
         localizedPrice: (product as any).localizedPrice ?? null,
         price: (product as any).price ?? null,
         priceLocaleCurrencyCode:
@@ -157,9 +168,7 @@ export async function loadIAPProducts(): Promise<IAPProduct[]> {
         // price is the numeric amount as a string on iOS
         const priceNum = parseFloat((p as any).price ?? "0");
         const currency =
-          (p as any).priceLocale?.currencyCode ??
-          (p as any).currency ??
-          "NZD";
+          (p as any).priceLocale?.currencyCode ?? (p as any).currency ?? "NZD";
 
         return {
           productId: p.productId,
@@ -187,7 +196,10 @@ export async function loadIAPProducts(): Promise<IAPProduct[]> {
  * one-shot listener before calling requestSubscription(), resolve when a
  * result arrives, and remove the listener afterward.
  */
-export async function purchasePlan(plan: IAPPlan): Promise<PurchaseResult> {
+export async function purchasePlan(
+  plan: IAPPlan,
+  appAccountToken: string,
+): Promise<PurchaseResult> {
   if (!isIOS()) {
     return {
       success: false,
@@ -227,21 +239,29 @@ export async function purchasePlan(plan: IAPPlan): Promise<PurchaseResult> {
           success: true,
           plan,
           transactionId: purchase.transactionId ?? sku,
+          originalTransactionId:
+            (purchase as any).originalTransactionIdentifierIOS ?? null,
           purchaseTime: purchase.transactionDate
             ? new Date(purchase.transactionDate).getTime()
             : Date.now(),
+          appAccountToken: (purchase as any).appAccountToken ?? null,
         });
-      }
+      },
     );
 
     // Listen for purchase errors
     const purchaseErrorSubscription = IAP.purchaseErrorListener(
       (error: IAP.PurchaseError) => {
-        if ((error as any).productId && (error as any).productId !== sku) return;
+        if ((error as any).productId && (error as any).productId !== sku)
+          return;
 
         // E_USER_CANCELLED is thrown when the user dismisses the sheet
         if (error.code === "E_USER_CANCELLED") {
-          settle({ success: false, cancelled: true, error: "Purchase cancelled." });
+          settle({
+            success: false,
+            cancelled: true,
+            error: "Purchase cancelled.",
+          });
           return;
         }
 
@@ -250,13 +270,17 @@ export async function purchasePlan(plan: IAPPlan): Promise<PurchaseResult> {
           cancelled: false,
           error: error.message ?? "Purchase failed. Please try again.",
         });
-      }
+      },
     );
 
     // Trigger Apple's native payment sheet
-    IAP.requestSubscription({ sku }).catch((err: any) => {
+    IAP.requestSubscription({ sku, appAccountToken }).catch((err: any) => {
       if (err?.code === "E_USER_CANCELLED") {
-        settle({ success: false, cancelled: true, error: "Purchase cancelled." });
+        settle({
+          success: false,
+          cancelled: true,
+          error: "Purchase cancelled.",
+        });
       } else {
         settle({
           success: false,
@@ -282,10 +306,21 @@ export async function purchasePlan(plan: IAPPlan): Promise<PurchaseResult> {
  */
 export async function checkCurrentEntitlement(): Promise<EntitlementResult> {
   if (!isIOS()) {
-    return { isActive: false, plan: null, expiryDate: null, transactionId: null };
+    return {
+      isActive: false,
+      plan: null,
+      expiryDate: null,
+      transactionId: null,
+      originalTransactionId: null,
+      appAccountToken: null,
+    };
   }
 
   await ensureConnected();
+
+  await IAP.getSubscriptions({
+    skus: Object.values(IAP_PRODUCT_IDS),
+  });
 
   const purchases = await IAP.getAvailablePurchases();
 
@@ -301,7 +336,14 @@ export async function checkCurrentEntitlement(): Promise<EntitlementResult> {
     });
 
   if (active.length === 0) {
-    return { isActive: false, plan: null, expiryDate: null, transactionId: null };
+    return {
+      isActive: false,
+      plan: null,
+      expiryDate: null,
+      transactionId: null,
+      originalTransactionId: null,
+      appAccountToken: null,
+    };
   }
 
   const latest = active[0];
@@ -321,6 +363,9 @@ export async function checkCurrentEntitlement(): Promise<EntitlementResult> {
     plan,
     expiryDate,
     transactionId: latest.transactionId ?? latest.productId,
+    originalTransactionId:
+      (latest as any).originalTransactionIdentifierIOS ?? null,
+    appAccountToken: (latest as any).appAccountToken ?? null,
   };
 }
 

@@ -5,7 +5,7 @@ import * as Sharing from "expo-sharing";
 import { getApiBaseUrl } from "@/lib/api-base-url";
 import type { DailyLog } from "@/lib/logbook-storage";
 
-type GenerateExcelOptions = {
+export type GenerateExcelOptions = {
   driverId?: string | number | null;
   logs: DailyLog[];
   driverName: string;

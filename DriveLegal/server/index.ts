@@ -127,7 +127,7 @@ app.get("/verify-email", async (req, res) => {
   }
 
   try {
-    const tokenRows = await query<any[]>(
+    const tokenRows = await query<{ email: string; expiresAt: string }>(
       `
       SELECT email, expiresAt
       FROM email_verification_tokens

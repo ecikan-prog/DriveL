@@ -18,7 +18,7 @@ export default function TermsOfServiceScreen() {
           text: "Acceptance of these terms",
         },
         {
-          icon: "assignment-outlined",
+          icon: "assignment",
           text: "Your responsibilities",
         },
         {

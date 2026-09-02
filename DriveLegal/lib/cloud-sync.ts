@@ -9,11 +9,16 @@
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
-import {
-  DailyLog,
-  type ActiveShift,
-} from "./logbook-storage";
+import { DailyLog, type ActiveShift } from "./logbook-storage";
 import type { DriverType } from "@/lib/local-auth";
+import * as LocalAuth from "./local-auth";
+import {
+  clearAuthSession,
+  getAuthSession,
+  notifySessionInvalidated,
+  setPendingLogoutNotice,
+} from "./app-session";
+import { lockPinSession } from "./pin-security";
 
 const SYNC_STATUS_KEY = "dl_sync_status";
 
@@ -22,7 +27,7 @@ const SYNC_STATUS_KEY = "dl_sync_status";
 // also works correctly. On native iOS/Android, always use the
 // hardcoded production URL (env vars are NOT available at EAS build
 // time via Manus Publish, so we must not rely on them).
-const LIVE_BACKEND = "https://drivel-production.up.railway.app";
+const LIVE_BACKEND = "https://operators.drivelegal.app";
 const API_BASE =
   Platform.OS === "web" && typeof window !== "undefined" && window.location
     ? `${window.location.origin}/api/trpc`
@@ -33,6 +38,14 @@ type SyncStatus = {
   pushedLogIds: string[];
 };
 
+async function handleInvalidSession(message: string): Promise<void> {
+  await setPendingLogoutNotice(message);
+  lockPinSession();
+  await LocalAuth.logoutUser();
+  await clearAuthSession();
+  notifySessionInvalidated(message);
+}
+
 async function getSyncStatus(userId: string): Promise<SyncStatus> {
   try {
     const raw = await AsyncStorage.getItem(`${SYNC_STATUS_KEY}_${userId}`);
@@ -41,8 +54,14 @@ async function getSyncStatus(userId: string): Promise<SyncStatus> {
   return { pushedLogIds: [] };
 }
 
-async function saveSyncStatus(userId: string, status: SyncStatus): Promise<void> {
-  await AsyncStorage.setItem(`${SYNC_STATUS_KEY}_${userId}`, JSON.stringify(status));
+async function saveSyncStatus(
+  userId: string,
+  status: SyncStatus,
+): Promise<void> {
+  await AsyncStorage.setItem(
+    `${SYNC_STATUS_KEY}_${userId}`,
+    JSON.stringify(status),
+  );
 }
 
 /**
@@ -75,33 +94,32 @@ export function canonicalizeLog(log: DailyLog): string {
 async function trpcCall(
   path: string,
   input: unknown,
-  method: "query" | "mutation" = "mutation"
+  method: "query" | "mutation" = "mutation",
 ): Promise<any> {
   try {
+    const authSession = await getAuthSession();
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    };
+
+    if (authSession?.sessionToken) {
+      headers.Authorization = "Bearer " + authSession.sessionToken;
+    }
+
     let response: Response;
 
     if (method === "query") {
-      const encodedInput = encodeURIComponent(
-        JSON.stringify(input)
-      );
+      const encodedInput = encodeURIComponent(JSON.stringify(input));
 
-      response = await fetch(
-        `${API_BASE}/${path}?input=${encodedInput}`,
-        {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      response = await fetch(`${API_BASE}/${path}?input=${encodedInput}`, {
+        method: "GET",
+        headers,
+      });
     } else {
       response = await fetch(`${API_BASE}/${path}`, {
         method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify(input),
       });
     }
@@ -127,8 +145,12 @@ async function trpcCall(
 
       console.error(
         `[CloudSync] ${path} returned HTTP ${response.status}:`,
-        data
+        data,
       );
+
+      if (response.status === 401) {
+        await handleInvalidSession(message);
+      }
 
       return {
         success: false,
@@ -138,21 +160,23 @@ async function trpcCall(
       };
     }
 
-    return (
-      data?.result?.data?.json ??
-      data?.result?.data ??
-      data
-    );
+    const result = data?.result?.data?.json ?? data?.result?.data ?? data;
+
+    if (result?.sessionInvalid === true || result?.revoked === true) {
+      await handleInvalidSession(
+        result.error ??
+          "Your Drive Legal session has expired. Please sign in again.",
+      );
+    }
+
+    return result;
   } catch (error) {
     const message =
       error instanceof Error
         ? error.message
         : "Unable to connect to the Drive Legal server.";
 
-    console.error(
-      `[CloudSync] ${path} request failed:`,
-      error
-    );
+    console.error(`[CloudSync] ${path} request failed:`, error);
 
     return {
       success: false,
@@ -165,7 +189,16 @@ async function trpcCall(
 /**
  * Get the hash chain entries for a user from AsyncStorage.
  */
-async function getHashChain(userId: string): Promise<Array<{ logId: string; hash: string; previousHash: string; timestamp: string }>> {
+async function getHashChain(
+  userId: string,
+): Promise<
+  Array<{
+    logId: string;
+    hash: string;
+    previousHash: string;
+    timestamp: string;
+  }>
+> {
   try {
     const raw = await AsyncStorage.getItem(`drivelegal_hash_chain_${userId}`);
     if (raw) return JSON.parse(raw);
@@ -177,7 +210,9 @@ async function getHashChain(userId: string): Promise<Array<{ logId: string; hash
  * Push all un-synced completed shift logs to the cloud.
  * Idempotent — safe to call multiple times.
  */
-export async function pushLogsToCloud(userId: string): Promise<{ pushed: number; skipped: number }> {
+export async function pushLogsToCloud(
+  userId: string,
+): Promise<{ pushed: number; skipped: number }> {
   const syncStatus = await getSyncStatus(userId);
   const pushedSet = new Set(syncStatus.pushedLogIds);
 
@@ -216,12 +251,18 @@ export async function pushLogsToCloud(userId: string): Promise<{ pushed: number;
 
   if (result?.success) {
     // Mark all as synced
-    const newPushedIds = [...syncStatus.pushedLogIds, ...unsynced.map((l) => l.id)];
+    const newPushedIds = [
+      ...syncStatus.pushedLogIds,
+      ...unsynced.map((l) => l.id),
+    ];
     await saveSyncStatus(userId, {
       lastPushTime: new Date().toISOString(),
       pushedLogIds: newPushedIds,
     });
-    return { pushed: result.inserted ?? unsynced.length, skipped: result.skipped ?? 0 };
+    return {
+      pushed: result.inserted ?? unsynced.length,
+      skipped: result.skipped ?? 0,
+    };
   }
 
   return { pushed: 0, skipped: 0 };
@@ -231,8 +272,14 @@ export async function pushLogsToCloud(userId: string): Promise<{ pushed: number;
  * Pull shift logs from the cloud and merge into local AsyncStorage.
  * Used on login to restore history from another device.
  */
-export async function pullLogsFromCloud(userId: string): Promise<{ pulled: number }> {
-  const result = await trpcCall("sync.pullLogs", { driverLocalUserId: userId }, "query");
+export async function pullLogsFromCloud(
+  userId: string,
+): Promise<{ pulled: number }> {
+  const result = await trpcCall(
+    "sync.pullLogs",
+    { driverLocalUserId: userId },
+    "query",
+  );
   if (!result?.logs || result.logs.length === 0) return { pulled: 0 };
 
   // Load existing local logs
@@ -243,7 +290,12 @@ export async function pullLogsFromCloud(userId: string): Promise<{ pulled: numbe
   // Merge cloud logs that don't exist locally
   let pulled = 0;
   const cloudLogs: DailyLog[] = [];
-  const cloudHashChain: Array<{ logId: string; hash: string; previousHash: string; timestamp: string }> = [];
+  const cloudHashChain: Array<{
+    logId: string;
+    hash: string;
+    previousHash: string;
+    timestamp: string;
+  }> = [];
 
   for (const row of result.logs) {
     const logData = row.logData as DailyLog;
@@ -265,7 +317,8 @@ export async function pullLogsFromCloud(userId: string): Promise<{ pulled: numbe
   if (pulled > 0) {
     // Merge and sort by startTime descending
     const merged = [...localLogs, ...cloudLogs].sort(
-      (a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
+      (a, b) =>
+        new Date(b.startTime).getTime() - new Date(a.startTime).getTime(),
     );
     await AsyncStorage.setItem(`gnzl_logs_${userId}`, JSON.stringify(merged));
   }
@@ -277,16 +330,22 @@ export async function pullLogsFromCloud(userId: string): Promise<{ pulled: numbe
     const newEntries = cloudHashChain.filter((e) => !existingIds.has(e.logId));
     if (newEntries.length > 0) {
       const mergedChain = [...existingChain, ...newEntries].sort(
-        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        (a, b) =>
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
       );
-      await AsyncStorage.setItem(`drivelegal_hash_chain_${userId}`, JSON.stringify(mergedChain));
+      await AsyncStorage.setItem(
+        `drivelegal_hash_chain_${userId}`,
+        JSON.stringify(mergedChain),
+      );
     }
   }
 
   // Update sync status so we don't re-push what we just pulled
   const syncStatus = await getSyncStatus(userId);
   const allLogIds = result.logs.map((r: any) => r.logId);
-  const mergedPushedIds = [...new Set([...syncStatus.pushedLogIds, ...allLogIds])];
+  const mergedPushedIds = [
+    ...new Set([...syncStatus.pushedLogIds, ...allLogIds]),
+  ];
   await saveSyncStatus(userId, {
     ...syncStatus,
     pushedLogIds: mergedPushedIds,
@@ -316,7 +375,8 @@ export async function registerDriverCloud(params: {
   baseUrl: string;
 }): Promise<{ success: boolean; error?: string }> {
   const result = await trpcCall("driverAuth.register", params);
-  if (!result) return { success: false, error: "Network error. Account saved locally." };
+  if (!result)
+    return { success: false, error: "Network error. Account saved locally." };
   return result;
 }
 
@@ -324,11 +384,21 @@ export async function registerDriverCloud(params: {
  * Authenticate a driver against the cloud DB.
  * Returns driver profile if successful, null otherwise.
  */
-export async function loginDriverCloud(email: string, passwordHash: string): Promise<{
+export async function loginDriverCloud(
+  email: string,
+  passwordHash: string,
+  options: {
+    deviceId: string;
+    deviceLabel: string;
+    forceContinue?: boolean;
+  },
+): Promise<{
   success: boolean;
   error?: string;
   verificationRequired?: boolean;
+  sessionConflict?: boolean;
   email?: string;
+  sessionToken?: string;
   driver?: {
     localUserId: string;
     email: string;
@@ -345,15 +415,84 @@ export async function loginDriverCloud(email: string, passwordHash: string): Pro
     trialStartDate: string | null;
     createdAt: string | null;
     trialEndDate: string | null;
+    appAccountToken: string | null;
     subscriptionStatus: "trial" | "active" | "expired" | "cancelled";
     subscriptionPlan: "monthly" | "annual" | null;
     subscriptionId: string | null;
     currentPeriodEnd: string | null;
-    appAccountToken: string;
   };
 }> {
-  const result = await trpcCall("driverAuth.login", { email, passwordHash });
-  if (!result) return { success: false, error: "Network error. Using local account." };
+  const result = await trpcCall("driverAuth.login", {
+    email,
+    passwordHash,
+    ...options,
+  });
+  if (!result)
+    return { success: false, error: "Network error. Using local account." };
+  return result;
+}
+
+export async function restoreDriverSessionCloud(): Promise<{
+  success: boolean;
+  revoked?: boolean;
+  sessionInvalid?: boolean;
+  error?: string;
+  driver?: {
+    localUserId: string;
+    email: string;
+    name: string;
+    dateOfBirth: string | null;
+    tslNumber: string | null;
+    operatorName: string | null;
+    licenceNumber: string | null;
+    licenceClass: string | null;
+    licenceExpiry: string | null;
+    vehicleRegistration: string | null;
+    vehicleType: string | null;
+    driverType: DriverType;
+    trialStartDate: string | null;
+    createdAt: string | null;
+    trialEndDate: string | null;
+    appAccountToken: string | null;
+    subscriptionStatus: "trial" | "active" | "expired" | "cancelled";
+    subscriptionPlan: "monthly" | "annual" | null;
+    subscriptionId: string | null;
+    currentPeriodEnd: string | null;
+  };
+}> {
+  const result = await trpcCall("driverAuth.currentSession", {}, "query");
+
+  if (!result) {
+    return { success: false, error: "Network error." };
+  }
+
+  return result;
+}
+
+export async function logoutDriverCloud(): Promise<void> {
+  await trpcCall("driverAuth.logout", {});
+}
+
+export async function syncSubscriptionToCloud(params: {
+  status: "trial" | "active" | "expired" | "cancelled";
+  plan?: "monthly" | "annual" | null;
+  subscriptionId?: string | null;
+  currentPeriodEnd?: string | null;
+  appAccountToken?: string | null;
+}): Promise<{
+  success: boolean;
+  error?: string;
+  subscriptionStatus?: "trial" | "active" | "expired" | "cancelled";
+  subscriptionPlan?: "monthly" | "annual" | null;
+  subscriptionId?: string | null;
+  currentPeriodEnd?: string | null;
+}> {
+  const result = await trpcCall("driverAuth.syncSubscription", params);
+
+  if (!result) {
+    return { success: false, error: "Network error." };
+  }
+
   return result;
 }
 
@@ -378,9 +517,7 @@ export async function syncProfileToCloud(params: {
 /**
  * Request a password reset email for a driver account.
  */
-export async function forgotPasswordRequest(
-  email: string
-): Promise<void> {
+export async function forgotPasswordRequest(email: string): Promise<void> {
   const result = await trpcCall("driverAuth.forgotPassword", {
     email: email.trim().toLowerCase(),
     baseUrl: "drivelegal://",
@@ -389,16 +526,22 @@ export async function forgotPasswordRequest(
   if (!result?.success) {
     throw new Error(
       result?.error ??
-      result?.message ??
-      "Unable to send the password reset email."
+        result?.message ??
+        "Unable to send the password reset email.",
     );
   }
 }
 /**
  * Reset a driver's password using a valid reset token.
  */
-export async function resetPasswordWithToken(token: string, newPasswordHash: string): Promise<{ success: boolean; error?: string }> {
-  const result = await trpcCall("driverAuth.resetPassword", { token, newPasswordHash });
+export async function resetPasswordWithToken(
+  token: string,
+  newPasswordHash: string,
+): Promise<{ success: boolean; error?: string }> {
+  const result = await trpcCall("driverAuth.resetPassword", {
+    token,
+    newPasswordHash,
+  });
   if (!result) return { success: false, error: "Network error." };
   return result;
 }
@@ -406,11 +549,17 @@ export async function resetPasswordWithToken(token: string, newPasswordHash: str
 /**
  * Resend verification email for a driver account.
  */
-export async function resendVerificationEmail(email: string): Promise<{ success: boolean; message?: string }> {
-  const baseUrl = Platform.OS === "web" && typeof window !== "undefined" && window.location
-    ? window.location.origin
-    : LIVE_BACKEND;
-  const result = await trpcCall("driverAuth.resendVerification", { email, baseUrl });
+export async function resendVerificationEmail(
+  email: string,
+): Promise<{ success: boolean; message?: string }> {
+  const baseUrl =
+    Platform.OS === "web" && typeof window !== "undefined" && window.location
+      ? window.location.origin
+      : LIVE_BACKEND;
+  const result = await trpcCall("driverAuth.resendVerification", {
+    email,
+    baseUrl,
+  });
   if (!result) return { success: false, message: "Network error." };
   return result;
 }
@@ -418,13 +567,15 @@ export async function resendVerificationEmail(email: string): Promise<{ success:
 /**
  * Verify email using a token from the verification link.
  */
-export async function verifyEmailToken(token: string): Promise<{ success: boolean; error?: string }> {
+export async function verifyEmailToken(
+  token: string,
+): Promise<{ success: boolean; error?: string }> {
   const result = await trpcCall("driverAuth.verifyEmail", { token });
   if (!result) return { success: false, error: "Network error." };
   return result;
 }
 export async function saveActiveShiftToCloud(
-  shift: ActiveShift
+  shift: ActiveShift,
 ): Promise<{ success: boolean }> {
   const result = await trpcCall("sync.saveActiveShift", {
     driverLocalUserId: shift.userId,
@@ -438,14 +589,14 @@ export async function saveActiveShiftToCloud(
 }
 
 export async function pullActiveShiftFromCloud(
-  userId: string
+  userId: string,
 ): Promise<ActiveShift | null> {
   const result = await trpcCall(
     "sync.pullActiveShift",
     {
       driverLocalUserId: userId,
     },
-    "query"
+    "query",
   );
 
   if (!result?.success || !result.shift) {
@@ -456,7 +607,7 @@ export async function pullActiveShiftFromCloud(
 }
 
 export async function clearActiveShiftFromCloud(
-  userId: string
+  userId: string,
 ): Promise<{ success: boolean }> {
   const result = await trpcCall("sync.clearActiveShift", {
     driverLocalUserId: userId,
@@ -468,7 +619,9 @@ export async function clearActiveShiftFromCloud(
 }
 
 // Added delete helper (preserve original file and add this small helper)
-export async function deleteDriverCloud(email: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteDriverCloud(
+  email: string,
+): Promise<{ success: boolean; error?: string }> {
   const result = await trpcCall("driverAuth.deleteAccount", {
     email: email.trim().toLowerCase(),
   });
@@ -476,167 +629,44 @@ export async function deleteDriverCloud(email: string): Promise<{ success: boole
   return result;
 }
 
-// ─── Device identity ──────────────────────────────────────────────────────────
-
-const DEVICE_ID_KEY = "dl_device_id";
-
-/**
- * Return a stable per-device UUID, creating one on first call.
- * This is stored in AsyncStorage and survives app restarts but not re-installs.
- */
-export async function getOrCreateDeviceId(): Promise<string> {
-  try {
-    const stored = await AsyncStorage.getItem(DEVICE_ID_KEY);
-    if (stored) return stored;
-
-    const id =
-      Date.now().toString(36) +
-      "-" +
-      Math.random().toString(36).slice(2) +
-      "-" +
-      Math.random().toString(36).slice(2);
-
-    await AsyncStorage.setItem(DEVICE_ID_KEY, id);
-    return id;
-  } catch {
-    return "unknown-device";
-  }
-}
-
-// ─── Session API ──────────────────────────────────────────────────────────────
-
 const SESSION_TOKEN_KEY = "dl_session_token";
-
-type StoredSessionData = {
-  sessionToken: string;
-  appAccountToken?: string | null;
-};
-
-function parseStoredSessionData(raw: string | null): StoredSessionData | null {
-  if (!raw) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(raw);
-
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      typeof parsed.sessionToken === "string"
-    ) {
-      return {
-        sessionToken: parsed.sessionToken,
-        appAccountToken:
-          typeof parsed.appAccountToken === "string"
-            ? parsed.appAccountToken
-            : null,
-      };
-    }
-  } catch {
-    // Backward compatibility with existing raw session token storage.
-  }
-
-  return {
-    sessionToken: raw,
-    appAccountToken: null,
-  };
-}
 
 export async function storeSessionToken(
   userId: string,
   token: string,
-  appAccountToken?: string | null
+  options?: {
+    appAccountToken?: string | null;
+  },
 ): Promise<void> {
   await AsyncStorage.setItem(
     `${SESSION_TOKEN_KEY}_${userId}`,
     JSON.stringify({
       sessionToken: token,
-      appAccountToken: appAccountToken ?? null,
-    })
+      appAccountToken: options?.appAccountToken ?? null,
+    }),
   );
 }
 
-export async function getStoredSessionToken(userId: string): Promise<string | null> {
+export async function getStoredSessionToken(
+  userId: string,
+): Promise<string | null> {
   try {
-    const stored = parseStoredSessionData(
-      await AsyncStorage.getItem(`${SESSION_TOKEN_KEY}_${userId}`)
-    );
-    return stored?.sessionToken ?? null;
+    const raw = await AsyncStorage.getItem(`${SESSION_TOKEN_KEY}_${userId}`);
+
+    if (!raw) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+
+      if (parsed && typeof parsed.sessionToken === "string") {
+        return parsed.sessionToken;
+      }
+    } catch {}
+
+    return raw;
   } catch {
     return null;
-  }
-}
-
-export async function getStoredAppAccountToken(userId: string): Promise<string | null> {
-  try {
-    const stored = parseStoredSessionData(
-      await AsyncStorage.getItem(`${SESSION_TOKEN_KEY}_${userId}`)
-    );
-    return stored?.appAccountToken ?? null;
-  } catch {
-    return null;
-  }
-}
-
-export async function clearSessionToken(userId: string): Promise<void> {
-  await AsyncStorage.removeItem(`${SESSION_TOKEN_KEY}_${userId}`);
-}
-
-export type CreateSessionResult =
-  | { success: true; conflict: false; sessionToken: string }
-  | { success: false; conflict: true; conflictDeviceLabel: string }
-  | { success: false; conflict: false; error?: string };
-
-/**
- * Register a new session for the Drive Legal account on this device.
- * Returns a conflict result when another device has an active session.
- */
-export async function createDriverSession(params: {
-  localUserId: string;
-  deviceId: string;
-  deviceLabel?: string;
-}): Promise<CreateSessionResult> {
-  const result = await trpcCall("session.create", params);
-  if (!result) return { success: false, conflict: false, error: "Network error." };
-  return result;
-}
-
-/**
- * Invalidate all other active sessions and claim ownership for this device.
- * Called after the user confirms "Continue on this device" in the conflict dialog.
- */
-export async function takeoverDriverSession(params: {
-  localUserId: string;
-  deviceId: string;
-  deviceLabel?: string;
-}): Promise<{ success: boolean; sessionToken?: string; error?: string }> {
-  const result = await trpcCall("session.takeover", params);
-  if (!result) return { success: false, error: "Network error." };
-  return result;
-}
-
-/**
- * Check whether a session token is still valid.
- * Returns `null` on network error (treat as valid — do not log user out on infra issues).
- */
-export async function checkDriverSession(sessionToken: string): Promise<boolean | null> {
-  try {
-    const result = await trpcCall("session.check", { sessionToken }, "query");
-    if (!result) return null;
-    return result.valid === true;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Explicitly invalidate the session token on logout.
- */
-export async function invalidateDriverSession(sessionToken: string): Promise<void> {
-  try {
-    await trpcCall("session.invalidate", { sessionToken });
-  } catch {
-    // best-effort
   }
 }

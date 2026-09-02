@@ -37,8 +37,12 @@ export function adminRouter(app: Express) {
         return res.status(401).json({ error: "Unauthorized" });
       }
 
-      const [drivers] = await query<any[]>("SELECT COUNT(*) as count FROM drivers");
-      const [logs] = await query<any[]>("SELECT COUNT(*) as count FROM shift_logs");
+      const [drivers] = await query<{ count: number }>(
+        "SELECT COUNT(*) as count FROM drivers"
+      );
+      const [logs] = await query<{ count: number }>(
+        "SELECT COUNT(*) as count FROM shift_logs"
+      );
 
       res.json({
         drivers: drivers?.count || 0,

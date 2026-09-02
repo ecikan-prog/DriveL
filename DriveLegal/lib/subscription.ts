@@ -2,17 +2,15 @@
  * Subscription management for Drive Legal.
  *
  * Source-of-truth hierarchy (highest → lowest):
- *   1. StoreKit / react-native-iap  (iOS production entitlement)
- *   2. Railway/MySQL server              (synced on login via syncSubscriptionFromServer)
- *   3. AsyncStorage cache                (display only — never overrides StoreKit)
+ *   1. Authenticated Drive Legal account on Railway/MySQL
+ *   2. Explicit StoreKit purchase / restore action for that authenticated account
+ *   3. AsyncStorage cache
  *
  * Rules
  * ─────
- * • AsyncStorage is ONLY a display cache.  It is always overwritten by the
- *   real StoreKit state; it never upgrades status on its own.
- * • activateSubscriptionFromIAP() is the only function that marks a
- *   subscription "active" from within the app.  It requires a verified
- *   StoreKit transaction ID — there is no fake/demo activation path.
+ * • AsyncStorage is ONLY an account-scoped cache.
+ * • Local premium access must reflect the authenticated account state
+ *   accepted by the server for that account.
  * • The 21-day free trial is an Apple introductory offer configured in
  *   App Store Connect.  The local trialEndDate field is kept for
  *   backward-compatibility with the server schema; it is NOT the gating
@@ -47,10 +45,8 @@ const TRIAL_DAYS = 21;
 
 /**
  * Sync subscription state from the Railway backend.
- * Called immediately after a successful cloud login.
- * This sets the AsyncStorage cache from authoritative server data.
- * On iOS, refreshIAPEntitlement() is called afterward to let StoreKit
- * override the server state with the real entitlement.
+ * Called after authenticated account sync so the cache matches the
+ * Drive Legal account currently signed in on this device.
  */
 export async function syncSubscriptionFromServer(params: {
   userId: string;
@@ -60,22 +56,18 @@ export async function syncSubscriptionFromServer(params: {
   subscriptionId?: string | null;
   currentPeriodEnd?: string | null;
   plan?: "monthly" | "annual" | null;
+  iapVerified?: boolean;
 }): Promise<SubscriptionState> {
-  const existingRaw = await AsyncStorage.getItem(`${SUBSCRIPTION_KEY}_${params.userId}`);
-  const existingState = existingRaw
-    ? (JSON.parse(existingRaw) as SubscriptionState)
-    : null;
   const trialStartDate = params.trialStartDate ?? new Date().toISOString();
   const trialEndDate =
     params.trialEndDate ??
     new Date(
-      new Date(trialStartDate).getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000
+      new Date(trialStartDate).getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000,
     ).toISOString();
 
   // Always accept the authoritative server state on login.
   // refreshIAPEntitlement() is responsible for confirming or revoking
   // the active status via StoreKit after login completes.
-
   const state: SubscriptionState = {
     userId: params.userId,
     status: params.status,
@@ -86,7 +78,7 @@ export async function syncSubscriptionFromServer(params: {
     plan: params.plan ?? undefined,
     lastChecked: new Date().toISOString(),
     lastServerSync: new Date().toISOString(),
-    iapVerified: false,
+    iapVerified: params.iapVerified ?? false,
   };
 
   await saveSubscriptionState(state);
@@ -97,56 +89,46 @@ export async function syncSubscriptionFromServer(params: {
 
 /**
  * Query StoreKit for the real current entitlement and update the cache.
- * This is called on every app launch (from shift-context) so that the
- * cached state can never drift from the actual App Store state.
+ * This must only be used during an explicit purchase or restore flow,
+ * never as an automatic replacement for the authenticated account state.
  *
- * IMPORTANT: This is the ONLY function allowed to set status = "active"
- * based on a StoreKit check.  It cannot be bypassed.
+ * IMPORTANT: StoreKit results must still be reconciled back to the
+ * authenticated Drive Legal account on the server before premium access is
+ * treated as authoritative.
  */
-export async function refreshIAPEntitlement(userId: string): Promise<SubscriptionState> {
+export async function refreshIAPEntitlement(
+  userId: string,
+): Promise<SubscriptionState> {
   const cached = await getSubscriptionState(userId);
 
   try {
     const entitlement = await checkCurrentEntitlement();
 
     if (entitlement.isActive && entitlement.plan) {
-      // ── Account-binding guard ─────────────────────────────────────────────
-      // StoreKit returns purchases bound to the device's Apple ID, NOT to the
-      // Drive Legal account.  We must verify that the active StoreKit
-      // transaction actually belongs to this Drive Legal account before
-      // applying it.
-      //
-      // The server-sync step (syncSubscriptionFromServer) stores the
-      // account's known subscriptionId from the server.  Only accept the
-      // StoreKit result when:
-      //   (a) we have a server-known subscriptionId AND it matches the
-      //       StoreKit transactionId, OR
-      //   (b) the subscription was just purchased on this device (local cache
-      //       already has the transactionId from activateSubscriptionFromIAP,
-      //       which writes subscriptionId before this path is reached).
-      //
-      // This prevents another account's Apple subscription from leaking into
-      // the current session (Test C / Test A / Test B).
+      // StoreKit returns purchases bound to the device's Apple ID, not the
+      // authenticated Drive Legal account. Only accept the entitlement when it
+      // matches the subscription already associated with this account.
       const accountSubscriptionId = cached.subscriptionId;
 
       if (!accountSubscriptionId) {
-        // No subscription ID on record for this account.  We cannot verify
-        // that this StoreKit transaction belongs here — do not apply.
         return cached;
       }
 
-      if (entitlement.transactionId && entitlement.transactionId !== accountSubscriptionId) {
-        // The StoreKit transaction ID does not match this account's known
-        // subscription.  Reject to prevent cross-account entitlement leak.
-        console.warn("[IAP] StoreKit transactionId does not match account subscriptionId — rejecting.", {
-          storeKitTransactionId: entitlement.transactionId,
-          accountSubscriptionId,
-          userId,
-        });
+      if (
+        entitlement.transactionId &&
+        entitlement.transactionId !== accountSubscriptionId
+      ) {
+        console.warn(
+          "[IAP] StoreKit transactionId does not match account subscriptionId — rejecting.",
+          {
+            storeKitTransactionId: entitlement.transactionId,
+            accountSubscriptionId,
+            userId,
+          },
+        );
         return cached;
       }
 
-      // Transaction belongs to this account — apply StoreKit confirmation.
       const periodEnd = entitlement.expiryDate
         ? entitlement.expiryDate.toISOString()
         : estimatePeriodEnd(entitlement.plan, Date.now()).toISOString();
@@ -188,9 +170,8 @@ export async function refreshIAPEntitlement(userId: string): Promise<Subscriptio
 // ─── Post-purchase activation ─────────────────────────────────────────────────
 
 /**
- * Activate the subscription after a successful verified StoreKit purchase.
- * This is the ONLY code path that can transition status → "active" from
- * within the app.  It requires a real StoreKit transaction ID.
+ * Legacy helper for writing an explicitly verified StoreKit result into the
+ * local cache. Account access should still be re-synced from the server.
  *
  * The fake "sim_sub_" prefix is explicitly rejected.
  */
@@ -198,11 +179,11 @@ export async function activateSubscriptionFromIAP(
   userId: string,
   plan: "monthly" | "annual",
   transactionId: string,
-  purchaseTime: number
+  purchaseTime: number,
 ): Promise<SubscriptionState> {
   if (transactionId.startsWith("sim_sub_")) {
     throw new Error(
-      "Simulated transaction IDs are not accepted. A real StoreKit transaction is required."
+      "Simulated transaction IDs are not accepted. A real StoreKit transaction is required.",
     );
   }
 
@@ -239,9 +220,11 @@ export async function activateSubscriptionFromIAP(
 /**
  * Read the cached subscription state.
  * Applies a one-way expiry downgrade for non-IAP-verified states only.
- * Never upgrades status — that is StoreKit's job.
+ * Never upgrades status automatically.
  */
-export async function getSubscriptionState(userId: string): Promise<SubscriptionState> {
+export async function getSubscriptionState(
+  userId: string,
+): Promise<SubscriptionState> {
   try {
     const raw = await AsyncStorage.getItem(`${SUBSCRIPTION_KEY}_${userId}`);
     if (raw) {
@@ -261,7 +244,7 @@ export async function getSubscriptionState(userId: string): Promise<Subscription
   // No cache at all — show as trial pending the first server sync.
   const trialStart = new Date().toISOString();
   const trialEnd = new Date(
-    Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000
+    Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000,
   ).toISOString();
 
   const fallback: SubscriptionState = {
@@ -298,11 +281,13 @@ function applyExpiryCheck(state: SubscriptionState): SubscriptionState {
   return state;
 }
 
-export async function saveSubscriptionState(state: SubscriptionState): Promise<void> {
+export async function saveSubscriptionState(
+  state: SubscriptionState,
+): Promise<void> {
   state.lastChecked = new Date().toISOString();
   await AsyncStorage.setItem(
     `${SUBSCRIPTION_KEY}_${state.userId}`,
-    JSON.stringify(state)
+    JSON.stringify(state),
   );
 }
 

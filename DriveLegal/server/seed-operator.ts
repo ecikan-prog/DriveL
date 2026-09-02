@@ -8,7 +8,7 @@
  */
 import "dotenv/config";
 import { drizzle } from "drizzle-orm/mysql2";
-import { operators, operatorDrivers } from "../drizzle/schema";
+import { operators, operatorDrivers } from "./schema";
 import { eq, and } from "drizzle-orm";
 
 // Same simple hash as local-auth.ts

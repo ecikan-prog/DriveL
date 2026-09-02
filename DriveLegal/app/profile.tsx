@@ -15,15 +15,12 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
+import { syncProfileToCloud } from "@/lib/cloud-sync";
 import { useAuthContext } from "@/lib/auth-context";
 import { useShiftContext } from "@/lib/shift-context";
-import {
-  updateUserProfile,
-  type DriverType,
-} from "@/lib/local-auth";
+import { updateUserProfile, type DriverType } from "@/lib/local-auth";
 import {
   getSubscriptionState,
-  refreshIAPEntitlement,
   getTrialDaysLeft,
   type SubscriptionState,
 } from "@/lib/subscription";
@@ -283,17 +280,17 @@ function SelectorField({
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, logout, refreshUser } = useAuthContext();
-  const { activeShift, subscriptionState: shiftSubscriptionState } = useShiftContext();
+  const { activeShift, subscriptionState: shiftSubscriptionState } =
+    useShiftContext();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showVehiclePicker, setShowVehiclePicker] = useState(false);
   const [showDriverTypePicker, setShowDriverTypePicker] = useState(false);
   const [iconLoadFailed, setIconLoadFailed] = useState(false);
-  const [subscriptionState, setSubscriptionState] = useState<SubscriptionState | null>(
-    shiftSubscriptionState
-  );
+  const [subscriptionState, setSubscriptionState] =
+    useState<SubscriptionState | null>(shiftSubscriptionState);
   const [subscriptionStatusLoading, setSubscriptionStatusLoading] = useState(
-    !shiftSubscriptionState
+    !shiftSubscriptionState,
   );
   const [form, setForm] = useState({
     name: user?.name ?? "",
@@ -323,10 +320,7 @@ export default function ProfileScreen() {
       licenceExpiry: (user as any)?.licenceExpiry ?? "",
     });
 
-    Promise.all([
-      getAllLogs(user.id),
-      getFortnightlyDrivingSeconds(user.id),
-    ])
+    Promise.all([getAllLogs(user.id), getFortnightlyDrivingSeconds(user.id)])
       .then(([logs, fortnightly]) => {
         setStats({
           totalShifts: logs.length,
@@ -366,9 +360,7 @@ export default function ProfileScreen() {
         setSubscriptionState(cached);
       }
 
-      const refreshed = await refreshIAPEntitlement(user.id).catch(() => cached);
       if (isMounted) {
-        setSubscriptionState(refreshed);
         setSubscriptionStatusLoading(false);
       }
     };
@@ -386,7 +378,9 @@ export default function ProfileScreen() {
   }, [user?.id]);
 
   const trialDays =
-    subscriptionState?.status === "trial" ? getTrialDaysLeft(subscriptionState) : 0;
+    subscriptionState?.status === "trial"
+      ? getTrialDaysLeft(subscriptionState)
+      : 0;
   const activePlanLabel =
     subscriptionState?.plan === "annual"
       ? "Annual"
@@ -410,20 +404,20 @@ export default function ProfileScreen() {
       return;
     }
     if (
-  activeShift &&
-  form.driverType !==
-    ((user as any)?.driverType ?? "small_passenger")
-) {
-  Alert.alert(
-    "Active Shift",
-    "Please end your shift before changing driver type."
-  );
-  return;
-}
+      activeShift &&
+      form.driverType !== ((user as any)?.driverType ?? "small_passenger")
+    ) {
+      Alert.alert(
+        "Active Shift",
+        "Please end your shift before changing driver type.",
+      );
+      return;
+    }
 
     setSaving(true);
     try {
       const result = await updateUserProfile(user.id, {
+        name: form.name.trim(),
         operatorName: form.operatorName.trim() || undefined,
         licenceClass: form.licenceClass.trim() || undefined,
         licenceExpiry: form.licenceExpiry.trim() || undefined,
@@ -432,7 +426,17 @@ export default function ProfileScreen() {
         driverType: form.driverType as DriverType,
       });
 
-      if (result.success) {
+      if (result.success === true) {
+        await syncProfileToCloud({
+          localUserId: user.id,
+          name: form.name.trim(),
+          operatorName: form.operatorName.trim() || undefined,
+          licenceClass: form.licenceClass.trim() || undefined,
+          licenceExpiry: form.licenceExpiry.trim() || undefined,
+          vehicleRegistration: form.vehicleRegistration.trim().toUpperCase(),
+          vehicleType: form.vehicleType,
+          driverType: form.driverType as DriverType,
+        });
         await refreshUser();
         setEditing(false);
       } else {
@@ -474,9 +478,9 @@ export default function ProfileScreen() {
 
   const handleContactSupport = async () => {
     const mailto = `mailto:support@drivelegal.app?subject=Drive%20Legal%20Support%20Request&body=Hello%2C%0A%0AI%20need%20help%20with%20Drive%20Legal.%0A%0ADriver%3A%20${encodeURIComponent(
-      user?.name ?? ""
+      user?.name ?? "",
     )}%0ALicence%3A%20${encodeURIComponent(
-      user?.licenceNumber ?? ""
+      user?.licenceNumber ?? "",
     )}%0A%0A%5BPlease%20describe%20your%20issue%20here%5D`;
     try {
       const supported = await Linking.canOpenURL(mailto);
@@ -485,20 +489,20 @@ export default function ProfileScreen() {
       } else {
         Alert.alert(
           "Contact Support",
-          "Please email support@drivelegal.app directly."
+          "Please email support@drivelegal.app directly.",
         );
       }
     } catch {
       Alert.alert(
         "Contact Support",
-        "Please email support@drivelegal.app directly."
+        "Please email support@drivelegal.app directly.",
       );
     }
   };
 
   if (!user) return null;
 
-return (
+  return (
     <ScreenContainer style={{ backgroundColor: COLORS.navy }}>
       {/* Header */}
       <View style={styles.header}>
@@ -644,7 +648,9 @@ return (
                     {isSubscriptionExpired ? "⏰" : "…"}
                   </Text>
                   <Text style={styles.trialExpiredLabel}>
-                    {isSubscriptionExpired ? "Trial Expired" : "Subscription Unavailable"}
+                    {isSubscriptionExpired
+                      ? "Trial Expired"
+                      : "Subscription Unavailable"}
                   </Text>
                 </View>
                 <Text style={styles.trialExpiredSubtext}>
@@ -656,9 +662,7 @@ return (
                   style={styles.subscribeButton}
                   onPress={() => router.push("/paywall" as any)}
                 >
-                  <Text style={styles.subscribeButtonText}>
-                    Subscribe Now
-                  </Text>
+                  <Text style={styles.subscribeButtonText}>Subscribe Now</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -686,46 +690,46 @@ return (
             {editing ? (
               <View style={styles.formStack}>
                 <InfoRow
-                 label="Full Name — Contact support to change"
-                 value={user.name ?? "—"}
-                 icon="🔒"
-               />
+                  label="Full Name — Contact support to change"
+                  value={user.name ?? "—"}
+                  icon="🔒"
+                />
 
                 <InfoRow
                   label="Licence Number — Contact support to change"
                   value={user.licenceNumber ?? "—"}
                   icon="🔒"
-                 />
+                />
                 <FormField
-  label="Operator Name"
-  value={form.operatorName}
-  placeholder="Operator name"
-  autoCapitalize="words"
-  onChangeText={(v) =>
-    setForm((p) => ({ ...p, operatorName: v }))
-  }
-/>
+                  label="Operator Name"
+                  value={form.operatorName}
+                  placeholder="Operator name"
+                  autoCapitalize="words"
+                  onChangeText={(v) =>
+                    setForm((p) => ({ ...p, operatorName: v }))
+                  }
+                />
 
-<FormField
-  label="Licence Class"
-  value={form.licenceClass}
-  placeholder="Example: Class 2"
-  autoCapitalize="characters"
-  onChangeText={(v) =>
-    setForm((p) => ({ ...p, licenceClass: v }))
-  }
-/>
+                <FormField
+                  label="Licence Class"
+                  value={form.licenceClass}
+                  placeholder="Example: Class 2"
+                  autoCapitalize="characters"
+                  onChangeText={(v) =>
+                    setForm((p) => ({ ...p, licenceClass: v }))
+                  }
+                />
 
-<FormField
-  label="Licence Expiry"
-  value={form.licenceExpiry}
-  placeholder="DD/MM/YYYY"
-  onChangeText={(v) =>
-    setForm((p) => ({ ...p, licenceExpiry: v }))
-  }
-/>
-              
-                  <FormField
+                <FormField
+                  label="Licence Expiry"
+                  value={form.licenceExpiry}
+                  placeholder="DD/MM/YYYY"
+                  onChangeText={(v) =>
+                    setForm((p) => ({ ...p, licenceExpiry: v }))
+                  }
+                />
+
+                <FormField
                   label="Vehicle Registration"
                   value={form.vehicleRegistration}
                   placeholder="Vehicle rego"
@@ -748,26 +752,22 @@ return (
                   }
                   placeholder="Select driver type"
                   onPress={() => {
-  if (activeShift) {
-    Alert.alert(
-      "Active Shift",
-      "Please end your shift before changing driver type."
-    );
-    return;
-  }
+                    if (activeShift) {
+                      Alert.alert(
+                        "Active Shift",
+                        "Please end your shift before changing driver type.",
+                      );
+                      return;
+                    }
 
-  setShowDriverTypePicker(true);
-}}
+                    setShowDriverTypePicker(true);
+                  }}
                 />
               </View>
             ) : (
               <>
                 <InfoRow label="Full Name" value={user.name ?? "—"} icon="👤" />
-                <InfoRow
-                  label="Email"
-                  value={user.email ?? "—"}
-                  icon="📧"
-                />
+                <InfoRow label="Email" value={user.email ?? "—"} icon="📧" />
                 <InfoRow
                   label="Licence Number"
                   value={user.licenceNumber ?? "—"}
@@ -777,7 +777,7 @@ return (
                   label="Operator Name"
                   value={(user as any)?.operatorName ?? "—"}
                   icon="🏢"
-                 />
+                />
 
                 <InfoRow
                   label="Licence Class"
@@ -786,21 +786,20 @@ return (
                 />
 
                 <InfoRow
-                 label="Licence Expiry"
-                 value={
-                  (user as any)?.licenceExpiry
-                   ? new Date(`${(user as any).licenceExpiry}T00:00:00`).toLocaleDateString(
-                    "en-NZ",
-                  {
-                 day: "2-digit",
-               month: "2-digit",
-            year: "numeric",
-          }
-       )
-     : "—"
-   }
-                 icon="📅"
-               />
+                  label="Licence Expiry"
+                  value={
+                    (user as any)?.licenceExpiry
+                      ? new Date(
+                          `${(user as any).licenceExpiry}T00:00:00`,
+                        ).toLocaleDateString("en-NZ", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                        })
+                      : "—"
+                  }
+                  icon="📅"
+                />
                 <InfoRow
                   label="Vehicle Type"
                   value={user.vehicleType ?? "—"}
@@ -817,7 +816,7 @@ return (
                     DRIVER_TYPES.find(
                       (type) =>
                         type.value ===
-                        ((user as any)?.driverType ?? "small_passenger")
+                        ((user as any)?.driverType ?? "small_passenger"),
                     )?.label ?? "Small Passenger Service"
                   }
                   icon="🚦"
@@ -825,14 +824,15 @@ return (
                 <InfoRow
                   label="Member Since"
                   value={
-  user.createdAt && !Number.isNaN(new Date(user.createdAt).getTime())
-    ? new Date(user.createdAt).toLocaleDateString("en-NZ", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
-    : "—"
-}
+                    user.createdAt &&
+                    !Number.isNaN(new Date(user.createdAt).getTime())
+                      ? new Date(user.createdAt).toLocaleDateString("en-NZ", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })
+                      : "—"
+                  }
                   icon="📅"
                   last
                 />
@@ -851,10 +851,10 @@ return (
                 <Text style={styles.ruleText}>
                   Maximum{" "}
                   <Text style={styles.ruleTextBold}>
-                   {(user as any)?.driverType === "small_passenger"
-                    ? "7 hours"
-                     : "5.5 hours"}{" "}
-                      driving
+                    {(user as any)?.driverType === "small_passenger"
+                      ? "7 hours"
+                      : "5.5 hours"}{" "}
+                    driving
                   </Text>{" "}
                   before a 30-minute break
                 </Text>
@@ -875,11 +875,8 @@ return (
                 </View>
                 <Text style={styles.ruleText}>
                   Maximum{" "}
-                  <Text style={styles.ruleTextBold}>
-                    70 hours of work time
-                  </Text>{" "}
-                  in a cumulative work period before a continuous 24-hour
-                  break
+                  <Text style={styles.ruleTextBold}>70 hours of work time</Text>{" "}
+                  in a cumulative work period before a continuous 24-hour break
                 </Text>
               </View>
               <View style={styles.ruleRow}>
@@ -926,8 +923,7 @@ return (
           <View style={styles.card}>
             <Text style={styles.cardTitleAlt}>💬 Contact Support</Text>
             <Text style={styles.supportText}>
-              Need help? We're here to assist you with any questions or
-              issues.
+              Need help? We're here to assist you with any questions or issues.
             </Text>
             <Text style={styles.supportEmail}>support@drivelegal.app</Text>
             <TouchableOpacity
@@ -939,10 +935,7 @@ return (
           </View>
 
           {/* Sign Out Button */}
-          <TouchableOpacity
-            style={styles.signOutButton}
-            onPress={handleLogout}
-          >
+          <TouchableOpacity style={styles.signOutButton} onPress={handleLogout}>
             <Text style={styles.signOutEmoji}>🚪</Text>
             <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>
@@ -971,16 +964,16 @@ return (
           sublabel: dt.sublabel,
         }))}
         onSelect={(value) => {
-  if (activeShift) {
-    Alert.alert(
-      "Active Shift",
-      "Please end your shift before changing driver type."
-    );
-    return;
-  }
+          if (activeShift) {
+            Alert.alert(
+              "Active Shift",
+              "Please end your shift before changing driver type.",
+            );
+            return;
+          }
 
-  setForm((p) => ({ ...p, driverType: value }));
-}}
+          setForm((p) => ({ ...p, driverType: value }));
+        }}
         onClose={() => setShowDriverTypePicker(false)}
       />
     </ScreenContainer>

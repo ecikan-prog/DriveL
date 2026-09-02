@@ -37,7 +37,7 @@ export function portalRouter(app: Express) {
 
     const { id } = req.params;
 
-    const drivers = await query<any[]>(
+    const drivers = await query<{ localUserId: string }>(
       `
       SELECT localUserId
       FROM drivers
@@ -53,7 +53,7 @@ export function portalRouter(app: Express) {
       });
     }
 
-    const logs = await query<any[]>(
+    const logs = await query(
       `
       SELECT
         id,
@@ -90,9 +90,13 @@ export function portalRouter(app: Express) {
       if (!isAuthorized(req)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
-      const drivers = await query<any[]>("SELECT COUNT(*) as count FROM drivers");
-      const logs = await query<any[]>("SELECT COUNT(*) as count FROM daily_logs");
-      const todayLogs = await query<any[]>(
+      const drivers = await query<{ count: number }>(
+        "SELECT COUNT(*) as count FROM drivers"
+      );
+      const logs = await query<{ count: number }>(
+        "SELECT COUNT(*) as count FROM daily_logs"
+      );
+      const todayLogs = await query<{ count: number }>(
         "SELECT COUNT(*) as count FROM daily_logs WHERE DATE(start_time) = CURDATE()"
       );
       res.json({
