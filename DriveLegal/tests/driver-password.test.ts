@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import crypto from "crypto";
 
 import {
   hashDriverPassword,
@@ -39,10 +38,8 @@ describe("driver password verification", () => {
 
   it("allows legacy SHA-256 account login and returns migration hash", () => {
     const password = "DriveLegal2026!";
-    const storedHash = crypto
-      .createHash("sha256")
-      .update(password)
-      .digest("hex");
+    const storedHash =
+      "7f576096fe3499935c6549bf2078e723752ded172190559bf38f27e20c9c3e89";
     const result = verifyDriverPassword(password, storedHash, {
       sha256Hex: storedHash,
     });
