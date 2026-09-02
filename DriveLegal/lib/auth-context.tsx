@@ -14,6 +14,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import * as Crypto from "expo-crypto";
 import { AppState, Platform } from "react-native";
 
 import * as LocalAuth from "./local-auth";
@@ -426,9 +427,15 @@ export function AuthProvider({ children }: { children?: React.ReactNode }) {
       const localPasswordHash = LocalAuth.hashPassword(password);
 
       try {
+        const legacyPasswordSha256 = await Crypto.digestStringAsync(
+          Crypto.CryptoDigestAlgorithm.SHA256,
+          password,
+        );
         const deviceId = await getOrCreateDeviceId();
         const deviceLabel = getDeviceLabel();
         const cloudResult = await loginDriverCloud(normalisedEmail, password, {
+          legacyPasswordHash: localPasswordHash,
+          legacyPasswordSha256,
           deviceId,
           deviceLabel,
           forceContinue: options?.forceContinue,

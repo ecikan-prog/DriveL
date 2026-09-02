@@ -511,6 +511,8 @@ export const appRouter = t.router({
         z.object({
           email: z.string().email(),
           password: z.string().min(1).max(256),
+          legacyPasswordHash: z.string().min(1).max(128).optional(),
+          legacyPasswordSha256: z.string().length(64).optional(),
           deviceId: z.string().min(1).max(128).optional(),
           deviceLabel: z.string().min(1).max(255).optional(),
           forceContinue: z.boolean().optional(),
@@ -568,6 +570,10 @@ export const appRouter = t.router({
             const passwordCheck = verifyDriverPassword(
               input.password,
               driver.passwordHash,
+              {
+                simpleHash: input.legacyPasswordHash,
+                sha256Hex: input.legacyPasswordSha256,
+              },
             );
 
             if (!passwordCheck.matches) {
@@ -599,7 +605,7 @@ export const appRouter = t.router({
                   LIMIT 1
                   `,
                   [
-                    passwordCheck.canonicalHash,
+                    passwordCheck.nextHash ?? driver.passwordHash,
                     appAccountToken,
                     driver.localUserId,
                   ],
@@ -697,7 +703,7 @@ export const appRouter = t.router({
                 LIMIT 1
                 `,
                 [
-                  passwordCheck.canonicalHash,
+                  passwordCheck.nextHash ?? driver.passwordHash,
                   appAccountToken,
                   driver.localUserId,
                 ],

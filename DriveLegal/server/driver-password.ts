@@ -1,50 +1,66 @@
 import crypto from "crypto";
 
-function legacySimpleHash(value: string): string {
-  let hash = 0;
-
-  for (let i = 0; i < value.length; i++) {
-    const char = value.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash;
-  }
-
-  return hash.toString(16);
-}
+const SCRYPT_PREFIX = "s1";
+const SCRYPT_SALT_BYTES = 10;
+const SCRYPT_KEY_BYTES = 24;
 
 export function hashDriverPassword(password: string): string {
-  return crypto.createHash("sha256").update(password).digest("hex");
+  const salt = crypto.randomBytes(SCRYPT_SALT_BYTES);
+  const derivedKey = crypto.scryptSync(password, salt, SCRYPT_KEY_BYTES);
+
+  return `${SCRYPT_PREFIX}$${salt.toString("base64url")}$${derivedKey.toString("base64url")}`;
+}
+
+function verifyScryptPassword(password: string, storedHash: string): boolean {
+  const [prefix, encodedSalt, encodedHash] = storedHash.split("$");
+
+  if (!prefix || !encodedSalt || !encodedHash || prefix !== SCRYPT_PREFIX) {
+    return false;
+  }
+
+  try {
+    const salt = Buffer.from(encodedSalt, "base64url");
+    const expectedHash = Buffer.from(encodedHash, "base64url");
+    const derivedKey = crypto.scryptSync(password, salt, expectedHash.length);
+
+    return crypto.timingSafeEqual(derivedKey, expectedHash);
+  } catch {
+    return false;
+  }
 }
 
 export function verifyDriverPassword(
   password: string,
   storedHash: string,
+  legacyHashes?: {
+    simpleHash?: string;
+    sha256Hex?: string;
+  },
 ): {
   matches: boolean;
-  canonicalHash: string;
+  nextHash?: string;
   needsMigration: boolean;
 } {
-  const canonicalHash = hashDriverPassword(password);
-
-  if (storedHash === canonicalHash) {
+  if (verifyScryptPassword(password, storedHash)) {
     return {
       matches: true,
-      canonicalHash,
       needsMigration: false,
     };
   }
 
-  if (storedHash === legacySimpleHash(password)) {
+  if (
+    storedHash === legacyHashes?.sha256Hex ||
+    storedHash === legacyHashes?.simpleHash
+  ) {
     return {
       matches: true,
-      canonicalHash,
+      nextHash: hashDriverPassword(password),
       needsMigration: true,
     };
   }
 
   return {
     matches: false,
-    canonicalHash,
     needsMigration: false,
   };
 }

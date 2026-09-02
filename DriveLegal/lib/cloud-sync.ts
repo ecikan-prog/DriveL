@@ -386,6 +386,8 @@ export async function loginDriverCloud(
   email: string,
   password: string,
   options: {
+    legacyPasswordHash?: string;
+    legacyPasswordSha256?: string;
     deviceId: string;
     deviceLabel: string;
     forceContinue?: boolean;
