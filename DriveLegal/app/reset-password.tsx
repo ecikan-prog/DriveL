@@ -15,6 +15,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { resetPasswordWithToken } from "@/lib/cloud-sync";
+import { hashPassword } from "@/lib/local-auth";
 
 const COLORS = {
   blue: "#3658D8",
@@ -101,7 +102,8 @@ export default function ResetPasswordScreen() {
     setLoading(true);
 
     try {
-      const result = await resetPasswordWithToken(token, password);
+      const passwordHash = hashPassword(password);
+      const result = await resetPasswordWithToken(token, passwordHash);
 
       if (!result.success) {
         throw new Error(

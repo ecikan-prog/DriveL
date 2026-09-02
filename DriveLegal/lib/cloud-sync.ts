@@ -358,7 +358,7 @@ export async function pullLogsFromCloud(
 export async function registerDriverCloud(params: {
   localUserId: string;
   email: string;
-  password: string;
+  passwordHash: string;
   name: string;
   dateOfBirth: string;
   tslNumber?: string;
@@ -384,10 +384,8 @@ export async function registerDriverCloud(params: {
  */
 export async function loginDriverCloud(
   email: string,
-  password: string,
+  passwordHash: string,
   options: {
-    legacyPasswordHash?: string;
-    legacyPasswordSha256?: string;
     deviceId: string;
     deviceLabel: string;
     forceContinue?: boolean;
@@ -424,7 +422,7 @@ export async function loginDriverCloud(
 }> {
   const result = await trpcCall("driverAuth.login", {
     email,
-    password,
+    passwordHash,
     ...options,
   });
   if (!result)
@@ -536,11 +534,11 @@ export async function forgotPasswordRequest(email: string): Promise<void> {
  */
 export async function resetPasswordWithToken(
   token: string,
-  newPassword: string,
+  newPasswordHash: string,
 ): Promise<{ success: boolean; error?: string }> {
   const result = await trpcCall("driverAuth.resetPassword", {
     token,
-    newPassword,
+    newPasswordHash,
   });
   if (!result) return { success: false, error: "Network error." };
   return result;
