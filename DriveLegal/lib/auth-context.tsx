@@ -527,10 +527,12 @@ export function AuthProvider({ children }: { children?: React.ReactNode }) {
   const register = useCallback(
     async (params: RegisterParams): Promise<RegisterResult> => {
       const email = normaliseEmail(params.email);
+      const password = params.password;
 
       const cleanedParams: RegisterParams = {
         ...params,
         email,
+        password,
         name: params.name.trim(),
         tslNumber: params.tslNumber.trim(),
         operatorName: params.operatorName?.trim(),
@@ -549,7 +551,7 @@ export function AuthProvider({ children }: { children?: React.ReactNode }) {
         const cloudResult = await registerDriverCloud({
           localUserId,
           email,
-          password: params.password,
+          password: cleanedParams.password,
           name: cleanedParams.name,
           dateOfBirth: cleanedParams.dateOfBirth,
           tslNumber: cleanedParams.tslNumber,
