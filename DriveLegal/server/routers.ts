@@ -294,7 +294,8 @@ export const appRouter = t.router({
             SELECT
               id,
               emailVerified,
-              deletedAt
+              deletedAt,
+              appAccountToken
             FROM drivers
             WHERE email = ?
             LIMIT 1
@@ -312,6 +313,9 @@ export const appRouter = t.router({
           if (existing.length > 0) {
             const ex = existing[0];
             if (ex.deletedAt) {
+              const appAccountToken =
+                ex.appAccountToken ?? createAppAccountToken();
+
               // Reactivate soft-deleted account
               await query(
                 `
@@ -322,7 +326,8 @@ export const appRouter = t.router({
                   localUserId = ?,
                   passwordHash = ?,
                   trialStartDate = ?,
-                  trialEndDate = ?
+                  trialEndDate = ?,
+                  appAccountToken = ?
                 WHERE id = ?
                 `,
                 [
@@ -330,6 +335,7 @@ export const appRouter = t.router({
                   input.passwordHash,
                   trialStartDate,
                   trialEndDate,
+                  appAccountToken,
                   ex.id,
                 ],
               );
@@ -386,6 +392,8 @@ export const appRouter = t.router({
             };
           }
 
+          const appAccountToken = createAppAccountToken();
+
           await query(
             `
             INSERT INTO drivers (
@@ -426,7 +434,7 @@ export const appRouter = t.router({
               input.operatorName?.trim() || null,
               trialStartDate,
               trialEndDate,
-              createAppAccountToken(),
+              appAccountToken,
               "trial",
             ],
           );

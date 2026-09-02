@@ -79,6 +79,7 @@ type RegisterParams = {
 
 type AuthContextValue = {
   user: LocalAuth.AuthUser | null;
+  appAccountToken: string | null;
   loading: boolean;
   login: (
     email: string,
@@ -129,6 +130,7 @@ function getVerificationBaseUrl(): string {
 
 export function AuthProvider({ children }: { children?: React.ReactNode }) {
   const [user, setUser] = useState<LocalAuth.AuthUser | null>(null);
+  const [appAccountToken, setAppAccountToken] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
 
@@ -203,6 +205,8 @@ export function AuthProvider({ children }: { children?: React.ReactNode }) {
         });
       }
 
+      setAppAccountToken(driver.appAccountToken ?? null);
+
       if (options?.pullLogs !== false) {
         await pullLogsFromCloud(driver.localUserId);
         await migrateLogCalculations(driver.localUserId);
@@ -222,6 +226,7 @@ export function AuthProvider({ children }: { children?: React.ReactNode }) {
     lockPinSession();
     await LocalAuth.logoutUser();
     await clearAuthSession();
+    setAppAccountToken(null);
     setUser(null);
   }, []);
 
@@ -324,6 +329,8 @@ export function AuthProvider({ children }: { children?: React.ReactNode }) {
             return;
           }
 
+          setAppAccountToken(authSession.appAccountToken ?? null);
+
           const restored = await restoreDriverSessionCloud();
 
           if (restored.success && restored.driver) {
@@ -351,6 +358,8 @@ export function AuthProvider({ children }: { children?: React.ReactNode }) {
               });
             }
           }
+        } else {
+          setAppAccountToken(null);
         }
       } catch (error) {
         console.error("[Auth] Initialisation failed:", error);
@@ -480,6 +489,7 @@ export function AuthProvider({ children }: { children?: React.ReactNode }) {
 
         if (!applied.success) {
           await clearAuthSession();
+          setAppAccountToken(null);
           return {
             success: false,
             error: applied.error,
@@ -680,6 +690,7 @@ export function AuthProvider({ children }: { children?: React.ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
+        appAccountToken,
         loading,
         login,
         register,

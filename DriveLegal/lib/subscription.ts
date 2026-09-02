@@ -65,6 +65,9 @@ export async function syncSubscriptionFromServer(params: {
       new Date(trialStartDate).getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000,
     ).toISOString();
 
+  // Always accept the authoritative server state on login.
+  // refreshIAPEntitlement() is responsible for confirming or revoking
+  // the active status via StoreKit after login completes.
   const state: SubscriptionState = {
     userId: params.userId,
     status: params.status,
@@ -102,8 +105,30 @@ export async function refreshIAPEntitlement(
     const entitlement = await checkCurrentEntitlement();
 
     if (entitlement.isActive && entitlement.plan) {
-      // StoreKit confirms an active subscription — mark as active regardless
-      // of what the AsyncStorage cache or server said.
+      // StoreKit returns purchases bound to the device's Apple ID, not the
+      // authenticated Drive Legal account. Only accept the entitlement when it
+      // matches the subscription already associated with this account.
+      const accountSubscriptionId = cached.subscriptionId;
+
+      if (!accountSubscriptionId) {
+        return cached;
+      }
+
+      if (
+        entitlement.transactionId &&
+        entitlement.transactionId !== accountSubscriptionId
+      ) {
+        console.warn(
+          "[IAP] StoreKit transactionId does not match account subscriptionId — rejecting.",
+          {
+            storeKitTransactionId: entitlement.transactionId,
+            accountSubscriptionId,
+            userId,
+          },
+        );
+        return cached;
+      }
+
       const periodEnd = entitlement.expiryDate
         ? entitlement.expiryDate.toISOString()
         : estimatePeriodEnd(entitlement.plan, Date.now()).toISOString();
