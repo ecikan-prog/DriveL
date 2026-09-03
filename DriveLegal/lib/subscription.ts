@@ -22,6 +22,8 @@ import { checkCurrentEntitlement, estimatePeriodEnd } from "./iap";
 const SUBSCRIPTION_KEY = "drivelegal_subscription";
 
 export type SubscriptionStatus = "trial" | "active" | "expired" | "cancelled";
+export type SubscriptionSyncSource = "session" | "purchase" | "restore";
+export type SubscriptionAuthority = "server" | "purchase" | "restore";
 
 export type SubscriptionState = {
   userId: string;
@@ -37,6 +39,14 @@ export type SubscriptionState = {
   lastServerSync?: string;
   /** Whether the current active state was verified by StoreKit */
   iapVerified?: boolean;
+  /** Where the currently cached entitlement last came from */
+  entitlementAuthority?: SubscriptionAuthority;
+  /**
+   * True when a local purchase/restore is newer than the last server session
+   * snapshot seen on-device and must not be replaced by a conflicting older
+   * session-validation response.
+   */
+  pendingServerConfirmation?: boolean;
 };
 
 const TRIAL_DAYS = 21;
@@ -57,7 +67,9 @@ export async function syncSubscriptionFromServer(params: {
   currentPeriodEnd?: string | null;
   plan?: "monthly" | "annual" | null;
   iapVerified?: boolean;
+  source?: SubscriptionSyncSource;
 }): Promise<SubscriptionState> {
+  const source = params.source ?? "session";
   const trialStartDate = params.trialStartDate ?? new Date().toISOString();
   const trialEndDate =
     params.trialEndDate ??
@@ -65,10 +77,12 @@ export async function syncSubscriptionFromServer(params: {
       new Date(trialStartDate).getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000,
     ).toISOString();
 
-  // Always accept the authoritative server state on login.
+  // Session-validation updates normally accept the authenticated account state,
+  // but an explicit local purchase/restore stays authoritative until the
+  // server confirms the same entitlement or returns a genuinely newer update.
   // refreshIAPEntitlement() is responsible for confirming or revoking
   // the active status via StoreKit after login completes.
-  const state: SubscriptionState = {
+  const incomingState: SubscriptionState = {
     userId: params.userId,
     status: params.status,
     trialStartDate,
@@ -79,7 +93,27 @@ export async function syncSubscriptionFromServer(params: {
     lastChecked: new Date().toISOString(),
     lastServerSync: new Date().toISOString(),
     iapVerified: params.iapVerified ?? false,
+    entitlementAuthority: source === "session" ? "server" : source,
+    pendingServerConfirmation: source !== "session" && params.status === "active",
   };
+
+  const cached = await readStoredSubscriptionState(params.userId);
+
+  if (
+    cached &&
+    shouldKeepProtectedLocalEntitlement({
+      cached,
+      incoming: incomingState,
+      source,
+    })
+  ) {
+    return cached;
+  }
+
+  const state =
+    source === "session"
+      ? reconcileSessionSubscriptionState(cached, incomingState)
+      : incomingState;
 
   await saveSubscriptionState(state);
   return state;
@@ -289,6 +323,117 @@ export async function saveSubscriptionState(
     `${SUBSCRIPTION_KEY}_${state.userId}`,
     JSON.stringify(state),
   );
+}
+
+async function readStoredSubscriptionState(
+  userId: string,
+): Promise<SubscriptionState | null> {
+  try {
+    const raw = await AsyncStorage.getItem(`${SUBSCRIPTION_KEY}_${userId}`);
+    return raw ? (JSON.parse(raw) as SubscriptionState) : null;
+  } catch {
+    return null;
+  }
+}
+
+function reconcileSessionSubscriptionState(
+  cached: SubscriptionState | null,
+  incoming: SubscriptionState,
+): SubscriptionState {
+  if (
+    cached?.pendingServerConfirmation &&
+    matchesProtectedLocalEntitlement(cached, incoming)
+  ) {
+    return {
+      ...incoming,
+      iapVerified: cached.iapVerified || incoming.iapVerified,
+      pendingServerConfirmation: false,
+      entitlementAuthority: "server",
+    };
+  }
+
+  return incoming;
+}
+
+function shouldKeepProtectedLocalEntitlement(params: {
+  cached: SubscriptionState;
+  incoming: SubscriptionState;
+  source: SubscriptionSyncSource;
+}): boolean {
+  const { cached, incoming, source } = params;
+
+  if (source !== "session" || !cached.pendingServerConfirmation) {
+    return false;
+  }
+
+  if (matchesProtectedLocalEntitlement(cached, incoming)) {
+    return false;
+  }
+
+  if (isGenuinelyNewerServerState(cached, incoming)) {
+    return false;
+  }
+
+  return true;
+}
+
+function matchesProtectedLocalEntitlement(
+  cached: SubscriptionState,
+  incoming: SubscriptionState,
+): boolean {
+  return (
+    cached.status === incoming.status &&
+    cached.plan === incoming.plan &&
+    normaliseSubscriptionId(cached.subscriptionId) ===
+      normaliseSubscriptionId(incoming.subscriptionId)
+  );
+}
+
+function isGenuinelyNewerServerState(
+  cached: SubscriptionState,
+  incoming: SubscriptionState,
+): boolean {
+  const cachedId = normaliseSubscriptionId(cached.subscriptionId);
+  const incomingId = normaliseSubscriptionId(incoming.subscriptionId);
+
+  if (!cachedId || !incomingId || cachedId !== incomingId) {
+    return false;
+  }
+
+  if (
+    cached.status === "active" &&
+    (incoming.status === "expired" || incoming.status === "cancelled")
+  ) {
+    return true;
+  }
+
+  const cachedPeriodEnd = parseTime(cached.currentPeriodEnd);
+  const incomingPeriodEnd = parseTime(incoming.currentPeriodEnd);
+
+  if (
+    incoming.status === "active" &&
+    typeof cachedPeriodEnd === "number" &&
+    typeof incomingPeriodEnd === "number" &&
+    incomingPeriodEnd > cachedPeriodEnd
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function normaliseSubscriptionId(
+  subscriptionId?: string | null,
+): string | null {
+  if (!subscriptionId) return null;
+  const trimmed = subscriptionId.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function parseTime(value?: string | null): number | null {
+  if (!value) return null;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : null;
 }
 
 // ─── Gating helpers ───────────────────────────────────────────────────────────
