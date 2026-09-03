@@ -9,6 +9,7 @@ const mockIapState = vi.hoisted(() => {
       | null,
     purchaseErrorHandler: null as ((error: any) => void) | null,
     nextPurchase: null as Record<string, any> | null,
+    requestSubscriptionImpl: null as (() => Promise<unknown>) | null,
   };
 });
 
@@ -33,6 +34,9 @@ vi.mock("react-native-iap", () => {
       return { remove: vi.fn() };
     }),
     requestSubscription: vi.fn(async () => {
+      if (mockIapState.requestSubscriptionImpl) {
+        return mockIapState.requestSubscriptionImpl();
+      }
       if (mockIapState.nextPurchase && mockIapState.purchaseUpdatedHandler) {
         await mockIapState.purchaseUpdatedHandler(mockIapState.nextPurchase);
       }
@@ -49,6 +53,7 @@ describe("purchasePlan appAccountToken propagation", () => {
     mockIapState.purchaseUpdatedHandler = null;
     mockIapState.purchaseErrorHandler = null;
     mockIapState.nextPurchase = null;
+    mockIapState.requestSubscriptionImpl = null;
     vi.clearAllMocks();
   });
 
@@ -118,5 +123,41 @@ describe("purchasePlan appAccountToken propagation", () => {
       sku: "com.drivelegal.app.monthly",
       appAccountToken: undefined,
     });
+  });
+
+  it("does not leak one account token into another purchase attempt", async () => {
+    let releaseFirstRequest: (() => void) | null = null;
+
+    mockIapState.requestSubscriptionImpl = () =>
+      new Promise((resolve) => {
+        releaseFirstRequest = () => resolve(null);
+      });
+
+    const firstPurchase = purchasePlan("monthly", "account-a-token");
+    await Promise.resolve();
+
+    const secondPurchase = await purchasePlan("monthly", "account-b-token");
+
+    expect(secondPurchase).toEqual({
+      success: false,
+      cancelled: false,
+      error: "Another subscription purchase is already in progress.",
+    });
+
+    mockIapState.requestSubscriptionImpl = null;
+    await mockIapState.purchaseUpdatedHandler?.({
+      productId: "com.drivelegal.app.monthly",
+      transactionId: "tx-5",
+      transactionDate: Date.now(),
+      appAccountToken: null,
+    });
+    releaseFirstRequest?.();
+
+    const firstResult = await firstPurchase;
+    expect(firstResult.success).toBe(true);
+    if (firstResult.success) {
+      expect(firstResult.appAccountToken).toBe("account-a-token");
+    }
+    expect(IAP.requestSubscription).toHaveBeenCalledTimes(1);
   });
 });
