@@ -235,6 +235,21 @@ export async function purchasePlan(
           // If finish fails the transaction will be retried on next launch
         }
 
+        console.log("[IAP] Successful purchase result:", {
+          success: true,
+          requestedPlan: plan,
+          requestedSku: sku,
+          productId: purchase.productId ?? null,
+          transactionId: purchase.transactionId ?? null,
+          originalTransactionId:
+            (purchase as any).originalTransactionIdentifierIOS ?? null,
+          appAccountToken: (purchase as any).appAccountToken ?? null,
+          transactionDate: purchase.transactionDate ?? null,
+          transactionReasonIOS: (purchase as any).transactionReasonIOS ?? null,
+          verificationResultIOS:
+            (purchase as any).verificationResultIOS ?? null,
+        });
+
         settle({
           success: true,
           plan,
