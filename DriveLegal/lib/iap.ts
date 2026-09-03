@@ -198,7 +198,7 @@ export async function loadIAPProducts(): Promise<IAPProduct[]> {
  */
 export async function purchasePlan(
   plan: IAPPlan,
-  appAccountToken: string,
+  appAccountToken?: string | null,
 ): Promise<PurchaseResult> {
   if (!isIOS()) {
     return {
@@ -211,6 +211,12 @@ export async function purchasePlan(
   await ensureConnected();
 
   const sku = IAP_PRODUCT_IDS[plan];
+  const requestedAppAccountToken = appAccountToken;
+  const fallbackAppAccountToken =
+    typeof requestedAppAccountToken === "string" &&
+    requestedAppAccountToken.length > 0
+      ? requestedAppAccountToken
+      : null;
 
   return new Promise<PurchaseResult>((resolve) => {
     let settled = false;
@@ -235,6 +241,13 @@ export async function purchasePlan(
           // If finish fails the transaction will be retried on next launch
         }
 
+        const returnedAppAccountToken = (purchase as any).appAccountToken;
+        const resolvedAppAccountToken =
+          typeof returnedAppAccountToken === "string" &&
+          returnedAppAccountToken.length > 0
+            ? returnedAppAccountToken
+            : fallbackAppAccountToken;
+
         settle({
           success: true,
           plan,
@@ -244,7 +257,7 @@ export async function purchasePlan(
           purchaseTime: purchase.transactionDate
             ? new Date(purchase.transactionDate).getTime()
             : Date.now(),
-          appAccountToken: (purchase as any).appAccountToken ?? null,
+          appAccountToken: resolvedAppAccountToken,
         });
       },
     );
@@ -274,7 +287,7 @@ export async function purchasePlan(
     );
 
     // Trigger Apple's native payment sheet
-    IAP.requestSubscription({ sku, appAccountToken }).catch((err: any) => {
+    IAP.requestSubscription({ sku, appAccountToken: requestedAppAccountToken }).catch((err: any) => {
       if (err?.code === "E_USER_CANCELLED") {
         settle({
           success: false,
