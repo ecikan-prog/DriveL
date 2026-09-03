@@ -98,7 +98,7 @@ let connected = false;
  */
 async function ensureConnected(): Promise<void> {
   if (!isIOS() || connected) return;
-  IAP.setup({ storekitMode: "STOREKIT2_MODE" });
+  IAP.setup({ storekitMode: "STOREKIT_HYBRID_MODE" });
   await IAP.initConnection();
   connected = true;
 }
@@ -234,21 +234,6 @@ export async function purchasePlan(
         } catch {
           // If finish fails the transaction will be retried on next launch
         }
-
-        console.log("[IAP] Successful purchase result:", {
-          success: true,
-          requestedPlan: plan,
-          requestedSku: sku,
-          productId: purchase.productId ?? null,
-          transactionId: purchase.transactionId ?? null,
-          originalTransactionId:
-            (purchase as any).originalTransactionIdentifierIOS ?? null,
-          appAccountToken: (purchase as any).appAccountToken ?? null,
-          transactionDate: purchase.transactionDate ?? null,
-          transactionReasonIOS: (purchase as any).transactionReasonIOS ?? null,
-          verificationResultIOS:
-            (purchase as any).verificationResultIOS ?? null,
-        });
 
         settle({
           success: true,
