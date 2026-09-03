@@ -363,6 +363,7 @@ export default function PaywallScreen() {
           currentPeriodEnd: serverResult.currentPeriodEnd,
           plan: serverResult.subscriptionPlan,
           iapVerified: true,
+          source: "purchase",
         });
 
         const updated = await getSubscriptionState(user.id);
@@ -462,6 +463,7 @@ export default function PaywallScreen() {
           currentPeriodEnd: serverResult.currentPeriodEnd,
           plan: serverResult.subscriptionPlan,
           iapVerified: true,
+          source: "restore",
         });
 
         const updated = await getSubscriptionState(user.id);

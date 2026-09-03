@@ -191,6 +191,7 @@ export function AuthProvider({ children }: { children?: React.ReactNode }) {
         subscriptionId: driver.subscriptionId,
         currentPeriodEnd: driver.currentPeriodEnd,
         plan: driver.subscriptionPlan,
+        source: "session",
       });
 
       if (driver.appAccountToken) {
