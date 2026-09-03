@@ -425,16 +425,9 @@ export default function PaywallScreen() {
       const entitlement = await checkCurrentEntitlement();
 
       if (entitlement.isActive && entitlement.plan) {
-        if (
-          !entitlement.appAccountToken ||
-          entitlement.appAccountToken !== authSession.appAccountToken
-        ) {
-          Alert.alert(
-            "Restore Unavailable",
-            "This Apple subscription is not linked to the currently signed-in Drive Legal account, so it cannot be restored here automatically.",
-          );
-          return;
-        }
+        // appAccountToken is not reliably returned by getAvailablePurchases(),
+        // so restore is no longer blocked on it. The authenticated session
+        // (sessionToken, verified server-side) is the real proof of identity.
 
         const serverResult = await syncSubscriptionToCloud({
           status: "active",

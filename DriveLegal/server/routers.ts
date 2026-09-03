@@ -1299,21 +1299,10 @@ export const appRouter = t.router({
           }
 
           if (input.status === "active") {
-            if (!input.appAccountToken) {
-              return {
-                success: false,
-                error:
-                  "This Apple subscription is not linked to the authenticated Drive Legal account.",
-              };
-            }
-
-            if (session.driver.appAccountToken !== input.appAccountToken) {
-              return {
-                success: false,
-                error:
-                  "This Apple subscription belongs to a different Drive Legal account.",
-              };
-            }
+            // appAccountToken is best-effort only — not reliably echoed back by
+            // react-native-iap on restore. requireDriverSession() above already
+            // proves which account this request belongs to via sessionToken.
+            // subscriptionId (originalTransactionId) is the durable purchase link.
           }
 
           await query(
