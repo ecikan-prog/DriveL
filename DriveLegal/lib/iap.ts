@@ -88,9 +88,16 @@ export type EntitlementResult = {
   appAccountToken: string | null;
 };
 
+type ActivePurchaseAttempt = {
+  id: symbol;
+  sku: string;
+  requestedAppAccountToken?: string | null;
+};
+
 // ─── Connection ───────────────────────────────────────────────────────────────
 
 let connected = false;
+let activePurchaseAttempt: ActivePurchaseAttempt | null = null;
 
 /**
  * Open the StoreKit payment queue connection.
@@ -211,12 +218,21 @@ export async function purchasePlan(
   await ensureConnected();
 
   const sku = IAP_PRODUCT_IDS[plan];
-  const requestedAppAccountToken = appAccountToken;
-  const fallbackAppAccountToken =
-    typeof requestedAppAccountToken === "string" &&
-    requestedAppAccountToken.length > 0
-      ? requestedAppAccountToken
-      : null;
+  const purchaseAttempt: ActivePurchaseAttempt = {
+    id: Symbol(`purchase:${sku}`),
+    sku,
+    requestedAppAccountToken: appAccountToken,
+  };
+
+  if (activePurchaseAttempt) {
+    return {
+      success: false,
+      cancelled: false,
+      error: "Another subscription purchase is already in progress.",
+    };
+  }
+
+  activePurchaseAttempt = purchaseAttempt;
 
   return new Promise<PurchaseResult>((resolve) => {
     let settled = false;
@@ -224,6 +240,9 @@ export async function purchasePlan(
     function settle(result: PurchaseResult) {
       if (settled) return;
       settled = true;
+      if (activePurchaseAttempt?.id === purchaseAttempt.id) {
+        activePurchaseAttempt = null;
+      }
       purchaseUpdateSubscription?.remove?.();
       purchaseErrorSubscription?.remove?.();
       resolve(result);
@@ -233,6 +252,7 @@ export async function purchasePlan(
     const purchaseUpdateSubscription = IAP.purchaseUpdatedListener(
       async (purchase: IAP.SubscriptionPurchase | IAP.ProductPurchase) => {
         if (purchase.productId !== sku) return;
+        if (activePurchaseAttempt?.id !== purchaseAttempt.id) return;
 
         try {
           // Acknowledge/finish the transaction so Apple clears the queue
@@ -242,11 +262,6 @@ export async function purchasePlan(
         }
 
         const returnedAppAccountToken = (purchase as any).appAccountToken;
-        const resolvedAppAccountToken =
-          typeof returnedAppAccountToken === "string" &&
-          returnedAppAccountToken.length > 0
-            ? returnedAppAccountToken
-            : fallbackAppAccountToken;
 
         settle({
           success: true,
@@ -257,7 +272,10 @@ export async function purchasePlan(
           purchaseTime: purchase.transactionDate
             ? new Date(purchase.transactionDate).getTime()
             : Date.now(),
-          appAccountToken: resolvedAppAccountToken,
+          appAccountToken: resolvePurchaseAppAccountToken(
+            returnedAppAccountToken,
+            purchaseAttempt.requestedAppAccountToken,
+          ),
         });
       },
     );
@@ -287,7 +305,10 @@ export async function purchasePlan(
     );
 
     // Trigger Apple's native payment sheet
-    IAP.requestSubscription({ sku, appAccountToken: requestedAppAccountToken }).catch((err: any) => {
+    IAP.requestSubscription({
+      sku,
+      appAccountToken: purchaseAttempt.requestedAppAccountToken,
+    }).catch((err: any) => {
       if (err?.code === "E_USER_CANCELLED") {
         settle({
           success: false,
@@ -386,6 +407,27 @@ export async function checkCurrentEntitlement(): Promise<EntitlementResult> {
 
 function isIOS(): boolean {
   return Platform.OS === "ios";
+}
+
+function resolvePurchaseAppAccountToken(
+  returnedAppAccountToken: unknown,
+  requestedAppAccountToken?: string | null,
+): string | null {
+  if (
+    typeof returnedAppAccountToken === "string" &&
+    returnedAppAccountToken.length > 0
+  ) {
+    return returnedAppAccountToken;
+  }
+
+  if (
+    requestedAppAccountToken === null ||
+    typeof requestedAppAccountToken === "undefined"
+  ) {
+    return null;
+  }
+
+  return requestedAppAccountToken;
 }
 
 export function planFromProductId(productId: string): IAPPlan | null {
