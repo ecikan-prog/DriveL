@@ -1298,12 +1298,10 @@ export const appRouter = t.router({
             };
           }
 
-          if (input.status === "active") {
-            // appAccountToken is best-effort only — not reliably echoed back by
-            // react-native-iap on restore. requireDriverSession() above already
-            // proves which account this request belongs to via sessionToken.
-            // subscriptionId (originalTransactionId) is the durable purchase link.
-          }
+          // appAccountToken is best-effort only — not reliably echoed back by
+          // react-native-iap on restore. requireDriverSession() above already
+          // proves which account this request belongs to via sessionToken.
+          // subscriptionId (originalTransactionId) is the durable purchase link.
 
           await query(
             `
