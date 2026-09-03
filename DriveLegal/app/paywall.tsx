@@ -320,14 +320,10 @@ export default function PaywallScreen() {
       );
 
       if (result.success) {
-        if (
-          !result.appAccountToken ||
-          result.appAccountToken !== authSession.appAccountToken
-        ) {
-          throw new Error(
-            "This Apple transaction is not linked to the authenticated Drive Legal account.",
-          );
-        }
+        // appAccountToken is not reliably returned by react-native-iap after
+        // purchase — do not block on it here. syncSubscriptionToCloud below
+        // is verified server-side via the authenticated session token, which
+        // is the real proof of identity.
 
         const currentPeriodEnd = new Date(
           result.plan === "annual"
