@@ -472,8 +472,8 @@ export default function PaywallScreen() {
       }
     } catch (error: any) {
       Alert.alert(
-        "Restore Failed",
-        "Unable to restore your subscription. Please check your internet connection and try again.",
+        "Restore Failed (Debug)",
+        error?.message ?? "Unknown error — no message provided.",
       );
     } finally {
       setRestoring(false);
