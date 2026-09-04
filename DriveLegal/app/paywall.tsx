@@ -24,6 +24,7 @@ import {
   Image,
   Platform,
   ActivityIndicator,
+  Linking,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
@@ -546,6 +547,17 @@ export default function PaywallScreen() {
     }
   };
 
+  const handleManageSubscription = async () => {
+    try {
+      await Linking.openURL("https://apps.apple.com/account/subscriptions");
+    } catch {
+      Alert.alert(
+        "Unable to Open",
+        "Please open your Apple ID subscription settings from the App Store.",
+      );
+    }
+  };
+
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -756,17 +768,26 @@ export default function PaywallScreen() {
               >
                 Current Plan: {subscriptionState?.plan === "monthly" ? "Monthly" : "Annual"}
               </Text>
-              <Text
+              <TouchableOpacity
+                onPress={handleManageSubscription}
                 style={{
-                  color: "#D1D5DB",
-                  fontSize: 12,
-                  textAlign: "center",
-                  lineHeight: 18,
+                  backgroundColor: "#5980E9",
+                  borderRadius: 14,
+                  paddingVertical: 16,
+                  alignItems: "center",
+                  shadowColor: "#5980E9",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 6,
                 }}
               >
-                To cancel or change your subscription, open your Apple ID
-                subscription settings.
-              </Text>
+                <Text
+                  style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "800" }}
+                >
+                  Manage Subscription
+                </Text>
+              </TouchableOpacity>
             </View>
           ) : (
             <>
