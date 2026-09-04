@@ -27,7 +27,7 @@ import {
   Linking,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { deepLinkToSubscriptions } from "react-native-iap";
+import { IapIosSk2 } from "react-native-iap";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuthContext } from "@/lib/auth-context";
 import { getAuthSession } from "@/lib/app-session";
@@ -550,7 +550,7 @@ export default function PaywallScreen() {
 
   const handleManageSubscription = async () => {
     try {
-      await deepLinkToSubscriptions({});
+      await IapIosSk2.showManageSubscriptions();
     } catch {
       try {
         await Linking.openURL("https://apps.apple.com/account/subscriptions");
