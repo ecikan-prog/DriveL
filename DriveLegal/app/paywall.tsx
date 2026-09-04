@@ -14,7 +14,7 @@
  * There is NO Stripe integration, NO "Simulate Subscribe" dialog, and NO
  * demo/fake activation path in this file.
  */
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -25,6 +25,7 @@ import {
   Platform,
   ActivityIndicator,
   Linking,
+  AppState,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { IapIosSk2 } from "react-native-iap";
@@ -86,6 +87,26 @@ function formatCurrencyFromMicros(
   }
 }
 
+function formatSubscriptionDate(dateValue?: string | null): string | null {
+  if (!dateValue) return null;
+
+  const date = new Date(dateValue);
+
+  if (!Number.isFinite(date.getTime())) {
+    return null;
+  }
+
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    }).format(date);
+  } catch {
+    return date.toLocaleDateString();
+  }
+}
+
 export default function PaywallScreen() {
   const router = useRouter();
   const { user } = useAuthContext();
@@ -99,6 +120,7 @@ export default function PaywallScreen() {
     ReturnType<typeof getSubscriptionState>
   > | null>(null);
   const [subscriptionLoading, setSubscriptionLoading] = useState(true);
+  const [manageRefreshPending, setManageRefreshPending] = useState(false);
 
   // Load subscription state and StoreKit products on mount
   useEffect(() => {
@@ -270,9 +292,18 @@ export default function PaywallScreen() {
     : 0;
   const isTrial = subscriptionState?.status === "trial";
   const isActive = subscriptionState?.status === "active";
+  const isCancelledButActive =
+    subscriptionState?.status === "active" &&
+    subscriptionState?.willAutoRenew === false;
+  const isAutoRenewingActive =
+    subscriptionState?.status === "active" &&
+    subscriptionState?.willAutoRenew !== false;
   const isExpired =
     subscriptionState?.status === "expired" ||
     subscriptionState?.status === "cancelled";
+  const subscriptionExpiryText = formatSubscriptionDate(
+    subscriptionState?.currentPeriodEnd,
+  );
 
   const displayPrice = (plan: PlanOption): string | null => {
     const product = plan.id === "monthly" ? monthlyProduct : annualProduct;
@@ -285,12 +316,93 @@ export default function PaywallScreen() {
     }
   }, [subscriptionState?.status, subscriptionState?.plan]);
 
-  const refreshSubscriptionStatus = async () => {
+  const refreshSubscriptionStatus = useCallback(async () => {
     if (!user) return;
 
     setSubscriptionLoading(true);
 
     try {
+      const cached = await getSubscriptionState(user.id);
+      const entitlement = await checkCurrentEntitlement();
+
+      if (entitlement.isActive && entitlement.plan) {
+        const currentPeriodEnd =
+          entitlement.expiryDate?.toISOString() ??
+          cached.currentPeriodEnd ??
+          null;
+        const serverResult = await syncSubscriptionToCloud({
+          status: "active",
+          plan: entitlement.plan,
+          subscriptionId: String(
+            entitlement.originalTransactionId ??
+              entitlement.transactionId ??
+              cached.subscriptionId ??
+              entitlement.plan,
+          ),
+          currentPeriodEnd,
+          willAutoRenew: entitlement.willAutoRenew ?? cached.willAutoRenew ?? true,
+          appAccountToken: entitlement.appAccountToken,
+        });
+
+        if (serverResult.success) {
+          const refreshed = await syncSubscriptionFromServer({
+            userId: user.id,
+            status: serverResult.subscriptionStatus ?? "active",
+            trialStartDate: cached.trialStartDate,
+            trialEndDate: cached.trialEndDate,
+            subscriptionId: serverResult.subscriptionId,
+            currentPeriodEnd: serverResult.currentPeriodEnd ?? currentPeriodEnd,
+            willAutoRenew:
+              serverResult.subscriptionWillRenew ??
+              entitlement.willAutoRenew ??
+              cached.willAutoRenew ??
+              true,
+            plan: serverResult.subscriptionPlan ?? entitlement.plan,
+            iapVerified: true,
+            source: "restore",
+          });
+
+          setSubscriptionState(refreshed);
+          if (refreshed.plan) {
+            setSelectedPlan(refreshed.plan);
+          }
+        }
+      } else if (
+        cached.status === "active" ||
+        cached.status === "cancelled" ||
+        subscriptionState?.status === "active" ||
+        subscriptionState?.status === "cancelled"
+      ) {
+        const previous = subscriptionState ?? cached;
+        const serverResult = await syncSubscriptionToCloud({
+          status: "expired",
+          plan: previous.plan ?? null,
+          subscriptionId: previous.subscriptionId ?? null,
+          currentPeriodEnd: previous.currentPeriodEnd ?? null,
+          willAutoRenew: false,
+        });
+
+        if (serverResult.success) {
+          const refreshed = await syncSubscriptionFromServer({
+            userId: user.id,
+            status: serverResult.subscriptionStatus ?? "expired",
+            trialStartDate: cached.trialStartDate,
+            trialEndDate: cached.trialEndDate,
+            subscriptionId: serverResult.subscriptionId ?? previous.subscriptionId,
+            currentPeriodEnd:
+              serverResult.currentPeriodEnd ?? previous.currentPeriodEnd,
+            willAutoRenew: serverResult.subscriptionWillRenew ?? false,
+            plan: serverResult.subscriptionPlan ?? previous.plan,
+            source: "session",
+          });
+
+          setSubscriptionState(refreshed);
+          if (refreshed.plan) {
+            setSelectedPlan(refreshed.plan);
+          }
+        }
+      }
+
       const serverSession = await restoreDriverSessionCloud();
 
       if (serverSession.success && serverSession.driver) {
@@ -302,6 +414,7 @@ export default function PaywallScreen() {
           trialEndDate: serverSession.driver.trialEndDate,
           subscriptionId: serverSession.driver.subscriptionId,
           currentPeriodEnd: serverSession.driver.currentPeriodEnd,
+          willAutoRenew: serverSession.driver.subscriptionWillRenew,
           plan: serverSession.driver.subscriptionPlan,
           source: "session",
         });
@@ -313,17 +426,34 @@ export default function PaywallScreen() {
         return;
       }
 
-      const cached = await getSubscriptionState(user.id);
-      setSubscriptionState(cached);
-      if (cached.plan) {
-        setSelectedPlan(cached.plan);
+      const fallback = await getSubscriptionState(user.id);
+      setSubscriptionState(fallback);
+      if (fallback.plan) {
+        setSelectedPlan(fallback.plan);
       }
     } catch (error) {
       console.warn("[Paywall] Subscription refresh failed:", error);
     } finally {
       setSubscriptionLoading(false);
     }
-  };
+  }, [subscriptionState, user]);
+
+  useEffect(() => {
+    if (!manageRefreshPending) {
+      return;
+    }
+
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") {
+        setManageRefreshPending(false);
+        void refreshSubscriptionStatus();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [manageRefreshPending, refreshSubscriptionStatus]);
 
   // ─── Subscribe ──────────────────────────────────────────────────────────────
 
@@ -369,16 +499,18 @@ export default function PaywallScreen() {
         // purchase — do not block on it here. syncSubscriptionToCloud below
         // is verified server-side via the authenticated session token, which
         // is the real proof of identity.
-
-        const currentPeriodEnd = new Date(
-          result.plan === "annual"
-            ? new Date(result.purchaseTime).setFullYear(
-                new Date(result.purchaseTime).getFullYear() + 1,
-              )
-            : new Date(result.purchaseTime).setMonth(
-                new Date(result.purchaseTime).getMonth() + 1,
-              ),
-        ).toISOString();
+        const entitlement = await checkCurrentEntitlement();
+        const currentPeriodEnd =
+          entitlement.expiryDate?.toISOString() ??
+          new Date(
+            result.plan === "annual"
+              ? new Date(result.purchaseTime).setFullYear(
+                  new Date(result.purchaseTime).getFullYear() + 1,
+                )
+              : new Date(result.purchaseTime).setMonth(
+                  new Date(result.purchaseTime).getMonth() + 1,
+                ),
+          ).toISOString();
 
         const serverResult = await syncSubscriptionToCloud({
           status: "active",
@@ -387,6 +519,7 @@ export default function PaywallScreen() {
             result.originalTransactionId ?? result.transactionId,
           ),
           currentPeriodEnd,
+          willAutoRenew: entitlement.willAutoRenew ?? true,
           appAccountToken: result.appAccountToken,
         });
 
@@ -404,6 +537,10 @@ export default function PaywallScreen() {
           trialEndDate: subscriptionState?.trialEndDate,
           subscriptionId: serverResult.subscriptionId,
           currentPeriodEnd: serverResult.currentPeriodEnd,
+          willAutoRenew:
+            serverResult.subscriptionWillRenew ??
+            entitlement.willAutoRenew ??
+            true,
           plan: serverResult.subscriptionPlan,
           iapVerified: true,
           source: "purchase",
@@ -491,6 +628,7 @@ export default function PaywallScreen() {
               entitlement.plan,
           ),
           currentPeriodEnd: entitlement.expiryDate?.toISOString() ?? null,
+          willAutoRenew: entitlement.willAutoRenew ?? true,
           appAccountToken: entitlement.appAccountToken,
         });
 
@@ -508,6 +646,10 @@ export default function PaywallScreen() {
           trialEndDate: subscriptionState?.trialEndDate,
           subscriptionId: serverResult.subscriptionId,
           currentPeriodEnd: serverResult.currentPeriodEnd,
+          willAutoRenew:
+            serverResult.subscriptionWillRenew ??
+            entitlement.willAutoRenew ??
+            true,
           plan: serverResult.subscriptionPlan,
           iapVerified: true,
           source: "restore",
@@ -549,12 +691,17 @@ export default function PaywallScreen() {
   };
 
   const handleManageSubscription = async () => {
+    setManageRefreshPending(true);
+
     try {
       await IapIosSk2.showManageSubscriptions();
+      await refreshSubscriptionStatus();
     } catch {
       try {
         await Linking.openURL("https://apps.apple.com/account/subscriptions");
+        await refreshSubscriptionStatus();
       } catch {
+        setManageRefreshPending(false);
         Alert.alert(
           "Unable to Open",
           "Please open your Apple ID subscription settings from the App Store.",
@@ -682,7 +829,39 @@ export default function PaywallScreen() {
                 remaining in your 21-day free trial.
               </Text>
             </View>
-          ) : isActive ? (
+          ) : isCancelledButActive ? (
+            <View
+              style={{
+                backgroundColor: "rgba(245,158,11,0.16)",
+                borderRadius: 12,
+                padding: 16,
+                borderWidth: 1,
+                borderColor: "rgba(245,158,11,0.35)",
+              }}
+            >
+              <Text
+                style={{
+                  color: "#FCD34D",
+                  fontSize: 14,
+                  fontWeight: "700",
+                  textAlign: "center",
+                  marginBottom: 6,
+                }}
+              >
+                Subscription Active — Cancelled
+              </Text>
+              <Text
+                style={{
+                  color: "#F3F4F6",
+                  fontSize: 12,
+                  textAlign: "center",
+                  lineHeight: 18,
+                }}
+              >
+                Your access continues until {subscriptionExpiryText ?? "your renewal date"}. Resubscribe anytime before then to keep uninterrupted access.
+              </Text>
+            </View>
+          ) : isAutoRenewingActive ? (
             <View
               style={{
                 backgroundColor: "rgba(34,197,94,0.15)",
@@ -722,7 +901,7 @@ export default function PaywallScreen() {
                   marginBottom: 4,
                 }}
               >
-                ⏰ Free Trial Ended
+                {subscriptionState?.plan ? "⏰ Subscription Expired" : "⏰ Free Trial Ended"}
               </Text>
               <Text
                 style={{
@@ -732,8 +911,9 @@ export default function PaywallScreen() {
                   lineHeight: 18,
                 }}
               >
-                Your free trial has expired. Subscribe to continue logging your
-                driving hours.
+                {subscriptionState?.plan
+                  ? "Your paid access has ended. Subscribe again to continue logging your driving hours."
+                  : "Your free trial has expired. Subscribe to continue logging your driving hours."}
               </Text>
             </View>
           ) : null}
@@ -750,7 +930,11 @@ export default function PaywallScreen() {
               textAlign: "center",
             }}
           >
-            {isActive ? "Manage Subscription" : "Choose Your Plan"}
+            {isCancelledButActive
+              ? "Resume Subscription"
+              : isActive
+                ? "Manage Subscription"
+                : "Choose Your Plan"}
           </Text>
           {isActive ? (
             <View
@@ -773,6 +957,21 @@ export default function PaywallScreen() {
               >
                 Current Plan: {subscriptionState?.plan === "monthly" ? "Monthly" : "Annual"}
               </Text>
+              {isCancelledButActive && (
+                <Text
+                  style={{
+                    color: "#D1D5DB",
+                    fontSize: 12,
+                    textAlign: "center",
+                    lineHeight: 18,
+                    marginBottom: 12,
+                  }}
+                >
+                  {subscriptionExpiryText
+                    ? `Your access continues until ${subscriptionExpiryText}.`
+                    : "Your current paid period is still active."}
+                </Text>
+              )}
               <TouchableOpacity
                 onPress={handleManageSubscription}
                 style={{
@@ -790,7 +989,9 @@ export default function PaywallScreen() {
                 <Text
                   style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "800" }}
                 >
-                  Manage Subscription
+                  {isCancelledButActive
+                    ? "Resubscribe / Turn Auto-Renew Back On"
+                    : "Manage Subscription"}
                 </Text>
               </TouchableOpacity>
             </View>

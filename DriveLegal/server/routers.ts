@@ -102,7 +102,8 @@ async function getDriverForSessionToken(
       d.subscriptionStatus,
       d.subscriptionPlan,
       d.subscriptionId,
-      d.currentPeriodEnd
+      d.currentPeriodEnd,
+      d.subscriptionWillRenew
     FROM driver_sessions s
     INNER JOIN drivers d
       ON d.localUserId = s.localUserId
@@ -192,6 +193,7 @@ function toDriverPayload(driver: any) {
     subscriptionPlan: driver.subscriptionPlan,
     subscriptionId: driver.subscriptionId,
     currentPeriodEnd: driver.currentPeriodEnd,
+    subscriptionWillRenew: driver.subscriptionWillRenew,
   };
 }
 
@@ -547,6 +549,7 @@ export const appRouter = t.router({
                 subscriptionPlan,
                 subscriptionId,
                 currentPeriodEnd,
+                subscriptionWillRenew,
                 emailVerified
               FROM drivers
               WHERE email = ?
@@ -1283,6 +1286,7 @@ export const appRouter = t.router({
           plan: z.enum(["monthly", "annual"]).nullable().optional(),
           subscriptionId: z.string().max(255).nullable().optional(),
           currentPeriodEnd: z.string().max(64).nullable().optional(),
+          willAutoRenew: z.boolean().nullable().optional(),
           appAccountToken: z.string().uuid().nullable().optional(),
         }),
       )
@@ -1311,6 +1315,7 @@ export const appRouter = t.router({
               subscriptionPlan = ?,
               subscriptionId = ?,
               currentPeriodEnd = ?,
+              subscriptionWillRenew = ?,
               updatedAt = NOW()
             WHERE localUserId = ?
             LIMIT 1
@@ -1320,6 +1325,7 @@ export const appRouter = t.router({
               input.plan ?? null,
               input.subscriptionId ?? null,
               input.currentPeriodEnd ?? null,
+              input.willAutoRenew ?? null,
               session.driver.localUserId,
             ],
           );
@@ -1330,6 +1336,7 @@ export const appRouter = t.router({
             subscriptionPlan: input.plan ?? null,
             subscriptionId: input.subscriptionId ?? null,
             currentPeriodEnd: input.currentPeriodEnd ?? null,
+            subscriptionWillRenew: input.willAutoRenew ?? null,
           };
         } catch (error) {
           console.error("[DriverAuth] Subscription sync failed:", error);

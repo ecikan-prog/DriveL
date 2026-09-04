@@ -19,6 +19,7 @@ vi.mock("../lib/iap", () => ({
     isActive: false,
     plan: null,
     expiryDate: null,
+    willAutoRenew: null,
     transactionId: null,
     originalTransactionId: null,
     appAccountToken: null,
@@ -216,5 +217,52 @@ describe("subscription sync freshness guard", () => {
     expect(userOneState.subscriptionId).toBe("user-1-sub");
     expect(userTwoState.plan).toBe("annual");
     expect(userTwoState.subscriptionId).toBe("user-2-sub");
+  });
+
+  it("stores a cancelled-but-still-active subscription as active without auto-renew", async () => {
+    await syncSubscriptionFromServer({
+      userId: "user-1",
+      status: "active",
+      plan: "monthly",
+      subscriptionId: "user-1-sub",
+      currentPeriodEnd: "2026-10-01T00:00:00.000Z",
+      willAutoRenew: false,
+      source: "session",
+    });
+
+    const state = await getSubscriptionState("user-1");
+    expect(state.status).toBe("active");
+    expect(state.willAutoRenew).toBe(false);
+    expect(state.currentPeriodEnd).toBe("2026-10-01T00:00:00.000Z");
+  });
+
+  it("normalises legacy cancelled records with future expiry into active non-renewing access", async () => {
+    await syncSubscriptionFromServer({
+      userId: "user-1",
+      status: "cancelled",
+      plan: "monthly",
+      subscriptionId: "user-1-sub",
+      currentPeriodEnd: "2099-10-01T00:00:00.000Z",
+      source: "session",
+    });
+
+    const state = await getSubscriptionState("user-1");
+    expect(state.status).toBe("active");
+    expect(state.willAutoRenew).toBe(false);
+  });
+
+  it("normalises legacy cancelled records with elapsed expiry into expired access", async () => {
+    await syncSubscriptionFromServer({
+      userId: "user-1",
+      status: "cancelled",
+      plan: "monthly",
+      subscriptionId: "user-1-sub",
+      currentPeriodEnd: "2020-10-01T00:00:00.000Z",
+      source: "session",
+    });
+
+    const state = await getSubscriptionState("user-1");
+    expect(state.status).toBe("expired");
+    expect(state.willAutoRenew).toBeUndefined();
   });
 });

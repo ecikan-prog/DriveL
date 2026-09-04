@@ -82,6 +82,8 @@ export type EntitlementResult = {
   plan: IAPPlan | null;
   /** Verified expiry date — set when StoreKit provides it, null otherwise */
   expiryDate: Date | null;
+  /** Whether StoreKit says the current subscription will auto-renew */
+  willAutoRenew: boolean | null;
   /** The App Store product identifier for the active purchase */
   transactionId: string | null;
   originalTransactionId: string | null;
@@ -344,6 +346,7 @@ export async function checkCurrentEntitlement(): Promise<EntitlementResult> {
       isActive: false,
       plan: null,
       expiryDate: null,
+      willAutoRenew: null,
       transactionId: null,
       originalTransactionId: null,
       appAccountToken: null,
@@ -374,6 +377,7 @@ export async function checkCurrentEntitlement(): Promise<EntitlementResult> {
       isActive: false,
       plan: null,
       expiryDate: null,
+      willAutoRenew: null,
       transactionId: null,
       originalTransactionId: null,
       appAccountToken: null,
@@ -390,12 +394,22 @@ export async function checkCurrentEntitlement(): Promise<EntitlementResult> {
   const purchaseTime = latest.transactionDate
     ? new Date(latest.transactionDate).getTime()
     : Date.now();
-  const expiryDate = plan ? estimatePeriodEnd(plan, purchaseTime) : null;
+  let expiryDate = plan ? estimatePeriodEnd(plan, purchaseTime) : null;
+  let willAutoRenew: boolean | null = null;
+
+  if (plan) {
+    const sk2Details = await getSk2SubscriptionDetails(latest.productId);
+    if (sk2Details.expiryDate) {
+      expiryDate = sk2Details.expiryDate;
+    }
+    willAutoRenew = sk2Details.willAutoRenew;
+  }
 
   return {
     isActive: true,
     plan,
     expiryDate,
+    willAutoRenew,
     transactionId: latest.transactionId ?? latest.productId,
     originalTransactionId:
       (latest as any).originalTransactionIdentifierIOS ?? null,
@@ -446,4 +460,55 @@ export function estimatePeriodEnd(plan: IAPPlan, purchaseTime: number): Date {
     d.setMonth(d.getMonth() + 1);
   }
   return d;
+}
+
+async function getSk2SubscriptionDetails(productId: string): Promise<{
+  expiryDate: Date | null;
+  willAutoRenew: boolean | null;
+}> {
+  const currentEntitlement = IAP.IapIosSk2?.currentEntitlement;
+  const subscriptionStatus = IAP.IapIosSk2?.subscriptionStatus;
+
+  if (
+    typeof currentEntitlement !== "function" ||
+    typeof subscriptionStatus !== "function"
+  ) {
+    return {
+      expiryDate: null,
+      willAutoRenew: null,
+    };
+  }
+
+  const [transaction, statuses] = await Promise.all([
+    currentEntitlement(productId).catch(() => null),
+    subscriptionStatus(productId).catch(() => null),
+  ]);
+
+  const expirationDate =
+    typeof transaction?.expirationDate === "number" &&
+    Number.isFinite(transaction.expirationDate)
+      ? new Date(transaction.expirationDate)
+      : null;
+
+  const activeStatus = Array.isArray(statuses)
+    ? statuses.find((status) => isActiveSubscriptionStatus(status))
+    : null;
+
+  return {
+    expiryDate: expirationDate,
+    willAutoRenew:
+      typeof activeStatus?.renewalInfo?.willAutoRenew === "boolean"
+        ? activeStatus.renewalInfo.willAutoRenew
+        : null,
+  };
+}
+
+function isActiveSubscriptionStatus(status: {
+  state?: string | null;
+}): boolean {
+  return (
+    status.state === "subscribed" ||
+    status.state === "inGracePeriod" ||
+    status.state === "inBillingRetryPeriod"
+  );
 }

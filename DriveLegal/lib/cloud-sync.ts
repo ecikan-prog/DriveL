@@ -420,6 +420,7 @@ export async function loginDriverCloud(
     subscriptionPlan: "monthly" | "annual" | null;
     subscriptionId: string | null;
     currentPeriodEnd: string | null;
+    subscriptionWillRenew: boolean | null;
   };
 }> {
   const result = await trpcCall("driverAuth.login", {
@@ -458,6 +459,7 @@ export async function restoreDriverSessionCloud(): Promise<{
     subscriptionPlan: "monthly" | "annual" | null;
     subscriptionId: string | null;
     currentPeriodEnd: string | null;
+    subscriptionWillRenew: boolean | null;
   };
 }> {
   const result = await trpcCall("driverAuth.currentSession", {}, "query");
@@ -478,6 +480,7 @@ export async function syncSubscriptionToCloud(params: {
   plan?: "monthly" | "annual" | null;
   subscriptionId?: string | null;
   currentPeriodEnd?: string | null;
+  willAutoRenew?: boolean | null;
   appAccountToken?: string | null;
 }): Promise<{
   success: boolean;
@@ -486,6 +489,7 @@ export async function syncSubscriptionToCloud(params: {
   subscriptionPlan?: "monthly" | "annual" | null;
   subscriptionId?: string | null;
   currentPeriodEnd?: string | null;
+  subscriptionWillRenew?: boolean | null;
 }> {
   const result = await trpcCall("driverAuth.syncSubscription", params);
 

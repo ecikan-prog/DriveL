@@ -190,6 +190,7 @@ export function AuthProvider({ children }: { children?: React.ReactNode }) {
         trialEndDate: driver.trialEndDate,
         subscriptionId: driver.subscriptionId,
         currentPeriodEnd: driver.currentPeriodEnd,
+        willAutoRenew: driver.subscriptionWillRenew,
         plan: driver.subscriptionPlan,
         source: "session",
       });

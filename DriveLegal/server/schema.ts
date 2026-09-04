@@ -83,6 +83,7 @@ export const drivers = mysqlTable("drivers", {
   subscriptionPlan: mysqlEnum("subscriptionPlan", ["monthly", "annual"]),
   subscriptionId: varchar("subscriptionId", { length: 255 }),
   currentPeriodEnd: varchar("currentPeriodEnd", { length: 32 }),
+  subscriptionWillRenew: boolean("subscriptionWillRenew"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

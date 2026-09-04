@@ -33,6 +33,7 @@ export type SubscriptionState = {
   /** StoreKit transaction ID or server-provided subscription ID */
   subscriptionId?: string;
   currentPeriodEnd?: string;
+  willAutoRenew?: boolean;
   plan?: "monthly" | "annual";
   lastChecked: string;
   /** Timestamp of last syncSubscriptionFromServer call */
@@ -65,6 +66,7 @@ export async function syncSubscriptionFromServer(params: {
   trialEndDate?: string | null;
   subscriptionId?: string | null;
   currentPeriodEnd?: string | null;
+  willAutoRenew?: boolean | null;
   plan?: "monthly" | "annual" | null;
   iapVerified?: boolean;
   source?: SubscriptionSyncSource;
@@ -82,20 +84,21 @@ export async function syncSubscriptionFromServer(params: {
   // server confirms the same entitlement or returns a genuinely newer update.
   // refreshIAPEntitlement() is responsible for confirming or revoking
   // the active status via StoreKit after login completes.
-  const incomingState: SubscriptionState = {
+  const incomingState = normaliseSubscriptionState({
     userId: params.userId,
     status: params.status,
     trialStartDate,
     trialEndDate,
     subscriptionId: params.subscriptionId ?? undefined,
     currentPeriodEnd: params.currentPeriodEnd ?? undefined,
+    willAutoRenew: params.willAutoRenew ?? undefined,
     plan: params.plan ?? undefined,
     lastChecked: new Date().toISOString(),
     lastServerSync: new Date().toISOString(),
     iapVerified: params.iapVerified ?? false,
     entitlementAuthority: source === "session" ? "server" : source,
     pendingServerConfirmation: source !== "session" && params.status === "active",
-  };
+  });
 
   const cached = await readStoredSubscriptionState(params.userId);
 
@@ -173,11 +176,13 @@ export async function refreshIAPEntitlement(
         status: "active",
         plan: entitlement.plan,
         currentPeriodEnd: periodEnd,
+        willAutoRenew: entitlement.willAutoRenew ?? cached.willAutoRenew ?? true,
         lastChecked: new Date().toISOString(),
         iapVerified: true,
       };
-      await saveSubscriptionState(updated);
-      return updated;
+      const normalised = normaliseSubscriptionState(updated);
+      await saveSubscriptionState(normalised);
+      return normalised;
     }
 
     // StoreKit returns no active subscription.  Downgrade active/trial to
@@ -190,8 +195,9 @@ export async function refreshIAPEntitlement(
         lastChecked: new Date().toISOString(),
         iapVerified: false,
       };
-      await saveSubscriptionState(downgraded);
-      return downgraded;
+      const normalised = normaliseSubscriptionState(downgraded);
+      await saveSubscriptionState(normalised);
+      return normalised;
     }
   } catch {
     // StoreKit unavailable (offline, simulator, etc.) — return cached state.
@@ -241,12 +247,14 @@ export async function activateSubscriptionFromIAP(
     plan,
     subscriptionId: transactionId,
     currentPeriodEnd: periodEnd.toISOString(),
+    willAutoRenew: true,
     lastChecked: new Date().toISOString(),
     iapVerified: true,
   };
 
-  await saveSubscriptionState(updated);
-  return updated;
+  const normalised = normaliseSubscriptionState(updated);
+  await saveSubscriptionState(normalised);
+  return normalised;
 }
 
 // ─── Read / display helpers ───────────────────────────────────────────────────
@@ -265,8 +273,10 @@ export async function getSubscriptionState(
       const state: SubscriptionState = JSON.parse(raw);
       // Only apply local expiry check to states NOT verified by StoreKit,
       // to avoid incorrectly expiring a valid subscription while offline.
-      const updated = state.iapVerified ? state : applyExpiryCheck(state);
-      if (updated.status !== state.status) {
+      const updated = normaliseSubscriptionState(
+        state.iapVerified ? state : applyExpiryCheck(state),
+      );
+      if (JSON.stringify(updated) !== JSON.stringify(state)) {
         await saveSubscriptionState(updated);
       }
       return updated;
@@ -313,6 +323,40 @@ function applyExpiryCheck(state: SubscriptionState): SubscriptionState {
   }
 
   return state;
+}
+
+function normaliseSubscriptionState(
+  state: SubscriptionState,
+): SubscriptionState {
+  if (state.status === "cancelled") {
+    const periodEnd = parseTime(state.currentPeriodEnd);
+
+    if (typeof periodEnd === "number" && periodEnd > Date.now()) {
+      return {
+        ...state,
+        status: "active",
+        willAutoRenew: false,
+      };
+    }
+
+    return {
+      ...state,
+      status: "expired",
+      willAutoRenew: false,
+    };
+  }
+
+  if (state.status === "active") {
+    return {
+      ...state,
+      willAutoRenew: state.willAutoRenew ?? true,
+    };
+  }
+
+  return {
+    ...state,
+    willAutoRenew: undefined,
+  };
 }
 
 export async function saveSubscriptionState(
