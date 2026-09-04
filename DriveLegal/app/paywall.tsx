@@ -27,6 +27,7 @@ import {
   Linking,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { deepLinkToSubscriptions } from "react-native-iap";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuthContext } from "@/lib/auth-context";
 import { getAuthSession } from "@/lib/app-session";
@@ -549,12 +550,16 @@ export default function PaywallScreen() {
 
   const handleManageSubscription = async () => {
     try {
-      await Linking.openURL("https://apps.apple.com/account/subscriptions");
+      await deepLinkToSubscriptions({});
     } catch {
-      Alert.alert(
-        "Unable to Open",
-        "Please open your Apple ID subscription settings from the App Store.",
-      );
+      try {
+        await Linking.openURL("https://apps.apple.com/account/subscriptions");
+      } catch {
+        Alert.alert(
+          "Unable to Open",
+          "Please open your Apple ID subscription settings from the App Store.",
+        );
+      }
     }
   };
 
