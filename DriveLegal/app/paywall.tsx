@@ -29,7 +29,10 @@ import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuthContext } from "@/lib/auth-context";
 import { getAuthSession } from "@/lib/app-session";
-import { syncSubscriptionToCloud } from "@/lib/cloud-sync";
+import {
+  restoreDriverSessionCloud,
+  syncSubscriptionToCloud,
+} from "@/lib/cloud-sync";
 import {
   getSubscriptionState,
   getTrialDaysLeft,
@@ -280,6 +283,46 @@ export default function PaywallScreen() {
     }
   }, [subscriptionState?.status, subscriptionState?.plan]);
 
+  const refreshSubscriptionStatus = async () => {
+    if (!user) return;
+
+    setSubscriptionLoading(true);
+
+    try {
+      const serverSession = await restoreDriverSessionCloud();
+
+      if (serverSession.success && serverSession.driver) {
+        const refreshed = await syncSubscriptionFromServer({
+          userId: serverSession.driver.localUserId,
+          status: serverSession.driver.subscriptionStatus,
+          trialStartDate:
+            serverSession.driver.trialStartDate ?? serverSession.driver.createdAt,
+          trialEndDate: serverSession.driver.trialEndDate,
+          subscriptionId: serverSession.driver.subscriptionId,
+          currentPeriodEnd: serverSession.driver.currentPeriodEnd,
+          plan: serverSession.driver.subscriptionPlan,
+          source: "session",
+        });
+
+        setSubscriptionState(refreshed);
+        if (refreshed.plan) {
+          setSelectedPlan(refreshed.plan);
+        }
+        return;
+      }
+
+      const cached = await getSubscriptionState(user.id);
+      setSubscriptionState(cached);
+      if (cached.plan) {
+        setSelectedPlan(cached.plan);
+      }
+    } catch (error) {
+      console.warn("[Paywall] Subscription refresh failed:", error);
+    } finally {
+      setSubscriptionLoading(false);
+    }
+  };
+
   // ─── Subscribe ──────────────────────────────────────────────────────────────
 
   const handleSubscribe = async () => {
@@ -371,7 +414,17 @@ export default function PaywallScreen() {
         Alert.alert(
           "Subscription Active ✓",
           `Your ${result.plan} plan is now active. Thank you for subscribing to Drive Legal.`,
-          [{ text: "Continue", onPress: () => router.replace("/(tabs)") }],
+          [
+            {
+              text: "Continue",
+              onPress: () => {
+                void (async () => {
+                  await refreshSubscriptionStatus();
+                  router.replace("/(tabs)");
+                })();
+              },
+            },
+          ],
         );
       } else {
         const failure = result as {
@@ -465,7 +518,17 @@ export default function PaywallScreen() {
         Alert.alert(
           "Subscription Restored ✓",
           "Your previous subscription has been restored.",
-          [{ text: "Continue", onPress: () => router.replace("/(tabs)") }],
+          [
+            {
+              text: "Continue",
+              onPress: () => {
+                void (async () => {
+                  await refreshSubscriptionStatus();
+                  router.replace("/(tabs)");
+                })();
+              },
+            },
+          ],
         );
       } else {
         Alert.alert(
@@ -670,197 +733,235 @@ export default function PaywallScreen() {
               textAlign: "center",
             }}
           >
-            Choose Your Plan
+            {isActive ? "Manage Subscription" : "Choose Your Plan"}
           </Text>
-          {!productsLoading && productsUnavailable && (
+          {isActive ? (
             <View
               style={{
-                backgroundColor: "rgba(239,68,68,0.15)",
-                borderRadius: 12,
-                padding: 12,
+                backgroundColor: "rgba(255,255,255,0.05)",
+                borderRadius: 16,
+                padding: 16,
                 borderWidth: 1,
-                borderColor: "rgba(239,68,68,0.3)",
-                marginBottom: 12,
+                borderColor: "rgba(255,255,255,0.1)",
               }}
             >
               <Text
                 style={{
-                  color: "#FCA5A5",
+                  color: "#FFFFFF",
+                  fontSize: 14,
+                  fontWeight: "700",
+                  textAlign: "center",
+                  marginBottom: 8,
+                }}
+              >
+                Current Plan: {subscriptionState?.plan === "monthly" ? "Monthly" : "Annual"}
+              </Text>
+              <Text
+                style={{
+                  color: "#D1D5DB",
                   fontSize: 12,
                   textAlign: "center",
                   lineHeight: 18,
                 }}
               >
-                App Store pricing is temporarily unavailable. Please wait for
-                the prices to load before subscribing.
+                To cancel or change your subscription, open your Apple ID
+                subscription settings.
               </Text>
             </View>
-          )}
-
-          {PLANS.map((plan) => {
-            const isSelected = selectedPlan === plan.id;
-            const product =
-              plan.id === "monthly" ? monthlyProduct : annualProduct;
-            const planPrice = displayPrice(plan);
-            const showUnavailable = !productsLoading && !product;
-
-            return (
-              <TouchableOpacity
-                key={plan.id}
-                onPress={() => setSelectedPlan(plan.id)}
-                disabled={productsLoading || showUnavailable}
-                style={{
-                  backgroundColor: isSelected
-                    ? "rgba(89,128,233,0.2)"
-                    : "rgba(255,255,255,0.05)",
-                  borderRadius: 16,
-                  padding: 20,
-                  paddingLeft: 54,
-                  marginBottom: 12,
-                  borderWidth: 2,
-                  borderColor: isSelected ? "#5980E9" : "rgba(255,255,255,0.1)",
-                  position: "relative",
-                  opacity: productsLoading || showUnavailable ? 0.75 : 1,
-                }}
-              >
-                {plan.popular && (
-                  <View
-                    style={{
-                      position: "absolute",
-                      top: -10,
-                      right: 16,
-                      backgroundColor: "#4ADE80",
-                      borderRadius: 8,
-                      paddingHorizontal: 10,
-                      paddingVertical: 3,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: "#003366",
-                        fontSize: 10,
-                        fontWeight: "800",
-                      }}
-                    >
-                      BEST VALUE
-                    </Text>
-                  </View>
-                )}
+          ) : (
+            <>
+              {!productsLoading && productsUnavailable && (
                 <View
                   style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    width: "100%",
+                    backgroundColor: "rgba(239,68,68,0.15)",
+                    borderRadius: 12,
+                    padding: 12,
+                    borderWidth: 1,
+                    borderColor: "rgba(239,68,68,0.3)",
+                    marginBottom: 12,
                   }}
                 >
-                  <View>
-                    <Text
-                      style={{
-                        color: "#FFFFFF",
-                        fontSize: 16,
-                        fontWeight: "700",
-                      }}
-                    >
-                      {plan.name}
-                    </Text>
-                    {plan.id === "annual" && annualSavings && (
-                      <Text
-                        style={{
-                          color: "#4ADE80",
-                          fontSize: 12,
-                          fontWeight: "600",
-                          marginTop: 2,
-                        }}
-                      >
-                        {annualSavings}
-                      </Text>
-                    )}
-                  </View>
-                  <View
+                  <Text
                     style={{
-                      alignItems: "flex-end",
-                      flexShrink: 1,
-                      marginLeft: 12,
+                      color: "#FCA5A5",
+                      fontSize: 12,
+                      textAlign: "center",
+                      lineHeight: 18,
                     }}
                   >
-                    {productsLoading ? (
-                      <View style={{ alignItems: "flex-end" }}>
-                        <ActivityIndicator color="#FFFFFF" size="small" />
+                    App Store pricing is temporarily unavailable. Please wait for
+                    the prices to load before subscribing.
+                  </Text>
+                </View>
+              )}
+
+              {PLANS.map((plan) => {
+                const isSelected = selectedPlan === plan.id;
+                const product =
+                  plan.id === "monthly" ? monthlyProduct : annualProduct;
+                const planPrice = displayPrice(plan);
+                const showUnavailable = !productsLoading && !product;
+
+                return (
+                  <TouchableOpacity
+                    key={plan.id}
+                    onPress={() => setSelectedPlan(plan.id)}
+                    disabled={productsLoading || showUnavailable}
+                    style={{
+                      backgroundColor: isSelected
+                        ? "rgba(89,128,233,0.2)"
+                        : "rgba(255,255,255,0.05)",
+                      borderRadius: 16,
+                      padding: 20,
+                      paddingLeft: 54,
+                      marginBottom: 12,
+                      borderWidth: 2,
+                      borderColor: isSelected ? "#5980E9" : "rgba(255,255,255,0.1)",
+                      position: "relative",
+                      opacity: productsLoading || showUnavailable ? 0.75 : 1,
+                    }}
+                  >
+                    {plan.popular && (
+                      <View
+                        style={{
+                          position: "absolute",
+                          top: -10,
+                          right: 16,
+                          backgroundColor: "#4ADE80",
+                          borderRadius: 8,
+                          paddingHorizontal: 10,
+                          paddingVertical: 3,
+                        }}
+                      >
                         <Text
                           style={{
-                            color: "#8AACDA",
-                            fontSize: 11,
-                            marginTop: 4,
+                            color: "#003366",
+                            fontSize: 10,
+                            fontWeight: "800",
                           }}
                         >
-                          Loading price…
+                          BEST VALUE
                         </Text>
                       </View>
-                    ) : planPrice ? (
-                      <Text
-                        numberOfLines={1}
-                        adjustsFontSizeToFit
-                        minimumFontScale={0.8}
-                        style={{
-                          color: "#FFFFFF",
-                          fontSize: 18,
-                          fontWeight: "800",
-                          textAlign: "right",
-                        }}
-                      >
-                        {planPrice}
-                      </Text>
-                    ) : (
-                      <Text
-                        style={{
-                          color: "#FCA5A5",
-                          fontSize: 13,
-                          fontWeight: "700",
-                          textAlign: "right",
-                        }}
-                      >
-                        Price unavailable
-                      </Text>
                     )}
-                    <Text style={{ color: "#8AACDA", fontSize: 11 }}>
-                      {plan.period}
-                    </Text>
-                  </View>
-                </View>
-                {/* Radio indicator */}
-                <View
-                  style={{
-                    position: "absolute",
-                    top: 20,
-                    left: 20,
-                    width: 20,
-                    height: 20,
-                    borderRadius: 10,
-                    borderWidth: 2,
-                    borderColor: isSelected ? "#5980E9" : "#4A6AB0",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  {isSelected && (
                     <View
                       style={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: 5,
-                        backgroundColor: "#5980E9",
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        width: "100%",
                       }}
-                    />
-                  )}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
+                    >
+                      <View>
+                        <Text
+                          style={{
+                            color: "#FFFFFF",
+                            fontSize: 16,
+                            fontWeight: "700",
+                          }}
+                        >
+                          {plan.name}
+                        </Text>
+                        {plan.id === "annual" && annualSavings && (
+                          <Text
+                            style={{
+                              color: "#4ADE80",
+                              fontSize: 12,
+                              fontWeight: "600",
+                              marginTop: 2,
+                            }}
+                          >
+                            {annualSavings}
+                          </Text>
+                        )}
+                      </View>
+                      <View
+                        style={{
+                          alignItems: "flex-end",
+                          flexShrink: 1,
+                          marginLeft: 12,
+                        }}
+                      >
+                        {productsLoading ? (
+                          <View style={{ alignItems: "flex-end" }}>
+                            <ActivityIndicator color="#FFFFFF" size="small" />
+                            <Text
+                              style={{
+                                color: "#8AACDA",
+                                fontSize: 11,
+                                marginTop: 4,
+                              }}
+                            >
+                              Loading price…
+                            </Text>
+                          </View>
+                        ) : planPrice ? (
+                          <Text
+                            numberOfLines={1}
+                            adjustsFontSizeToFit
+                            minimumFontScale={0.8}
+                            style={{
+                              color: "#FFFFFF",
+                              fontSize: 18,
+                              fontWeight: "800",
+                              textAlign: "right",
+                            }}
+                          >
+                            {planPrice}
+                          </Text>
+                        ) : (
+                          <Text
+                            style={{
+                              color: "#FCA5A5",
+                              fontSize: 13,
+                              fontWeight: "700",
+                              textAlign: "right",
+                            }}
+                          >
+                            Price unavailable
+                          </Text>
+                        )}
+                        <Text style={{ color: "#8AACDA", fontSize: 11 }}>
+                          {plan.period}
+                        </Text>
+                      </View>
+                    </View>
+                    {/* Radio indicator */}
+                    <View
+                      style={{
+                        position: "absolute",
+                        top: 20,
+                        left: 20,
+                        width: 20,
+                        height: 20,
+                        borderRadius: 10,
+                        borderWidth: 2,
+                        borderColor: isSelected ? "#5980E9" : "#4A6AB0",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {isSelected && (
+                        <View
+                          style={{
+                            width: 10,
+                            height: 10,
+                            borderRadius: 5,
+                            backgroundColor: "#5980E9",
+                          }}
+                        />
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </>
+          )}
         </View>
 
         {/* Features */}
-        <View style={{ paddingHorizontal: 24, marginBottom: 32 }}>
+        {!isActive && (
+          <View style={{ paddingHorizontal: 24, marginBottom: 32 }}>
           <Text
             style={{
               color: "#8AACDA",
@@ -894,41 +995,44 @@ export default function PaywallScreen() {
               <Text style={{ color: "#D1D5DB", fontSize: 13 }}>{feature}</Text>
             </View>
           ))}
-        </View>
+          </View>
+        )}
 
         {/* Subscribe Button */}
-        <View style={{ paddingHorizontal: 24, marginBottom: 16 }}>
-          <TouchableOpacity
-            onPress={handleSubscribe}
-            disabled={purchasing || restoring || !canPurchase}
-            style={{
-              backgroundColor:
-                purchasing || restoring || !canPurchase ? "#3A5A9E" : "#5980E9",
-              borderRadius: 14,
-              paddingVertical: 16,
-              alignItems: "center",
-              shadowColor: "#5980E9",
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.3,
-              shadowRadius: 8,
-              elevation: 6,
-            }}
-          >
-            {purchasing ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text
-                style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "800" }}
-              >
-                {productsLoading
-                  ? "Loading Prices…"
-                  : productsUnavailable
-                    ? "Subscription Unavailable"
-                    : "Subscribe Now"}
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
+        {!isActive && (
+          <View style={{ paddingHorizontal: 24, marginBottom: 16 }}>
+            <TouchableOpacity
+              onPress={handleSubscribe}
+              disabled={purchasing || restoring || !canPurchase}
+              style={{
+                backgroundColor:
+                  purchasing || restoring || !canPurchase ? "#3A5A9E" : "#5980E9",
+                borderRadius: 14,
+                paddingVertical: 16,
+                alignItems: "center",
+                shadowColor: "#5980E9",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 8,
+                elevation: 6,
+              }}
+            >
+              {purchasing ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text
+                  style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "800" }}
+                >
+                  {productsLoading
+                    ? "Loading Prices…"
+                    : productsUnavailable
+                      ? "Subscription Unavailable"
+                      : "Subscribe Now"}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Restore / Legal */}
         <View
@@ -949,7 +1053,7 @@ export default function PaywallScreen() {
               <Text
                 style={{ color: "#5980E9", fontSize: 13, fontWeight: "600" }}
               >
-                Restore Purchase
+                {isActive ? "Restore / Refresh Purchase" : "Restore Purchase"}
               </Text>
             )}
           </TouchableOpacity>
