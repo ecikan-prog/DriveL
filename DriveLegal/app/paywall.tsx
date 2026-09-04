@@ -338,7 +338,9 @@ export default function PaywallScreen() {
         const serverResult = await syncSubscriptionToCloud({
           status: "active",
           plan: result.plan,
-          subscriptionId: result.originalTransactionId ?? result.transactionId,
+          subscriptionId: String(
+            result.originalTransactionId ?? result.transactionId,
+          ),
           currentPeriodEnd,
           appAccountToken: result.appAccountToken,
         });
@@ -428,10 +430,11 @@ export default function PaywallScreen() {
         const serverResult = await syncSubscriptionToCloud({
           status: "active",
           plan: entitlement.plan,
-          subscriptionId:
+          subscriptionId: String(
             entitlement.originalTransactionId ??
-            entitlement.transactionId ??
-            entitlement.plan,
+              entitlement.transactionId ??
+              entitlement.plan,
+          ),
           currentPeriodEnd: entitlement.expiryDate?.toISOString() ?? null,
           appAccountToken: entitlement.appAccountToken,
         });
