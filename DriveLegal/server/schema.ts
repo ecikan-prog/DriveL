@@ -28,6 +28,27 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
+export const adminAccounts = mysqlTable("admin_accounts", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 320 }).notNull().unique(),
+  passwordHash: varchar("passwordHash", { length: 255 }).notNull(),
+  role: varchar("role", { length: 32 }).default("admin").notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  sessionVersion: int("sessionVersion").default(0).notNull(),
+  lastLogin: timestamp("lastLogin"),
+  passwordResetTokenHash: varchar("passwordResetTokenHash", {
+    length: 64,
+  }),
+  passwordResetRequestedAt: timestamp("passwordResetRequestedAt"),
+  passwordResetExpiresAt: timestamp("passwordResetExpiresAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AdminAccount = typeof adminAccounts.$inferSelect;
+export type InsertAdminAccount = typeof adminAccounts.$inferInsert;
+
 /**
  * Drive Legal driver profiles — stores driver-specific data for cloud sync.
  * Keyed by a stable local userId (string) so the same driver can link to

@@ -442,6 +442,24 @@ function buildResetEmailHtml(
   });
 }
 
+function buildAdminResetEmailHtml(
+  resetUrl: string,
+  recipientName: string
+): string {
+  return buildEmailLayout({
+    title: "Reset your DRIVE LEGAL administrator password",
+    greetingName: recipientName,
+    introduction:
+      "We received a request to reset the password for your administrator account.",
+    expiryText:
+      "This link expires shortly and can only be used once.",
+    actionText: "Reset Password",
+    actionUrl: resetUrl,
+    footerText:
+      "If you did not request this, you can safely ignore this email.",
+  });
+}
+
 export async function sendVerificationEmail(
   toEmail: string,
   recipientName: string,
@@ -493,5 +511,23 @@ const resetUrl =
     subject:
       "Reset Your Password — Drive Legal",
     htmlContent,
+  });
+}
+
+export async function sendAdminPasswordResetEmail(
+  toEmail: string,
+  recipientName: string,
+  resetToken: string,
+  baseUrl: string
+): Promise<boolean> {
+  const resetUrl =
+    `${normaliseBaseUrl(baseUrl)}/admin/reset-password?token=` +
+    encodeURIComponent(resetToken);
+
+  return sendBrevoEmail({
+    toEmail: toEmail.trim().toLowerCase(),
+    recipientName: recipientName.trim(),
+    subject: "Reset your DRIVE LEGAL administrator password",
+    htmlContent: buildAdminResetEmailHtml(resetUrl, recipientName),
   });
 }

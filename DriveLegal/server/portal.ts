@@ -1,15 +1,13 @@
 import { Express, Request, Response } from "express";
+import { authenticateAdminRequest } from "./admin-auth";
 import { query } from "./db";
-
-function isAuthorized(req: Request) {
-  const key = req.headers["x-admin-key"];
-  return key && key === process.env.ADMIN_KEY;
-}
 
 export function portalRouter(app: Express) {
   app.get("/portal/drivers", async (req: Request, res: Response) => {
     try {
-      if (!isAuthorized(req)) {
+      const admin = await authenticateAdminRequest(req);
+
+      if (!admin) {
         return res.status(401).json({ error: "Unauthorized" });
       }
       const drivers = await query(`
@@ -25,13 +23,15 @@ export function portalRouter(app: Express) {
       res.json({ drivers });
     } catch (err: any) {
       console.error("[PORTAL DRIVERS ERROR]", err);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: "Could not load drivers." });
     }
   });
 
   app.get("/portal/driver/:id/logs", async (req: Request, res: Response) => {
   try {
-    if (!isAuthorized(req)) {
+    const admin = await authenticateAdminRequest(req);
+
+    if (!admin) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
@@ -80,14 +80,16 @@ export function portalRouter(app: Express) {
     console.error("[PORTAL LOGS ERROR]", err);
 
     return res.status(500).json({
-      error: err?.message || "Failed to load driver logs",
+      error: "Failed to load driver logs",
     });
   }
 });
 
   app.get("/portal/stats", async (req: Request, res: Response) => {
     try {
-      if (!isAuthorized(req)) {
+      const admin = await authenticateAdminRequest(req);
+
+      if (!admin) {
         return res.status(401).json({ error: "Unauthorized" });
       }
       const drivers = await query<{ count: number }>(
@@ -106,13 +108,15 @@ export function portalRouter(app: Express) {
       });
     } catch (err: any) {
       console.error("[PORTAL STATS ERROR]", err);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: "Could not load portal statistics." });
     }
   });
 
   app.get("/portal/driver/:id", async (req: Request, res: Response) => {
     try {
-      if (!isAuthorized(req)) {
+      const admin = await authenticateAdminRequest(req);
+
+      if (!admin) {
         return res.status(401).json({ error: "Unauthorized" });
       }
       const { id } = req.params;
@@ -126,7 +130,7 @@ export function portalRouter(app: Express) {
       res.json({ driver: driver[0] });
     } catch (err: any) {
       console.error("[PORTAL DRIVER ERROR]", err);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: "Could not load driver." });
     }
   });
 }

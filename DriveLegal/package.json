@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "vitest run",
+    "admin:setup": "tsx server/setup-admin.ts",
     "db:push": "drizzle-kit push",
     "mobile:doctor": "expo-doctor",
     "mobile:bundle:ios": "expo export --platform ios --clear --output-dir dist-ios-test",

@@ -1,14 +1,6 @@
 import { Express, Request, Response } from "express";
+import { authenticateAdminRequest } from "./admin-auth";
 import { query } from "./db";
-
-/**
- * Simple admin auth (temporary)
- * Replace later with JWT / role-based access
- */
-function isAdmin(req: Request) {
-  const key = req.headers["x-admin-key"];
-  return key && key === process.env.ADMIN_KEY;
-}
 
 export function adminRouter(app: Express) {
   /**
@@ -16,7 +8,9 @@ export function adminRouter(app: Express) {
    */
   app.get("/admin/drivers", async (req: Request, res: Response) => {
     try {
-      if (!isAdmin(req)) {
+      const admin = await authenticateAdminRequest(req);
+
+      if (!admin) {
         return res.status(401).json({ error: "Unauthorized" });
       }
 
@@ -24,7 +18,7 @@ export function adminRouter(app: Express) {
       res.json({ drivers });
     } catch (err: any) {
       console.error("[ADMIN DRIVERS ERROR]", err);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: "Could not load drivers." });
     }
   });
 
@@ -33,7 +27,9 @@ export function adminRouter(app: Express) {
    */
   app.get("/admin/stats", async (req: Request, res: Response) => {
     try {
-      if (!isAdmin(req)) {
+      const admin = await authenticateAdminRequest(req);
+
+      if (!admin) {
         return res.status(401).json({ error: "Unauthorized" });
       }
 
@@ -50,7 +46,7 @@ export function adminRouter(app: Express) {
       });
     } catch (err: any) {
       console.error("[ADMIN STATS ERROR]", err);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: "Could not load admin statistics." });
     }
   });
 
@@ -59,7 +55,9 @@ export function adminRouter(app: Express) {
    */
   app.delete("/admin/driver/:id", async (req: Request, res: Response) => {
     try {
-      if (!isAdmin(req)) {
+      const admin = await authenticateAdminRequest(req);
+
+      if (!admin) {
         return res.status(401).json({ error: "Unauthorized" });
       }
 
@@ -70,7 +68,7 @@ export function adminRouter(app: Express) {
       res.json({ success: true });
     } catch (err: any) {
       console.error("[ADMIN DELETE ERROR]", err);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: "Could not delete driver." });
     }
   });
 }

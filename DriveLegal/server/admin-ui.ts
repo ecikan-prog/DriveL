@@ -1,14 +1,31 @@
-import { Express, Request, Response } from "express";
+import { createHash } from "crypto";
+import { Express, NextFunction, Request, Response } from "express";
 import {
-  createHash,
-  createHmac,
-  randomBytes,
-  timingSafeEqual,
-} from "crypto";
+  ADMIN_DEFAULT_SESSION_MAX_AGE_SECONDS,
+  ADMIN_PASSWORD_RESET_EXPIRY_MINUTES,
+  ADMIN_REMEMBER_ME_MAX_AGE_SECONDS,
+  authenticateAdminRequest,
+  clearAdminLoginRateLimit,
+  consumeAdminLoginRateLimit,
+  consumeAdminResetRateLimit,
+  createAdminCsrfToken,
+  createAdminSessionCookieHeader,
+  createExpiredAdminSessionCookie,
+  generateAdminPasswordResetToken,
+  getAdminAppUrl,
+  getAdminByEmail,
+  hasAdminSessionCookie,
+  hasValidAdminCsrf,
+  hashAdminPassword,
+  hashAdminPasswordResetToken,
+  normaliseAdminEmail,
+  requireAdminUiAuth,
+  validateAdminPassword,
+  verifyAdminPassword,
+} from "./admin-auth";
 import { query } from "./db";
+import { sendAdminPasswordResetEmail } from "./email";
 
-const COOKIE_NAME = "drivelegal_admin_session";
-const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
 const TRIAL_DAYS = 21;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -48,153 +65,8 @@ type TrialStatus = {
 
 type FlashTone = "success" | "warning" | "error" | "info";
 
-/* ─────────────────────────────────────────────
-   SECURITY
-   ───────────────────────────────────────────── */
-
-function safeEqual(a: string, b: string): boolean {
-  const first = Buffer.from(a);
-  const second = Buffer.from(b);
-
-  return (
-    first.length === second.length &&
-    timingSafeEqual(first, second)
-  );
-}
-
-function getAdminKey(): string {
-  const adminKey = process.env.ADMIN_KEY;
-
-  if (!adminKey) {
-    throw new Error("ADMIN_KEY is not configured");
-  }
-
-  return adminKey;
-}
-
-function sign(value: string, purpose: string): string {
-  return createHmac("sha256", getAdminKey())
-    .update(`${purpose}:${value}`)
-    .digest("base64url");
-}
-
-function createSessionCookieValue(): string {
-  const payload = JSON.stringify({
-    issuedAt: Date.now(),
-    nonce: randomBytes(18).toString("base64url"),
-  });
-
-  const encoded = Buffer.from(payload).toString("base64url");
-  return `${encoded}.${sign(encoded, "admin-session")}`;
-}
-
-function parseCookies(req: Request): Record<string, string> {
-  const result: Record<string, string> = {};
-  const raw = req.headers.cookie ?? "";
-
-  for (const part of raw.split(";")) {
-    const trimmed = part.trim();
-    const separator = trimmed.indexOf("=");
-
-    if (separator <= 0) {
-      continue;
-    }
-
-    const name = trimmed.slice(0, separator);
-    const value = trimmed.slice(separator + 1);
-
-    try {
-      result[name] = decodeURIComponent(value);
-    } catch {
-      result[name] = value;
-    }
-  }
-
-  return result;
-}
-
-function getValidSessionValue(req: Request): string | null {
-  const supplied = parseCookies(req)[COOKIE_NAME];
-
-  if (!supplied) {
-    return null;
-  }
-
-  const [encoded, signature, extra] = supplied.split(".");
-
-  if (!encoded || !signature || extra) {
-    return null;
-  }
-
-  if (!safeEqual(signature, sign(encoded, "admin-session"))) {
-    return null;
-  }
-
-  try {
-    const payload = JSON.parse(
-      Buffer.from(encoded, "base64url").toString("utf8")
-    ) as { issuedAt?: unknown; nonce?: unknown };
-
-    if (
-      typeof payload.issuedAt !== "number" ||
-      typeof payload.nonce !== "string"
-    ) {
-      return null;
-    }
-
-    const age = Date.now() - payload.issuedAt;
-
-    if (
-      age < 0 ||
-      age > SESSION_MAX_AGE_SECONDS * 1000
-    ) {
-      return null;
-    }
-
-    return supplied;
-  } catch {
-    return null;
-  }
-}
-
-function hasAdminSession(req: Request): boolean {
-  return getValidSessionValue(req) !== null;
-}
-
-function createCsrfToken(req: Request): string {
-  const session = getValidSessionValue(req);
-
-  if (!session) {
-    return "";
-  }
-
-  return sign(session, "admin-csrf");
-}
-
-function hasValidCsrf(req: Request): boolean {
-  const supplied =
-    typeof req.body?.csrfToken === "string"
-      ? req.body.csrfToken
-      : "";
-
-  const expected = createCsrfToken(req);
-
-  return Boolean(
-    supplied && expected && safeEqual(supplied, expected)
-  );
-}
-
-function requireAdmin(req: Request, res: Response): boolean {
-  if (!hasAdminSession(req)) {
-    res.redirect("/admin/login");
-    return false;
-  }
-
-  return true;
-}
-
 function rejectInvalidCsrf(req: Request, res: Response): boolean {
-  if (!hasValidCsrf(req)) {
+  if (!hasValidAdminCsrf(req)) {
     res.status(403).send(
       renderSimplePage(
         "Request blocked",
@@ -1562,6 +1434,436 @@ function emailStatusBadge(value: unknown): string {
   return booleanValue(value)
     ? `<span class="status verified">Verified</span>`
     : `<span class="status unverified">Unverified</span>`;
+}
+
+function renderAdminAuthPage(params: {
+  title: string;
+  description: string;
+  form: string;
+  feedback?: string;
+  feedbackTone?: "error" | "info" | "success";
+}): string {
+  const tone = params.feedbackTone ?? "info";
+
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="robots" content="noindex,nofollow" />
+        <title>${escapeHtml(params.title)} — Drive Legal Admin</title>
+        <style>${adminStyles}</style>
+      </head>
+      <body>
+        <main class="login-page">
+          <section class="login-brand">
+            <div class="login-brand-mark">DL</div>
+            <span class="login-brand-kicker">DRIVE LEGAL</span>
+            <h1>Administrator access for the Drive Legal portal</h1>
+            <p>
+              Secure access to driver accounts, trials, shift records, and compliance operations.
+            </p>
+            <div class="login-brand-points">
+              <span>Production-grade authentication</span>
+              <span>Protected admin workflows</span>
+              <span>Support: support@drivelegal.app</span>
+            </div>
+          </section>
+
+          <section class="login-side">
+            <div class="login-card">
+              <div class="login-card-header">
+                <span class="login-brand-kicker login-card-kicker">DRIVE LEGAL</span>
+                <h2>${escapeHtml(params.title)}</h2>
+                <p>${escapeHtml(params.description)}</p>
+              </div>
+
+              ${
+                params.feedback
+                  ? `<div class="login-feedback login-feedback-${tone}" role="status">${escapeHtml(params.feedback)}</div>`
+                  : ""
+              }
+
+              ${params.form}
+            </div>
+          </section>
+        </main>
+      </body>
+    </html>
+  `;
+}
+
+function renderAdminLoginPage(
+  errorCode?: string,
+  flashMessage?: string,
+  flashTone: FlashTone = "info",
+): string {
+  const errorMessage =
+    errorCode === "inactive"
+      ? "This administrator account is currently inactive. Please contact your system administrator."
+      : errorCode === "unavailable"
+        ? "We couldn’t complete your sign-in. Please try again."
+        : errorCode === "rate"
+          ? "Too many sign-in attempts. Please wait a few minutes and try again."
+          : errorCode === "invalid"
+            ? "Email or password is incorrect."
+            : "";
+
+  return renderAdminAuthPage({
+    title: "Administrator Sign In",
+    description: "Enter your administrator email and password to continue.",
+    feedback: errorMessage || flashMessage,
+    feedbackTone: errorMessage ? "error" : flashTone === "success" ? "success" : "info",
+    form: `
+      <form method="POST" action="/admin/login" data-loading-form>
+        <div class="field-group">
+          <label class="field-label" for="email">Email address</label>
+          <input
+            class="field-input"
+            id="email"
+            name="email"
+            type="email"
+            autocomplete="username"
+            inputmode="email"
+            required
+            autofocus
+          />
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="password">Password</label>
+          <div class="password-field">
+            <input
+              class="field-input"
+              id="password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+            />
+            <button
+              class="password-toggle"
+              type="button"
+              data-password-toggle
+              data-show-label="Show"
+              data-hide-label="Hide"
+              aria-label="Show password"
+              aria-controls="password"
+              aria-pressed="false"
+            >
+              Show
+            </button>
+          </div>
+        </div>
+
+        <label class="checkbox-row" for="rememberMe">
+          <input id="rememberMe" name="rememberMe" type="checkbox" value="1" />
+          <span>Remember me</span>
+        </label>
+
+        <button class="login-submit" type="submit" data-submit-button>
+          <span data-idle-label>Sign in</span>
+          <span data-busy-label hidden>Signing in…</span>
+        </button>
+      </form>
+
+      <div class="login-links">
+        <a href="/admin/forgot-password">Forgot your password?</a>
+      </div>
+
+      <script>
+        (() => {
+          const toggle = document.querySelector("[data-password-toggle]");
+          const passwordInput = document.getElementById("password");
+          const form = document.querySelector("[data-loading-form]");
+          const submitButton = form?.querySelector("[data-submit-button]");
+          const idleLabel = submitButton?.querySelector("[data-idle-label]");
+          const busyLabel = submitButton?.querySelector("[data-busy-label]");
+
+          if (toggle && passwordInput) {
+            toggle.addEventListener("click", () => {
+              const showing = passwordInput.getAttribute("type") === "text";
+              passwordInput.setAttribute("type", showing ? "password" : "text");
+              toggle.textContent = showing
+                ? toggle.getAttribute("data-show-label") || "Show"
+                : toggle.getAttribute("data-hide-label") || "Hide";
+              toggle.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+              toggle.setAttribute("aria-pressed", showing ? "false" : "true");
+            });
+          }
+
+          if (form && submitButton && idleLabel && busyLabel) {
+            form.addEventListener("submit", () => {
+              submitButton.setAttribute("disabled", "disabled");
+              submitButton.classList.add("is-loading");
+              idleLabel.hidden = true;
+              busyLabel.hidden = false;
+            });
+          }
+        })();
+      </script>
+    `,
+  });
+}
+
+function renderAdminForgotPasswordPage(errorMessage?: string): string {
+  return renderAdminAuthPage({
+    title: "Reset your password",
+    description:
+      "Enter your administrator email and we’ll send you a secure password reset link.",
+    feedback: errorMessage,
+    feedbackTone: "error",
+    form: `
+      <form method="POST" action="/admin/forgot-password" data-loading-form>
+        <div class="field-group">
+          <label class="field-label" for="email">Enter your administrator email address</label>
+          <input
+            class="field-input"
+            id="email"
+            name="email"
+            type="email"
+            autocomplete="username"
+            inputmode="email"
+            required
+            autofocus
+          />
+        </div>
+
+        <button class="login-submit" type="submit" data-submit-button>
+          <span data-idle-label>Send reset link</span>
+          <span data-busy-label hidden>Sending…</span>
+        </button>
+      </form>
+
+      <p class="login-note">
+        Forgot your password?<br />
+        Enter your administrator email and we’ll send you a secure password reset link.
+      </p>
+      <p class="login-note">
+        For help, contact <a href="mailto:support@drivelegal.app">support@drivelegal.app</a>.
+      </p>
+      <div class="login-links">
+        <a href="/admin/login">Return to Administrator Sign In</a>
+      </div>
+
+      <script>
+        (() => {
+          const form = document.querySelector("[data-loading-form]");
+          const submitButton = form?.querySelector("[data-submit-button]");
+          const idleLabel = submitButton?.querySelector("[data-idle-label]");
+          const busyLabel = submitButton?.querySelector("[data-busy-label]");
+
+          if (form && submitButton && idleLabel && busyLabel) {
+            form.addEventListener("submit", () => {
+              submitButton.setAttribute("disabled", "disabled");
+              submitButton.classList.add("is-loading");
+              idleLabel.hidden = true;
+              busyLabel.hidden = false;
+            });
+          }
+        })();
+      </script>
+    `,
+  });
+}
+
+function renderAdminForgotPasswordSentPage(): string {
+  return renderAdminAuthPage({
+    title: "Check your email",
+    description:
+      "If an account exists for that email address, a password reset link has been sent.",
+    feedback:
+      "If an account exists for that email address, a password reset link has been sent.",
+    feedbackTone: "info",
+    form: `
+      <p class="login-note">
+        The link expires in ${ADMIN_PASSWORD_RESET_EXPIRY_MINUTES} minutes and can only be used once.
+      </p>
+      <p class="login-note">
+        For help, contact <a href="mailto:support@drivelegal.app">support@drivelegal.app</a>.
+      </p>
+      <div class="login-links">
+        <a href="/admin/login">Return to Administrator Sign In</a>
+      </div>
+    `,
+  });
+}
+
+function renderAdminResetPasswordPage(
+  token: string,
+  errorMessage?: string,
+): string {
+  return renderAdminAuthPage({
+    title: "Create a new password",
+    description: "Choose a new password for your administrator account.",
+    feedback: errorMessage,
+    feedbackTone: "error",
+    form: `
+      <form method="POST" action="/admin/reset-password" data-loading-form>
+        <input type="hidden" name="token" value="${escapeHtml(token)}" />
+
+        <div class="field-group">
+          <label class="field-label" for="password">New password</label>
+          <div class="password-field">
+            <input
+              class="field-input"
+              id="password"
+              name="password"
+              type="password"
+              autocomplete="new-password"
+              minlength="12"
+              required
+              autofocus
+            />
+            <button
+              class="password-toggle"
+              type="button"
+              data-password-toggle
+              data-show-label="Show"
+              data-hide-label="Hide"
+              aria-label="Show password"
+              aria-controls="password"
+              aria-pressed="false"
+            >
+              Show
+            </button>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="confirmPassword">Confirm new password</label>
+          <input
+            class="field-input"
+            id="confirmPassword"
+            name="confirmPassword"
+            type="password"
+            autocomplete="new-password"
+            minlength="12"
+            required
+          />
+        </div>
+
+        <div class="password-rules" aria-live="polite">
+          <div data-rule="length">At least 12 characters</div>
+          <div data-rule="lower">At least one lowercase letter</div>
+          <div data-rule="upper">At least one uppercase letter</div>
+          <div data-rule="number">At least one number</div>
+          <div data-rule="match">Passwords match</div>
+        </div>
+
+        <button class="login-submit" type="submit" data-submit-button disabled>
+          <span data-idle-label>Update Password</span>
+          <span data-busy-label hidden>Updating…</span>
+        </button>
+      </form>
+
+      <div class="login-links">
+        <a href="/admin/login">Return to Administrator Sign In</a>
+      </div>
+
+      <script>
+        (() => {
+          const form = document.querySelector("[data-loading-form]");
+          const passwordInput = document.getElementById("password");
+          const confirmInput = document.getElementById("confirmPassword");
+          const toggle = document.querySelector("[data-password-toggle]");
+          const submitButton = form?.querySelector("[data-submit-button]");
+          const idleLabel = submitButton?.querySelector("[data-idle-label]");
+          const busyLabel = submitButton?.querySelector("[data-busy-label]");
+          const rules = {
+            length: (value) => value.length >= 12,
+            lower: (value) => /[a-z]/.test(value),
+            upper: (value) => /[A-Z]/.test(value),
+            number: (value) => /[0-9]/.test(value),
+            match: (value, confirm) => value.length > 0 && value === confirm,
+          };
+
+          const updateState = () => {
+            const password = passwordInput?.value || "";
+            const confirm = confirmInput?.value || "";
+            let valid = true;
+
+            Object.entries(rules).forEach(([name, check]) => {
+              const passed = name === "match" ? check(password, confirm) : check(password);
+              const rule = document.querySelector('[data-rule="' + name + '"]');
+              if (rule) {
+                rule.classList.toggle("is-valid", passed);
+                rule.classList.toggle("is-invalid", !passed && (password.length > 0 || confirm.length > 0));
+              }
+              if (!passed) {
+                valid = false;
+              }
+            });
+
+            if (submitButton) {
+              submitButton.disabled = !valid;
+            }
+          };
+
+          if (toggle && passwordInput) {
+            toggle.addEventListener("click", () => {
+              const showing = passwordInput.getAttribute("type") === "text";
+              const nextType = showing ? "password" : "text";
+              passwordInput.setAttribute("type", nextType);
+              if (confirmInput) {
+                confirmInput.setAttribute("type", nextType);
+              }
+              toggle.textContent = showing
+                ? toggle.getAttribute("data-show-label") || "Show"
+                : toggle.getAttribute("data-hide-label") || "Hide";
+              toggle.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+              toggle.setAttribute("aria-pressed", showing ? "false" : "true");
+            });
+          }
+
+          passwordInput?.addEventListener("input", updateState);
+          confirmInput?.addEventListener("input", updateState);
+
+          if (form && submitButton && idleLabel && busyLabel) {
+            form.addEventListener("submit", () => {
+              submitButton.setAttribute("disabled", "disabled");
+              submitButton.classList.add("is-loading");
+              idleLabel.hidden = true;
+              busyLabel.hidden = false;
+            });
+          }
+
+          updateState();
+        })();
+      </script>
+    `,
+  });
+}
+
+function renderAdminResetSuccessPage(): string {
+  return renderAdminAuthPage({
+    title: "Password updated successfully",
+    description: "Your administrator password has been updated.",
+    feedback: "Password updated successfully",
+    feedbackTone: "success",
+    form: `
+      <div class="login-links login-links-stack">
+        <a href="/admin/login">Return to Administrator Sign In</a>
+      </div>
+    `,
+  });
+}
+
+function renderAdminResetInvalidPage(): string {
+  return renderAdminAuthPage({
+    title: "Reset link unavailable",
+    description: "This password reset link is invalid, expired, or has already been used.",
+    feedback:
+      "This password reset link is invalid, expired, or has already been used.",
+    feedbackTone: "error",
+    form: `
+      <div class="login-links login-links-stack">
+        <a href="/admin/forgot-password">Request a new reset link</a>
+        <a href="/admin/login">Return to Administrator Sign In</a>
+      </div>
+    `,
+  });
 }
 
 /* ─────────────────────────────────────────────
