@@ -48,6 +48,15 @@ describe("subscription sync freshness guard", () => {
   beforeEach(() => {
     storage.clear();
     vi.clearAllMocks();
+    vi.mocked(checkCurrentEntitlement).mockReset();
+    vi.mocked(checkCurrentEntitlement).mockResolvedValue({
+      isActive: false,
+      plan: null,
+      expiryDate: null,
+      transactionId: null,
+      originalTransactionId: null,
+      appAccountToken: null,
+    });
   });
 
   it("keeps a monthly purchase active when a stale annual session response arrives", async () => {
@@ -194,14 +203,23 @@ describe("subscription sync freshness guard", () => {
   });
 
   it("continues to apply normal session refreshes and clears protection after server confirmation", async () => {
-    vi.mocked(checkCurrentEntitlement).mockResolvedValue({
-      isActive: true,
-      plan: "monthly",
-      expiryDate: new Date("2026-10-01T00:00:00.000Z"),
-      transactionId: "subscription-chain-1",
-      originalTransactionId: "subscription-chain-1",
-      appAccountToken: null,
-    });
+    vi.mocked(checkCurrentEntitlement)
+      .mockResolvedValueOnce({
+        isActive: true,
+        plan: "monthly",
+        expiryDate: new Date("2026-10-01T00:00:00.000Z"),
+        transactionId: "subscription-chain-1",
+        originalTransactionId: "subscription-chain-1",
+        appAccountToken: null,
+      })
+      .mockResolvedValueOnce({
+        isActive: true,
+        plan: "annual",
+        expiryDate: new Date("2027-09-01T00:00:00.000Z"),
+        transactionId: "server-updated-subscription",
+        originalTransactionId: "server-updated-subscription",
+        appAccountToken: null,
+      });
 
     await syncSubscriptionFromServer({
       userId: "user-1",
@@ -240,23 +258,14 @@ describe("subscription sync freshness guard", () => {
   });
 
   it("keeps subscription state isolated per account", async () => {
-    vi.mocked(checkCurrentEntitlement)
-      .mockResolvedValueOnce({
-        isActive: true,
-        plan: "monthly",
-        expiryDate: new Date("2026-10-01T00:00:00.000Z"),
-        transactionId: "user-1-sub",
-        originalTransactionId: "user-1-sub",
-        appAccountToken: null,
-      })
-      .mockResolvedValueOnce({
-        isActive: true,
-        plan: "annual",
-        expiryDate: new Date("2027-09-01T00:00:00.000Z"),
-        transactionId: "user-2-sub",
-        originalTransactionId: "user-2-sub",
-        appAccountToken: null,
-      });
+    vi.mocked(checkCurrentEntitlement).mockResolvedValueOnce({
+      isActive: true,
+      plan: "annual",
+      expiryDate: new Date("2027-09-01T00:00:00.000Z"),
+      transactionId: "user-2-sub",
+      originalTransactionId: "user-2-sub",
+      appAccountToken: null,
+    });
 
     await syncSubscriptionFromServer({
       userId: "user-1",
