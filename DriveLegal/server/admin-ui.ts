@@ -1179,13 +1179,18 @@ const adminStyles = `
   }
 
   .login-side {
-    display: grid;
-    place-items: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
     padding: 28px;
   }
 
-  .login-card {
+  .login-side-inner {
     width: min(430px, 100%);
+  }
+
+  .login-card {
+    width: 100%;
     padding: 34px;
     border-radius: 18px;
     background: #ffffff;
@@ -1208,6 +1213,14 @@ const adminStyles = `
     font-weight: 800;
   }
 
+  .field-group {
+    margin-bottom: 14px;
+  }
+
+  .field-group:last-of-type {
+    margin-bottom: 8px;
+  }
+
   .field-input {
     width: 100%;
     padding: 13px 14px;
@@ -1222,9 +1235,62 @@ const adminStyles = `
     box-shadow: 0 0 0 3px rgba(93,127,231,0.14);
   }
 
+  .password-field {
+    position: relative;
+  }
+
+  .password-field .field-input {
+    padding-right: 52px;
+  }
+
+  .password-toggle {
+    position: absolute;
+    right: 7px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #4a5f82;
+    cursor: pointer;
+  }
+
+  .password-toggle:hover {
+    background: #eef3ff;
+  }
+
+  .password-toggle:focus-visible {
+    outline: 2px solid #5d7fe7;
+    outline-offset: 1px;
+  }
+
+  .password-toggle-icon {
+    font-size: 17px;
+    line-height: 1;
+  }
+
+  .forgot-password {
+    display: block;
+    margin: 0 0 16px;
+    text-align: right;
+    font-size: 13px;
+    color: #4065b5;
+    text-decoration: none;
+    font-weight: 700;
+  }
+
+  .forgot-password:hover {
+    text-decoration: underline;
+  }
+
   .login-submit {
     width: 100%;
-    margin-top: 17px;
+    margin-top: 0;
     padding: 13px;
     border: 0;
     border-radius: 10px;
@@ -1243,6 +1309,45 @@ const adminStyles = `
     color: #a31515;
     font-size: 14px;
     font-weight: 700;
+  }
+
+  .login-footer-visual {
+    position: relative;
+    margin-top: 16px;
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 14px 30px rgba(13,46,84,0.18);
+  }
+
+  .login-footer-visual::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: 72px;
+    background: linear-gradient(180deg, #eef3ff 0%, rgba(238,243,255,0) 100%);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .login-footer-visual img {
+    display: block;
+    width: 100%;
+    height: 190px;
+    object-fit: cover;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   @media (max-width: 1120px) {
@@ -1603,31 +1708,98 @@ export function registerAdminUi(app: Express) {
             </section>
 
             <section class="login-side">
-              <div class="login-card">
-                <h2>Administrator sign in</h2>
-                <p>Enter the secure administrator key to continue.</p>
+              <div class="login-side-inner">
+                <div class="login-card">
+                  <h2>Administrator sign in</h2>
+                  <p>Enter your username and password to continue.</p>
 
-                ${showError ? `<div class="login-error">The administrator key was not accepted.</div>` : ""}
+                  ${showError ? `<div class="login-error">The administrator key was not accepted.</div>` : ""}
 
-                <form method="POST" action="/admin/login">
-                  <label class="field-label" for="adminKey">Administrator key</label>
-                  <input
-                    class="field-input"
-                    id="adminKey"
-                    name="adminKey"
-                    type="password"
-                    autocomplete="current-password"
-                    required
-                    autofocus
+                  <form method="POST" action="/admin/login">
+                    <div class="field-group">
+                      <label class="field-label" for="username">Username</label>
+                      <input
+                        class="field-input"
+                        id="username"
+                        name="username"
+                        type="text"
+                        autocomplete="username"
+                        required
+                        autofocus
+                      />
+                    </div>
+
+                    <div class="field-group">
+                      <label class="field-label" for="adminKey">Password</label>
+                      <div class="password-field">
+                        <input
+                          class="field-input"
+                          id="adminKey"
+                          name="adminKey"
+                          type="password"
+                          autocomplete="current-password"
+                          required
+                        />
+                        <button
+                          class="password-toggle"
+                          type="button"
+                          data-password-toggle
+                          aria-label="Show password"
+                        >
+                          <span class="password-toggle-icon" data-password-toggle-icon aria-hidden="true">👁</span>
+                          <span class="sr-only" data-password-toggle-text>Show password</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <a class="forgot-password" href="/admin/forgot-password">Forgot password?</a>
+                    <button class="login-submit" type="submit">Sign in securely</button>
+                  </form>
+                </div>
+
+                <div class="login-footer-visual">
+                  <img
+                    src="https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=1400&q=80"
+                    alt="Commercial bus on an open road"
+                    loading="lazy"
                   />
-                  <button class="login-submit" type="submit">Sign in securely</button>
-                </form>
+                </div>
               </div>
             </section>
           </main>
+          <script>
+            (() => {
+              const toggle = document.querySelector("[data-password-toggle]");
+              const passwordInput = document.getElementById("adminKey");
+              const toggleIcon = document.querySelector("[data-password-toggle-icon]");
+              const toggleText = document.querySelector("[data-password-toggle-text]");
+
+              if (!toggle || !passwordInput || !toggleIcon || !toggleText) {
+                return;
+              }
+
+              toggle.addEventListener("click", () => {
+                const showing = passwordInput.getAttribute("type") === "text";
+                passwordInput.setAttribute("type", showing ? "password" : "text");
+                toggle.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+                toggleText.textContent = showing ? "Show password" : "Hide password";
+                toggleIcon.textContent = showing ? "👁" : "🙈";
+              });
+            })();
+          </script>
         </body>
       </html>
     `);
+  });
+
+  app.get("/admin/forgot-password", (_req: Request, res: Response) => {
+    return res.status(200).send(
+      renderSimplePage(
+        "Forgot password",
+        "Password recovery will be connected in a future update. Please contact your system administrator for now.",
+        "/admin/login"
+      )
+    );
   });
 
   app.post("/admin/login", (req: Request, res: Response) => {
