@@ -46,15 +46,17 @@
 
 import * as IAP from "react-native-iap";
 import { Platform } from "react-native";
+import {
+  planFromProductId,
+  SUBSCRIPTION_PRODUCT_IDS,
+  type SubscriptionPlan,
+} from "./subscription-products";
 
 // ─── Product IDs ──────────────────────────────────────────────────────────────
 // These must be identical to the Product IDs in App Store Connect.
-export const IAP_PRODUCT_IDS = {
-  monthly: "com.drivelegal.app.monthly",
-  annual: "com.drivelegal.app.annual",
-} as const;
+export const IAP_PRODUCT_IDS = SUBSCRIPTION_PRODUCT_IDS;
 
-export type IAPPlan = keyof typeof IAP_PRODUCT_IDS;
+export type IAPPlan = SubscriptionPlan;
 
 export type IAPProduct = {
   productId: string;
@@ -430,12 +432,7 @@ function resolvePurchaseAppAccountToken(
   return requestedAppAccountToken;
 }
 
-export function planFromProductId(productId: string): IAPPlan | null {
-  for (const [plan, id] of Object.entries(IAP_PRODUCT_IDS)) {
-    if (id === productId) return plan as IAPPlan;
-  }
-  return null;
-}
+export { planFromProductId };
 
 /** Compute an approximate period-end date from a purchase time for UI display. */
 export function estimatePeriodEnd(plan: IAPPlan, purchaseTime: number): Date {

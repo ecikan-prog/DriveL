@@ -24,6 +24,8 @@ import {
   getTrialDaysLeft,
   type SubscriptionState,
 } from "@/lib/subscription";
+import { getActiveSubscriptionSummary } from "@/lib/subscription-display";
+import { loadIAPProducts, type IAPProduct, IAP_PRODUCT_IDS } from "@/lib/iap";
 import {
   formatHoursMinutes,
   getAllLogs,
@@ -292,6 +294,9 @@ export default function ProfileScreen() {
   const [subscriptionStatusLoading, setSubscriptionStatusLoading] = useState(
     !shiftSubscriptionState,
   );
+  const [subscriptionProducts, setSubscriptionProducts] = useState<IAPProduct[]>(
+    [],
+  );
   const [form, setForm] = useState({
     name: user?.name ?? "",
     licenceNumber: user?.licenceNumber ?? "",
@@ -377,6 +382,32 @@ export default function ProfileScreen() {
     };
   }, [user?.id]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    if (Platform.OS !== "ios") {
+      setSubscriptionProducts([]);
+      return;
+    }
+
+    loadIAPProducts()
+      .then((products) => {
+        if (isMounted) {
+          setSubscriptionProducts(products);
+        }
+      })
+      .catch((error) => {
+        console.warn("[Profile] Failed to load subscription products:", error);
+        if (isMounted) {
+          setSubscriptionProducts([]);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const trialDays =
     subscriptionState?.status === "trial"
       ? getTrialDaysLeft(subscriptionState)
@@ -392,6 +423,21 @@ export default function ProfileScreen() {
   const isSubscriptionExpired =
     subscriptionState?.status === "expired" ||
     subscriptionState?.status === "cancelled";
+  const monthlyProduct =
+    subscriptionProducts.find(
+      (product) => product.productId === IAP_PRODUCT_IDS.monthly,
+    ) ?? null;
+  const annualProduct =
+    subscriptionProducts.find(
+      (product) => product.productId === IAP_PRODUCT_IDS.annual,
+    ) ?? null;
+  const activeSubscriptionSummary = getActiveSubscriptionSummary({
+    subscriptionState,
+    productsByPlan: {
+      monthly: monthlyProduct,
+      annual: annualProduct,
+    },
+  });
 
   const handleSave = async () => {
     if (!user) return;
@@ -623,10 +669,20 @@ export default function ProfileScreen() {
                   <Text style={styles.trialEmoji}>✓</Text>
                   <Text style={styles.trialLabel}>Subscription Active</Text>
                 </View>
-                <Text style={styles.trialDays}>{activePlanLabel}</Text>
+                <Text style={styles.trialDays}>
+                  {activeSubscriptionSummary.planLabel ?? activePlanLabel}
+                </Text>
                 <Text style={styles.trialSubtext}>
                   Your Apple subscription is active.
                 </Text>
+                <View style={styles.activeSubscriptionMeta}>
+                  <Text style={styles.activeSubscriptionMetaLine}>
+                    Price: {activeSubscriptionSummary.priceLabel ?? "Unavailable"}
+                  </Text>
+                  <Text style={styles.activeSubscriptionMetaLine}>
+                    Renewal Date: {activeSubscriptionSummary.renewalLabel ?? "Unavailable"}
+                  </Text>
+                </View>
               </>
             ) : isTrialOnly ? (
               <>
@@ -1170,6 +1226,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 8,
     marginLeft: 32,
+  },
+  activeSubscriptionMeta: {
+    marginTop: 12,
+    marginLeft: 32,
+    gap: 4,
+  },
+  activeSubscriptionMetaLine: {
+    color: "#DCEAFE",
+    fontSize: 12,
   },
   trialExpiredLabel: {
     color: COLORS.warning,

@@ -40,6 +40,7 @@ import {
   getTrialDaysLeft,
   syncSubscriptionFromServer,
 } from "@/lib/subscription";
+import { getActiveSubscriptionSummary } from "@/lib/subscription-display";
 import {
   loadIAPProducts,
   purchasePlan,
@@ -188,10 +189,7 @@ export default function PaywallScreen() {
         }
 
         await storeProductsPromise;
-
-        if (isMounted) {
-          setSubscriptionState(cached);
-        }
+        await refreshSubscriptionStatus();
       } catch (error) {
         console.error("[Paywall] Initialisation error:", error);
       } finally {
@@ -273,6 +271,13 @@ export default function PaywallScreen() {
   const isExpired =
     subscriptionState?.status === "expired" ||
     subscriptionState?.status === "cancelled";
+  const activeSubscriptionSummary = getActiveSubscriptionSummary({
+    subscriptionState,
+    productsByPlan: {
+      monthly: monthlyProduct,
+      annual: annualProduct,
+    },
+  });
 
   const displayPrice = (plan: PlanOption): string | null => {
     const product = plan.id === "monthly" ? monthlyProduct : annualProduct;
@@ -397,6 +402,12 @@ export default function PaywallScreen() {
           );
         }
 
+        if (serverResult.subscriptionStatus !== "active") {
+          throw new Error(
+            "Apple did not confirm an active subscription for this Apple ID. Please open Manage Subscription to verify billing status or tap Restore Purchase again.",
+          );
+        }
+
         await syncSubscriptionFromServer({
           userId: user.id,
           status: serverResult.subscriptionStatus ?? "active",
@@ -498,6 +509,12 @@ export default function PaywallScreen() {
           throw new Error(
             serverResult.error ??
               "Drive Legal could not confirm this Apple subscription for the authenticated account.",
+          );
+        }
+
+        if (serverResult.subscriptionStatus !== "active") {
+          throw new Error(
+            "Apple did not confirm an active subscription for this Apple ID.",
           );
         }
 
@@ -771,7 +788,27 @@ export default function PaywallScreen() {
                   marginBottom: 8,
                 }}
               >
-                Current Plan: {subscriptionState?.plan === "monthly" ? "Monthly" : "Annual"}
+               Current Plan: {activeSubscriptionSummary.planLabel ?? "Subscription"}
+              </Text>
+              <Text
+                style={{
+                  color: "#D1D5DB",
+                  fontSize: 13,
+                  textAlign: "center",
+                  marginBottom: 4,
+                }}
+              >
+                Price: {activeSubscriptionSummary.priceLabel ?? "Unavailable"}
+              </Text>
+              <Text
+                style={{
+                  color: "#8AACDA",
+                  fontSize: 12,
+                  textAlign: "center",
+                  marginBottom: 14,
+                }}
+              >
+                Renewal Date: {activeSubscriptionSummary.renewalLabel ?? "Unavailable"}
               </Text>
               <TouchableOpacity
                 onPress={handleManageSubscription}

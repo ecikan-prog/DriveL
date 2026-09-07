@@ -14,6 +14,10 @@ vi.mock("@react-native-async-storage/async-storage", () => ({
   },
 }));
 
+vi.mock("react-native", () => ({
+  Platform: { OS: "ios" },
+}));
+
 vi.mock("../lib/iap", () => ({
   checkCurrentEntitlement: vi.fn(async () => ({
     isActive: false,
@@ -38,14 +42,33 @@ import {
   getSubscriptionState,
   syncSubscriptionFromServer,
 } from "../lib/subscription";
+import { checkCurrentEntitlement } from "../lib/iap";
 
 describe("subscription sync freshness guard", () => {
   beforeEach(() => {
     storage.clear();
     vi.clearAllMocks();
+    vi.mocked(checkCurrentEntitlement).mockReset();
+    vi.mocked(checkCurrentEntitlement).mockResolvedValue({
+      isActive: false,
+      plan: null,
+      expiryDate: null,
+      transactionId: null,
+      originalTransactionId: null,
+      appAccountToken: null,
+    });
   });
 
   it("keeps a monthly purchase active when a stale annual session response arrives", async () => {
+    vi.mocked(checkCurrentEntitlement).mockResolvedValue({
+      isActive: true,
+      plan: "monthly",
+      expiryDate: new Date("2026-10-01T00:00:00.000Z"),
+      transactionId: "sub-monthly",
+      originalTransactionId: "sub-monthly",
+      appAccountToken: null,
+    });
+
     await syncSubscriptionFromServer({
       userId: "user-1",
       status: "active",
@@ -73,6 +96,15 @@ describe("subscription sync freshness guard", () => {
   });
 
   it("keeps a new purchase active when a stale expired session response arrives", async () => {
+    vi.mocked(checkCurrentEntitlement).mockResolvedValue({
+      isActive: true,
+      plan: "monthly",
+      expiryDate: new Date("2026-10-01T00:00:00.000Z"),
+      transactionId: "sub-monthly",
+      originalTransactionId: "sub-monthly",
+      appAccountToken: null,
+    });
+
     await syncSubscriptionFromServer({
       userId: "user-1",
       status: "active",
@@ -99,6 +131,15 @@ describe("subscription sync freshness guard", () => {
   });
 
   it("keeps a restored entitlement active when a stale session response arrives", async () => {
+    vi.mocked(checkCurrentEntitlement).mockResolvedValue({
+      isActive: true,
+      plan: "annual",
+      expiryDate: new Date("2027-09-01T00:00:00.000Z"),
+      transactionId: "restored-subscription",
+      originalTransactionId: "restored-subscription",
+      appAccountToken: null,
+    });
+
     await syncSubscriptionFromServer({
       userId: "user-1",
       status: "active",
@@ -125,6 +166,15 @@ describe("subscription sync freshness guard", () => {
   });
 
   it("allows a genuinely newer server state to replace the protected local state", async () => {
+    vi.mocked(checkCurrentEntitlement).mockResolvedValue({
+      isActive: true,
+      plan: "monthly",
+      expiryDate: new Date("2026-10-01T00:00:00.000Z"),
+      transactionId: "subscription-chain-1",
+      originalTransactionId: "subscription-chain-1",
+      appAccountToken: null,
+    });
+
     await syncSubscriptionFromServer({
       userId: "user-1",
       status: "active",
@@ -153,6 +203,24 @@ describe("subscription sync freshness guard", () => {
   });
 
   it("continues to apply normal session refreshes and clears protection after server confirmation", async () => {
+    vi.mocked(checkCurrentEntitlement)
+      .mockResolvedValueOnce({
+        isActive: true,
+        plan: "monthly",
+        expiryDate: new Date("2026-10-01T00:00:00.000Z"),
+        transactionId: "subscription-chain-1",
+        originalTransactionId: "subscription-chain-1",
+        appAccountToken: null,
+      })
+      .mockResolvedValueOnce({
+        isActive: true,
+        plan: "annual",
+        expiryDate: new Date("2027-09-01T00:00:00.000Z"),
+        transactionId: "server-updated-subscription",
+        originalTransactionId: "server-updated-subscription",
+        appAccountToken: null,
+      });
+
     await syncSubscriptionFromServer({
       userId: "user-1",
       status: "active",
@@ -190,6 +258,15 @@ describe("subscription sync freshness guard", () => {
   });
 
   it("keeps subscription state isolated per account", async () => {
+    vi.mocked(checkCurrentEntitlement).mockResolvedValueOnce({
+      isActive: true,
+      plan: "annual",
+      expiryDate: new Date("2027-09-01T00:00:00.000Z"),
+      transactionId: "user-2-sub",
+      originalTransactionId: "user-2-sub",
+      appAccountToken: null,
+    });
+
     await syncSubscriptionFromServer({
       userId: "user-1",
       status: "active",
@@ -216,5 +293,47 @@ describe("subscription sync freshness guard", () => {
     expect(userOneState.subscriptionId).toBe("user-1-sub");
     expect(userTwoState.plan).toBe("annual");
     expect(userTwoState.subscriptionId).toBe("user-2-sub");
+  });
+
+  it("downgrades a server-reported active subscription when StoreKit reports no active entitlement", async () => {
+    await syncSubscriptionFromServer({
+      userId: "user-1",
+      status: "active",
+      plan: "monthly",
+      subscriptionId: "phantom-subscription",
+      currentPeriodEnd: "2026-10-01T00:00:00.000Z",
+      source: "session",
+    });
+
+    const state = await getSubscriptionState("user-1");
+    expect(state.status).toBe("expired");
+    expect(state.plan).toBe("monthly");
+    expect(state.subscriptionId).toBe("phantom-subscription");
+    expect(state.iapVerified).toBe(false);
+  });
+
+  it("downgrades a server-reported active subscription when StoreKit returns a different transaction", async () => {
+    vi.mocked(checkCurrentEntitlement).mockResolvedValue({
+      isActive: true,
+      plan: "monthly",
+      expiryDate: new Date("2026-10-01T00:00:00.000Z"),
+      transactionId: "different-subscription",
+      originalTransactionId: "different-subscription",
+      appAccountToken: null,
+    });
+
+    await syncSubscriptionFromServer({
+      userId: "user-1",
+      status: "active",
+      plan: "monthly",
+      subscriptionId: "server-subscription",
+      currentPeriodEnd: "2026-10-01T00:00:00.000Z",
+      source: "session",
+    });
+
+    const state = await getSubscriptionState("user-1");
+    expect(state.status).toBe("expired");
+    expect(state.subscriptionId).toBe("server-subscription");
+    expect(state.iapVerified).toBe(false);
   });
 });

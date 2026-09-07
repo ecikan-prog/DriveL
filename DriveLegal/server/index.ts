@@ -17,6 +17,7 @@ import { excelProtectedRouter } from "./excel-protected";
 import { exportRouter } from "./export-routes";
 import { adminRouter } from "./admin";
 import { registerAdminUi } from "./admin-ui";
+import { registerAppleSubscriptionRoutes } from "./apple-subscriptions";
 import { registerOperatorUi } from "./operator-ui";
 
 
@@ -73,6 +74,7 @@ registerOAuthRoutes(app);
 
 portalRouter(app);
 adminRouter(app);
+registerAppleSubscriptionRoutes(app);
 registerOperatorUi(app);
 registerAdminUi(app);
 excelProtectedRouter(app);

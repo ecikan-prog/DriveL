@@ -17,6 +17,7 @@
  *   mechanism for trial access on iOS.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 import { checkCurrentEntitlement, estimatePeriodEnd } from "./iap";
 
 const SUBSCRIPTION_KEY = "drivelegal_subscription";
@@ -116,6 +117,15 @@ export async function syncSubscriptionFromServer(params: {
       : incomingState;
 
   await saveSubscriptionState(state);
+
+  if (
+    source === "session" &&
+    state.status === "active" &&
+    shouldValidateWithStoreKit()
+  ) {
+    return refreshIAPEntitlement(params.userId);
+  }
+
   return state;
 }
 
@@ -123,17 +133,18 @@ export async function syncSubscriptionFromServer(params: {
 
 /**
  * Query StoreKit for the real current entitlement and update the cache.
- * This must only be used during an explicit purchase or restore flow,
- * never as an automatic replacement for the authenticated account state.
- *
- * IMPORTANT: StoreKit results must still be reconciled back to the
- * authenticated Drive Legal account on the server before premium access is
- * treated as authoritative.
+ * Use this as a fail-safe after loading the authenticated account state so the
+ * app never keeps a phantom active subscription when Apple reports no matching
+ * entitlement for the current Apple ID.
  */
 export async function refreshIAPEntitlement(
   userId: string,
 ): Promise<SubscriptionState> {
   const cached = await getSubscriptionState(userId);
+
+  if (!shouldValidateWithStoreKit()) {
+    return cached;
+  }
 
   try {
     const entitlement = await checkCurrentEntitlement();
@@ -160,7 +171,7 @@ export async function refreshIAPEntitlement(
             userId,
           },
         );
-        return cached;
+        return revokeActiveSubscription(cached);
       }
 
       const periodEnd = entitlement.expiryDate
@@ -180,18 +191,10 @@ export async function refreshIAPEntitlement(
       return updated;
     }
 
-    // StoreKit returns no active subscription.  Downgrade active/trial to
-    // expired only when StoreKit explicitly says no entitlement.
-    if (cached.status === "active" && cached.iapVerified) {
-      // Previously confirmed via StoreKit — now expired/cancelled.
-      const downgraded: SubscriptionState = {
-        ...cached,
-        status: "expired",
-        lastChecked: new Date().toISOString(),
-        iapVerified: false,
-      };
-      await saveSubscriptionState(downgraded);
-      return downgraded;
+    // StoreKit explicitly reports no active entitlement for this Apple ID.
+    // Fail safe to the paywall rather than preserving a stale server flag.
+    if (cached.status === "active") {
+      return revokeActiveSubscription(cached);
     }
   } catch {
     // StoreKit unavailable (offline, simulator, etc.) — return cached state.
@@ -434,6 +437,24 @@ function parseTime(value?: string | null): number | null {
   if (!value) return null;
   const timestamp = new Date(value).getTime();
   return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function shouldValidateWithStoreKit(): boolean {
+  return Platform.OS === "ios";
+}
+
+async function revokeActiveSubscription(
+  state: SubscriptionState,
+): Promise<SubscriptionState> {
+  const downgraded: SubscriptionState = {
+    ...state,
+    status: "expired",
+    lastChecked: new Date().toISOString(),
+    iapVerified: false,
+    pendingServerConfirmation: false,
+  };
+  await saveSubscriptionState(downgraded);
+  return downgraded;
 }
 
 // ─── Gating helpers ───────────────────────────────────────────────────────────

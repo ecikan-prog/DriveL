@@ -3,6 +3,7 @@ import { z } from "zod";
 import crypto from "crypto";
 
 import { query, withTransaction } from "./db";
+import { syncDriverSubscriptionRecord } from "./apple-subscriptions";
 import type { Context } from "./context";
 import { hashDriverPassword, verifyDriverPassword } from "./driver-password";
 import { sendPasswordResetEmail, sendVerificationEmail } from "./email";
@@ -1303,34 +1304,13 @@ export const appRouter = t.router({
           // proves which account this request belongs to via sessionToken.
           // subscriptionId (originalTransactionId) is the durable purchase link.
 
-          await query(
-            `
-            UPDATE drivers
-            SET
-              subscriptionStatus = ?,
-              subscriptionPlan = ?,
-              subscriptionId = ?,
-              currentPeriodEnd = ?,
-              updatedAt = NOW()
-            WHERE localUserId = ?
-            LIMIT 1
-            `,
-            [
-              input.status,
-              input.plan ?? null,
-              input.subscriptionId ?? null,
-              input.currentPeriodEnd ?? null,
-              session.driver.localUserId,
-            ],
-          );
-
-          return {
-            success: true,
-            subscriptionStatus: input.status,
-            subscriptionPlan: input.plan ?? null,
-            subscriptionId: input.subscriptionId ?? null,
-            currentPeriodEnd: input.currentPeriodEnd ?? null,
-          };
+          return await syncDriverSubscriptionRecord({
+            localUserId: session.driver.localUserId,
+            requestedStatus: input.status,
+            requestedPlan: input.plan ?? null,
+            requestedSubscriptionId: input.subscriptionId ?? null,
+            requestedCurrentPeriodEnd: input.currentPeriodEnd ?? null,
+          });
         } catch (error) {
           console.error("[DriverAuth] Subscription sync failed:", error);
 
