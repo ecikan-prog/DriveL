@@ -188,10 +188,7 @@ export default function PaywallScreen() {
         }
 
         await storeProductsPromise;
-
-        if (isMounted) {
-          setSubscriptionState(cached);
-        }
+        await refreshSubscriptionStatus();
       } catch (error) {
         console.error("[Paywall] Initialisation error:", error);
       } finally {
