@@ -23,6 +23,7 @@ describe("apple subscription server validation", () => {
     keyId: process.env.APPLE_APP_STORE_KEY_ID,
     privateKey: process.env.APPLE_APP_STORE_PRIVATE_KEY,
     bundleId: process.env.APPLE_APP_STORE_BUNDLE_ID,
+    nodeEnv: process.env.NODE_ENV,
   };
 
   beforeEach(() => {
@@ -42,10 +43,12 @@ describe("apple subscription server validation", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     process.env.APPLE_APP_STORE_ISSUER_ID = originalEnv.issuerId;
     process.env.APPLE_APP_STORE_KEY_ID = originalEnv.keyId;
     process.env.APPLE_APP_STORE_PRIVATE_KEY = originalEnv.privateKey;
     process.env.APPLE_APP_STORE_BUNDLE_ID = originalEnv.bundleId;
+    process.env.NODE_ENV = originalEnv.nodeEnv;
   });
 
   it("downgrades a client-reported active subscription when Apple says expired", async () => {
@@ -250,5 +253,86 @@ describe("apple subscription server validation", () => {
       /errorCode=4001001, errorMessage=Invalid JWT signature/,
     );
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("sends an App Store JWT with the exact protected header Apple requires", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        environment: "Production",
+        bundleId: "app.drivelegal.mobile",
+        data: [
+          {
+            lastTransactions: [
+              {
+                originalTransactionId: "orig-header",
+                status: 1,
+                signedTransactionInfo: makeSignedPayload({
+                  originalTransactionId: "orig-header",
+                  productId: "com.drivelegal.app.monthly",
+                  expiresDate: Date.now() + 86_400_000,
+                  signedDate: Date.now(),
+                }),
+                signedRenewalInfo: makeSignedPayload({
+                  autoRenewProductId: "com.drivelegal.app.monthly",
+                }),
+              },
+            ],
+          },
+        ],
+      }),
+    } as Response);
+
+    await validateSubscriptionWithApple("orig-header");
+
+    const request = fetchMock.mock.calls[0]?.[1] as
+      | { headers?: Record<string, string> }
+      | undefined;
+    const authHeader = request?.headers?.Authorization;
+    expect(authHeader).toMatch(/^Bearer\s+\S+\.\S+\.\S+$/);
+
+    const token = authHeader?.slice("Bearer ".length) ?? "";
+    const [encodedHeader] = token.split(".");
+    const header = JSON.parse(
+      Buffer.from(encodedHeader ?? "", "base64url").toString("utf8"),
+    );
+
+    expect(header).toEqual({
+      alg: "ES256",
+      kid: "ABC123DEFG",
+      typ: "JWT",
+    });
+  });
+
+  it("logs safe JWT header diagnostics without logging the JWT itself", async () => {
+    vi.resetModules();
+    process.env.NODE_ENV = "development";
+
+    const consoleInfo = vi.spyOn(console, "info").mockImplementation(() => {});
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        environment: "Production",
+        bundleId: "app.drivelegal.mobile",
+        data: [],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const module = await import("../server/apple-subscriptions");
+    await module.validateSubscriptionWithApple("orig-diagnostics");
+
+    const jwtDiagnosticsCall = consoleInfo.mock.calls.find(
+      ([message]) => message === "[AppleSubscription] JWT diagnostics",
+    );
+    expect(jwtDiagnosticsCall).toBeTruthy();
+
+    const diagnostics = JSON.parse(String(jwtDiagnosticsCall?.[1] ?? "{}"));
+    expect(diagnostics.jwtHeaderTyp).toBe("JWT");
+    expect(diagnostics.jwtHeaderKidMatches).toBe(true);
+    expect(diagnostics).not.toHaveProperty("jwt");
+    expect(diagnostics).not.toHaveProperty("privateKey");
   });
 });
