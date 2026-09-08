@@ -318,9 +318,9 @@ async function fetchAppleSubscriptionStatus(params: {
     originalTransactionId: params.originalTransactionId,
     authToken,
   });
+  const failureBody = !response.ok ? await readAppleErrorBody(response) : null;
 
-  if (!response.ok) {
-    const failureBody = await readAppleErrorBody(response);
+  if (failureBody) {
     console.error("[AppleSubscription] Apple API lookup failed", {
       environment: params.environment,
       status: response.status,
@@ -343,14 +343,15 @@ async function fetchAppleSubscriptionStatus(params: {
   }
 
   if (!response.ok) {
-    const failureBody = await readAppleErrorBody(response);
     throw new Error(
       `Apple subscription lookup failed (${params.environment}) with status ${response.status}${
-        failureBody.errorCode !== null
+        failureBody?.errorCode !== null && failureBody?.errorCode !== undefined
           ? `, errorCode=${failureBody.errorCode}`
           : ""
       }${
-        failureBody.errorMessage ? `, errorMessage=${failureBody.errorMessage}` : ""
+        failureBody?.errorMessage
+          ? `, errorMessage=${failureBody.errorMessage}`
+          : ""
       }`,
     );
   }
