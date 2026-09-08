@@ -223,4 +223,32 @@ describe("apple subscription server validation", () => {
       "https://api.storekit-sandbox.itunes.apple.com",
     );
   });
+
+  it("surfaces Apple errorCode and errorMessage from failed lookups", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        text: async () =>
+          JSON.stringify({
+            errorCode: 4001001,
+            errorMessage: "Invalid JWT signature",
+          }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        text: async () =>
+          JSON.stringify({
+            errorCode: 4001001,
+            errorMessage: "Invalid JWT signature",
+          }),
+      } as Response);
+
+    await expect(validateSubscriptionWithApple("orig-fail")).rejects.toThrow(
+      /errorCode=4001001, errorMessage=Invalid JWT signature/,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });

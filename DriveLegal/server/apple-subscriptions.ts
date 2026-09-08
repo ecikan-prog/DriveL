@@ -44,6 +44,19 @@ type AppleSubscriptionResponse = {
   }>;
 };
 
+type AppleErrorResponse = {
+  errorCode?: number | string;
+  errorMessage?: string;
+};
+
+const APPLE_EXPECTED_BUNDLE_ID = "app.drivelegal.mobile";
+const APPLE_EXPECTED_KEY_ID = "F9FB3L2DDZ";
+const APPLE_EXPECTED_AUDIENCE = "appstoreconnect-v1";
+const APPLE_JWT_MAX_TTL_SECONDS = 60 * 60;
+
+let appleKeyDiagnosticsLogged = false;
+let appleJwtDiagnosticsLogged = false;
+
 type AppStoreNotificationPayload = {
   notificationType?: string;
   subtype?: string;
@@ -306,6 +319,18 @@ async function fetchAppleSubscriptionStatus(params: {
     authToken,
   });
 
+  if (!response.ok) {
+    const failureBody = await readAppleErrorBody(response);
+    console.error("[AppleSubscription] Apple API lookup failed", {
+      environment: params.environment,
+      status: response.status,
+      errorCode: failureBody.errorCode,
+      errorMessage: failureBody.errorMessage,
+      responseBody: failureBody.bodyText,
+      originalTransactionId: maskValue(params.originalTransactionId),
+    });
+  }
+
   if (response.status === 401 && params.environment === "Production") {
     return await fetchAppleSubscriptionStatus({
       environment: "Sandbox",
@@ -318,8 +343,15 @@ async function fetchAppleSubscriptionStatus(params: {
   }
 
   if (!response.ok) {
+    const failureBody = await readAppleErrorBody(response);
     throw new Error(
-      `Apple subscription lookup failed (${params.environment}) with status ${response.status}`,
+      `Apple subscription lookup failed (${params.environment}) with status ${response.status}${
+        failureBody.errorCode !== null
+          ? `, errorCode=${failureBody.errorCode}`
+          : ""
+      }${
+        failureBody.errorMessage ? `, errorMessage=${failureBody.errorMessage}` : ""
+      }`,
     );
   }
 
@@ -497,6 +529,7 @@ async function persistDriverSubscriptionState(params: {
 }
 
 function createAppStoreConnectToken(): string {
+  logApplePrivateKeyDiagnosticsAtStartup();
   const issuerId = requiredEnv("APPLE_APP_STORE_ISSUER_ID");
   const keyId = requiredEnv("APPLE_APP_STORE_KEY_ID");
   const privateKey = normaliseApplePrivateKey(
@@ -512,9 +545,17 @@ function createAppStoreConnectToken(): string {
     iss: issuerId,
     iat: now,
     exp: now + 300,
-    aud: "appstoreconnect-v1",
+    aud: APPLE_EXPECTED_AUDIENCE,
     bid: getAppleBundleId(),
   };
+
+  logJwtDiagnosticsOnce({
+    keyId,
+    issuerId,
+    header,
+    payload,
+  });
+
   const encodedHeader = base64UrlJson(header);
   const encodedPayload = base64UrlJson(payload);
   const unsignedToken = `${encodedHeader}.${encodedPayload}`;
@@ -542,7 +583,7 @@ function requiredEnv(name: string): string {
 }
 
 function getAppleBundleId(): string {
-  return process.env.APPLE_APP_STORE_BUNDLE_ID?.trim() || "app.drivelegal.mobile";
+  return process.env.APPLE_APP_STORE_BUNDLE_ID?.trim() || APPLE_EXPECTED_BUNDLE_ID;
 }
 
 function normaliseApplePrivateKey(value: string): string {
@@ -582,4 +623,159 @@ function toIsoString(value?: number | string | null): string | null {
 
   const date = new Date(timestamp);
   return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+}
+
+async function readAppleErrorBody(response: globalThis.Response): Promise<{
+  bodyText: string | null;
+  errorCode: number | string | null;
+  errorMessage: string | null;
+}> {
+  const bodyText = await readResponseTextSafely(response);
+
+  if (!bodyText) {
+    return {
+      bodyText: null,
+      errorCode: null,
+      errorMessage: null,
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(bodyText) as AppleErrorResponse;
+    const parsedErrorCode =
+      typeof parsed.errorCode === "number" || typeof parsed.errorCode === "string"
+        ? parsed.errorCode
+        : null;
+    const parsedErrorMessage =
+      typeof parsed.errorMessage === "string" ? parsed.errorMessage : null;
+
+    return {
+      bodyText,
+      errorCode: parsedErrorCode,
+      errorMessage: parsedErrorMessage,
+    };
+  } catch {
+    return {
+      bodyText,
+      errorCode: null,
+      errorMessage: null,
+    };
+  }
+}
+
+async function readResponseTextSafely(
+  response: globalThis.Response,
+): Promise<string | null> {
+  try {
+    if (typeof response.clone === "function") {
+      return await response.clone().text();
+    }
+
+    if (typeof response.text === "function") {
+      return await response.text();
+    }
+  } catch (error) {
+    console.error("[AppleSubscription] Failed to read Apple API error body", error);
+  }
+
+  return null;
+}
+
+function maskValue(value: string): string {
+  if (value.length <= 10) {
+    return value;
+  }
+
+  return `${value.slice(0, 6)}...${value.slice(-4)}`;
+}
+
+function maskSecretForLogs(value: string): string {
+  const compact = value.replace(/\s+/g, "");
+  if (compact.length <= 12) {
+    return compact;
+  }
+
+  return `${compact.slice(0, 8)}...${compact.slice(-8)}`;
+}
+
+function countNewLines(value: string): number {
+  return (value.match(/\n/g) ?? []).length;
+}
+
+function logApplePrivateKeyDiagnosticsAtStartup(): void {
+  if (appleKeyDiagnosticsLogged || process.env.NODE_ENV === "test") {
+    return;
+  }
+  appleKeyDiagnosticsLogged = true;
+
+  const rawValue = process.env.APPLE_APP_STORE_PRIVATE_KEY;
+  if (!rawValue) {
+    console.warn(
+      "[AppleSubscription] APPLE_APP_STORE_PRIVATE_KEY is missing at startup.",
+    );
+    return;
+  }
+
+  const normalisedValue = normaliseApplePrivateKey(rawValue);
+  const fingerprint = crypto
+    .createHash("sha256")
+    .update(normalisedValue)
+    .digest("hex");
+
+  console.info("[AppleSubscription] Private key diagnostics", {
+    rawMasked: maskSecretForLogs(rawValue),
+    normalisedMasked: maskSecretForLogs(normalisedValue),
+    hasEscapedNewlines: rawValue.includes("\\n"),
+    rawNewlineCount: countNewLines(rawValue),
+    normalisedNewlineCount: countNewLines(normalisedValue),
+    hasPemBegin: normalisedValue.includes("BEGIN PRIVATE KEY"),
+    hasPemEnd: normalisedValue.includes("END PRIVATE KEY"),
+    sha256Prefix: fingerprint.slice(0, 12),
+    sha256Suffix: fingerprint.slice(-12),
+  });
+}
+
+function logJwtDiagnosticsOnce(params: {
+  keyId: string;
+  issuerId: string;
+  header: {
+    alg: string;
+    kid: string;
+    typ: string;
+  };
+  payload: {
+    iss: string;
+    iat: number;
+    exp: number;
+    aud: string;
+    bid: string;
+  };
+}): void {
+  if (appleJwtDiagnosticsLogged || process.env.NODE_ENV === "test") {
+    return;
+  }
+  appleJwtDiagnosticsLogged = true;
+
+  const ttlSeconds = params.payload.exp - params.payload.iat;
+  const diagnostics = {
+    keyId: params.keyId,
+    keyIdMatchesEnv: params.header.kid === params.keyId,
+    keyIdMatchesExpected: params.header.kid === APPLE_EXPECTED_KEY_ID,
+    issuerIdMasked: maskValue(params.issuerId),
+    issuerMatchesEnv: params.payload.iss === params.issuerId,
+    bundleId: params.payload.bid,
+    bundleIdMatchesExpected: params.payload.bid === APPLE_EXPECTED_BUNDLE_ID,
+    audience: params.payload.aud,
+    audienceMatchesExpected: params.payload.aud === APPLE_EXPECTED_AUDIENCE,
+    algorithm: params.header.alg,
+    algorithmIsES256: params.header.alg === "ES256",
+    iat: params.payload.iat,
+    exp: params.payload.exp,
+    iatIso: new Date(params.payload.iat * 1000).toISOString(),
+    expIso: new Date(params.payload.exp * 1000).toISOString(),
+    ttlSeconds,
+    ttlWithinLimit: ttlSeconds > 0 && ttlSeconds <= APPLE_JWT_MAX_TTL_SECONDS,
+  };
+
+  console.info("[AppleSubscription] JWT diagnostics", diagnostics);
 }
