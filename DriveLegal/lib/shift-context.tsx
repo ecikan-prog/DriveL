@@ -32,6 +32,7 @@ import { Platform } from "react-native";
 import { AppState } from "react-native";
 import {
   getSubscriptionState,
+  subscribeToSubscriptionState,
   canLogShifts,
   type SubscriptionState,
 } from "./subscription";
@@ -305,6 +306,13 @@ export function ShiftProvider({ children }: { children?: React.ReactNode }) {
 
     reloadSubscription();
 
+    const unsubscribeSubscriptionState = subscribeToSubscriptionState(
+      user.id,
+      (nextState) => {
+        setSubscriptionState(nextState);
+      },
+    );
+
     const appStateSubscription = AppState.addEventListener(
       "change",
       (nextState) => {
@@ -319,6 +327,7 @@ export function ShiftProvider({ children }: { children?: React.ReactNode }) {
     }, 30000);
 
     return () => {
+      unsubscribeSubscriptionState();
       appStateSubscription.remove();
       clearInterval(interval);
     };

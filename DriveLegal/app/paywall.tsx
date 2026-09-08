@@ -267,16 +267,6 @@ export default function PaywallScreen() {
     return `Save ${formatCurrencyFromMicros(savingsMicros, currencyCode)}`;
   }, [monthlyProduct, annualProduct]);
 
-  const selectedProduct =
-    selectedPlan === "monthly" ? monthlyProduct : annualProduct;
-
-  const canPurchase =
-    Platform.OS === "ios" &&
-    Boolean(user) &&
-    !productsLoading &&
-    !productsUnavailable &&
-    Boolean(selectedProduct);
-
   const trialDaysLeft = subscriptionState
     ? getTrialDaysLeft(subscriptionState)
     : 0;
@@ -294,6 +284,16 @@ export default function PaywallScreen() {
       annual: annualProduct,
     },
   });
+  const effectiveSelectedPlan =
+    isActive && subscriptionState?.plan ? subscriptionState.plan : selectedPlan;
+  const selectedProduct =
+    effectiveSelectedPlan === "monthly" ? monthlyProduct : annualProduct;
+  const canPurchase =
+    Platform.OS === "ios" &&
+    Boolean(user) &&
+    !productsLoading &&
+    !productsUnavailable &&
+    Boolean(selectedProduct);
 
   const displayPrice = (plan: PlanOption): string | null => {
     const product = plan.id === "monthly" ? monthlyProduct : annualProduct;
@@ -875,99 +875,103 @@ export default function PaywallScreen() {
                 subscription before showing billing options.
               </Text>
             </View>
-          ) : isActive ? (
-            <View
-              style={{
-                backgroundColor: "rgba(255,255,255,0.05)",
-                borderRadius: 16,
-                padding: 16,
-                borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.1)",
-              }}
-            >
-              <Text
-                style={{
-                  color: "#FFFFFF",
-                  fontSize: 14,
-                  fontWeight: "700",
-                  textAlign: "center",
-                  marginBottom: 8,
-                }}
-              >
-               Current Plan:{" "}
-               {activeSubscriptionSummary.planLabel ?? "Subscription"}
-              </Text>
-              <Text
-                style={{
-                  color: "#D1D5DB",
-                  fontSize: 13,
-                  textAlign: "center",
-                  marginBottom: 4,
-                }}
-              >
-                Price: {activeSubscriptionSummary.priceLabel ?? "Unavailable"}
-              </Text>
-              <Text
-                style={{
-                  color: "#8AACDA",
-                  fontSize: 12,
-                  textAlign: "center",
-                  marginBottom: 14,
-                }}
-              >
-                Renewal Date:{" "}
-                {activeSubscriptionSummary.renewalLabel ?? "Unavailable"}
-              </Text>
-              <TouchableOpacity
-                onPress={handleManageSubscription}
-                style={{
-                  backgroundColor: "#5980E9",
-                  borderRadius: 14,
-                  paddingVertical: 16,
-                  alignItems: "center",
-                  shadowColor: "#5980E9",
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 8,
-                  elevation: 6,
-                }}
-              >
-                <Text
-                  style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "800" }}
-                >
-                  Manage Subscription
-                </Text>
-              </TouchableOpacity>
-            </View>
           ) : (
             <>
+              {isActive && (
+               <View
+                 style={{
+                   backgroundColor: "rgba(255,255,255,0.05)",
+                   borderRadius: 16,
+                   padding: 16,
+                   borderWidth: 1,
+                   borderColor: "rgba(255,255,255,0.1)",
+                   marginBottom: 12,
+                 }}
+               >
+                 <Text
+                   style={{
+                     color: "#FFFFFF",
+                     fontSize: 14,
+                     fontWeight: "700",
+                     textAlign: "center",
+                     marginBottom: 8,
+                   }}
+                 >
+                   Current Plan:{" "}
+                   {activeSubscriptionSummary.planLabel ?? "Subscription"}
+                 </Text>
+                 <Text
+                   style={{
+                     color: "#D1D5DB",
+                     fontSize: 13,
+                     textAlign: "center",
+                     marginBottom: 4,
+                   }}
+                 >
+                   Price: {activeSubscriptionSummary.priceLabel ?? "Unavailable"}
+                 </Text>
+                 <Text
+                   style={{
+                     color: "#8AACDA",
+                     fontSize: 12,
+                     textAlign: "center",
+                     marginBottom: 14,
+                   }}
+                 >
+                   Renewal Date:{" "}
+                   {activeSubscriptionSummary.renewalLabel ?? "Unavailable"}
+                 </Text>
+                 <TouchableOpacity
+                   onPress={handleManageSubscription}
+                   style={{
+                     backgroundColor: "#5980E9",
+                     borderRadius: 14,
+                     paddingVertical: 16,
+                     alignItems: "center",
+                     shadowColor: "#5980E9",
+                     shadowOffset: { width: 0, height: 4 },
+                     shadowOpacity: 0.3,
+                     shadowRadius: 8,
+                     elevation: 6,
+                   }}
+                 >
+                   <Text
+                     style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "800" }}
+                   >
+                     Manage Subscription
+                   </Text>
+                 </TouchableOpacity>
+               </View>
+              )}
               {!productsLoading && productsUnavailable && (
-                <View
-                  style={{
+               <View
+                 style={{
                     backgroundColor: "rgba(239,68,68,0.15)",
-                    borderRadius: 12,
-                    padding: 12,
-                    borderWidth: 1,
-                    borderColor: "rgba(239,68,68,0.3)",
-                    marginBottom: 12,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: "#FCA5A5",
-                      fontSize: 12,
-                      textAlign: "center",
-                      lineHeight: 18,
-                    }}
-                  >
-                    App Store pricing is temporarily unavailable. Please wait for
-                    the prices to load before subscribing.
-                  </Text>
-                </View>
+                   borderRadius: 12,
+                   padding: 12,
+                   borderWidth: 1,
+                   borderColor: "rgba(239,68,68,0.3)",
+                   marginBottom: 12,
+                 }}
+               >
+                 <Text
+                   style={{
+                     color: "#FCA5A5",
+                     fontSize: 12,
+                     textAlign: "center",
+                     lineHeight: 18,
+                   }}
+                 >
+                   App Store pricing is temporarily unavailable. Please wait for
+                   the prices to load before subscribing.
+                 </Text>
+               </View>
               )}
 
               {PLANS.map((plan) => {
-                const isSelected = selectedPlan === plan.id;
+                const isSelected = effectiveSelectedPlan === plan.id;
+                const isActiveSelection =
+                  isActive && subscriptionState?.plan === plan.id;
                 const product =
                   plan.id === "monthly" ? monthlyProduct : annualProduct;
                 const planPrice = displayPrice(plan);
@@ -977,17 +981,23 @@ export default function PaywallScreen() {
                   <TouchableOpacity
                     key={plan.id}
                     onPress={() => setSelectedPlan(plan.id)}
-                    disabled={productsLoading || showUnavailable}
+                    disabled={isActive || productsLoading || showUnavailable}
                     style={{
-                      backgroundColor: isSelected
-                        ? "rgba(89,128,233,0.2)"
-                        : "rgba(255,255,255,0.05)",
+                      backgroundColor: isActiveSelection
+                        ? "rgba(34,197,94,0.15)"
+                        : isSelected
+                          ? "rgba(89,128,233,0.2)"
+                          : "rgba(255,255,255,0.05)",
                       borderRadius: 16,
                       padding: 20,
                       paddingLeft: 54,
                       marginBottom: 12,
                       borderWidth: 2,
-                      borderColor: isSelected ? "#5980E9" : "rgba(255,255,255,0.1)",
+                      borderColor: isActiveSelection
+                        ? "#22C55E"
+                        : isSelected
+                          ? "#5980E9"
+                          : "rgba(255,255,255,0.1)",
                       position: "relative",
                       opacity: productsLoading || showUnavailable ? 0.75 : 1,
                     }}
@@ -1053,6 +1063,18 @@ export default function PaywallScreen() {
                           marginLeft: 12,
                         }}
                       >
+                        {isActiveSelection && (
+                          <Text
+                            style={{
+                              color: "#86EFAC",
+                              fontSize: 11,
+                              fontWeight: "800",
+                              marginBottom: 4,
+                            }}
+                          >
+                            ✓ ACTIVE
+                          </Text>
+                        )}
                         {productsLoading ? (
                           <View style={{ alignItems: "flex-end" }}>
                             <ActivityIndicator color="#FFFFFF" size="small" />
@@ -1107,20 +1129,36 @@ export default function PaywallScreen() {
                         height: 20,
                         borderRadius: 10,
                         borderWidth: 2,
-                        borderColor: isSelected ? "#5980E9" : "#4A6AB0",
+                        borderColor: isActiveSelection
+                          ? "#22C55E"
+                          : isSelected
+                            ? "#5980E9"
+                            : "#4A6AB0",
                         alignItems: "center",
                         justifyContent: "center",
                       }}
                     >
-                      {isSelected && (
-                        <View
+                      {isActiveSelection ? (
+                        <Text
                           style={{
-                            width: 10,
-                            height: 10,
-                            borderRadius: 5,
-                            backgroundColor: "#5980E9",
+                            color: "#22C55E",
+                            fontSize: 12,
+                            fontWeight: "900",
                           }}
-                        />
+                        >
+                          ✓
+                        </Text>
+                      ) : (
+                        isSelected && (
+                          <View
+                            style={{
+                              width: 10,
+                              height: 10,
+                              borderRadius: 5,
+                              backgroundColor: "#5980E9",
+                            }}
+                          />
+                        )
                       )}
                     </View>
                   </TouchableOpacity>

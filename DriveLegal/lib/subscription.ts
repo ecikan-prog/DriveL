@@ -50,7 +50,13 @@ export type SubscriptionState = {
   pendingServerConfirmation?: boolean;
 };
 
+type SubscriptionStateListener = (state: SubscriptionState) => void;
+
 const TRIAL_DAYS = 21;
+const subscriptionStateListeners = new Map<
+  string,
+  Set<SubscriptionStateListener>
+>();
 
 // ─── Server sync (called after login) ────────────────────────────────────────
 
@@ -99,6 +105,16 @@ export async function syncSubscriptionFromServer(params: {
   };
 
   const cached = await readStoredSubscriptionState(params.userId);
+
+  if (
+    source === "session" &&
+    cached?.pendingServerConfirmation &&
+    cached.status === "active" &&
+    (incomingState.status === "expired" || incomingState.status === "cancelled") &&
+    shouldValidateWithStoreKit()
+  ) {
+    return refreshIAPEntitlement(params.userId);
+  }
 
   if (
     cached &&
@@ -160,13 +176,16 @@ export async function refreshIAPEntitlement(
       }
 
       if (
-        entitlement.transactionId &&
-        entitlement.transactionId !== accountSubscriptionId
+        !matchesAccountSubscriptionId(accountSubscriptionId, {
+          transactionId: entitlement.transactionId,
+          originalTransactionId: entitlement.originalTransactionId,
+        })
       ) {
         console.warn(
-          "[IAP] StoreKit transactionId does not match account subscriptionId — rejecting.",
+          "[IAP] StoreKit entitlement does not match account subscriptionId — rejecting.",
           {
             storeKitTransactionId: entitlement.transactionId,
+            storeKitOriginalTransactionId: entitlement.originalTransactionId,
             accountSubscriptionId,
             userId,
           },
@@ -183,6 +202,11 @@ export async function refreshIAPEntitlement(
         userId,
         status: "active",
         plan: entitlement.plan,
+        subscriptionId:
+          normaliseSubscriptionId(entitlement.originalTransactionId) ??
+          accountSubscriptionId ??
+          entitlement.transactionId ??
+          cached.subscriptionId,
         currentPeriodEnd: periodEnd,
         lastChecked: new Date().toISOString(),
         iapVerified: true,
@@ -326,6 +350,7 @@ export async function saveSubscriptionState(
     `${SUBSCRIPTION_KEY}_${state.userId}`,
     JSON.stringify(state),
   );
+  notifySubscriptionStateListeners(state);
 }
 
 async function readStoredSubscriptionState(
@@ -403,13 +428,6 @@ function isGenuinelyNewerServerState(
     return false;
   }
 
-  if (
-    cached.status === "active" &&
-    (incoming.status === "expired" || incoming.status === "cancelled")
-  ) {
-    return true;
-  }
-
   const cachedPeriodEnd = parseTime(cached.currentPeriodEnd);
   const incomingPeriodEnd = parseTime(incoming.currentPeriodEnd);
 
@@ -437,6 +455,57 @@ function parseTime(value?: string | null): number | null {
   if (!value) return null;
   const timestamp = new Date(value).getTime();
   return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function matchesAccountSubscriptionId(
+  accountSubscriptionId: string,
+  entitlement: {
+    transactionId?: string | null;
+    originalTransactionId?: string | null;
+  },
+): boolean {
+  const normalisedAccountId = normaliseSubscriptionId(accountSubscriptionId);
+
+  if (!normalisedAccountId) {
+    return false;
+  }
+
+  return (
+    normalisedAccountId ===
+      normaliseSubscriptionId(entitlement.originalTransactionId) ||
+    normalisedAccountId === normaliseSubscriptionId(entitlement.transactionId)
+  );
+}
+
+function notifySubscriptionStateListeners(state: SubscriptionState): void {
+  const listeners = subscriptionStateListeners.get(state.userId);
+  if (!listeners || listeners.size === 0) {
+    return;
+  }
+
+  for (const listener of listeners) {
+    listener(state);
+  }
+}
+
+export function subscribeToSubscriptionState(
+  userId: string,
+  listener: SubscriptionStateListener,
+): () => void {
+  const listeners = subscriptionStateListeners.get(userId) ?? new Set();
+  listeners.add(listener);
+  subscriptionStateListeners.set(userId, listeners);
+
+  return () => {
+    const currentListeners = subscriptionStateListeners.get(userId);
+    if (!currentListeners) {
+      return;
+    }
+    currentListeners.delete(listener);
+    if (currentListeners.size === 0) {
+      subscriptionStateListeners.delete(userId);
+    }
+  };
 }
 
 function shouldValidateWithStoreKit(): boolean {
