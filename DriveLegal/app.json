@@ -2,7 +2,7 @@
   "expo": {
     "name": "Drive Legal",
     "slug": "drive-legal",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "drivelegal",
@@ -17,7 +17,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.drivelegal.mobile",
-      "buildNumber": "123",
+      "buildNumber": "124",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "Drive Legal needs your location to record GPS coordinates in your logbook entries as required by NZTA regulations."

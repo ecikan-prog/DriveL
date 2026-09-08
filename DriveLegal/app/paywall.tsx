@@ -40,7 +40,12 @@ import {
   getTrialDaysLeft,
   syncSubscriptionFromServer,
 } from "@/lib/subscription";
-import { getActiveSubscriptionSummary } from "@/lib/subscription-display";
+import {
+  getActiveSubscriptionSummary,
+  hasMatchingActiveEntitlement,
+  hasPriorSubscriptionEvidence,
+  shouldShowSubscriptionCheckingState,
+} from "@/lib/subscription-display";
 import {
   loadIAPProducts,
   purchasePlan,
@@ -100,6 +105,8 @@ export default function PaywallScreen() {
     ReturnType<typeof getSubscriptionState>
   > | null>(null);
   const [subscriptionLoading, setSubscriptionLoading] = useState(true);
+  const [subscriptionVerificationPending, setSubscriptionVerificationPending] =
+    useState(false);
 
   // Load subscription state and StoreKit products on mount
   useEffect(() => {
@@ -187,9 +194,16 @@ export default function PaywallScreen() {
         if (isMounted && cached.status === "active" && cached.iapVerified) {
           setSubscriptionState(cached);
         }
+        if (
+          isMounted &&
+          cached.status !== "active" &&
+          hasPriorSubscriptionEvidence(cached)
+        ) {
+          setSubscriptionVerificationPending(true);
+        }
 
         await storeProductsPromise;
-        await refreshSubscriptionStatus();
+        await refreshSubscriptionStatus(cached);
       } catch (error) {
         console.error("[Paywall] Initialisation error:", error);
       } finally {
@@ -271,6 +285,8 @@ export default function PaywallScreen() {
   const isExpired =
     subscriptionState?.status === "expired" ||
     subscriptionState?.status === "cancelled";
+  const isCheckingSubscription =
+    subscriptionLoading || subscriptionVerificationPending;
   const activeSubscriptionSummary = getActiveSubscriptionSummary({
     subscriptionState,
     productsByPlan: {
@@ -290,10 +306,41 @@ export default function PaywallScreen() {
     }
   }, [subscriptionState?.status, subscriptionState?.plan]);
 
-  const refreshSubscriptionStatus = async () => {
+  const resolveVerificationFallback = async (
+    cachedState: Awaited<ReturnType<typeof getSubscriptionState>> | null,
+  ) => {
+    let hasDeviceEntitlement = false;
+
+    if (Platform.OS === "ios") {
+      try {
+        const entitlement = await checkCurrentEntitlement();
+        hasDeviceEntitlement = hasMatchingActiveEntitlement({
+          subscriptionState: cachedState,
+          entitlement,
+        });
+      } catch (error) {
+        console.warn("[Paywall] Device entitlement check failed:", error);
+      }
+    }
+
+    setSubscriptionVerificationPending(
+      shouldShowSubscriptionCheckingState({
+        subscriptionState: cachedState,
+        verificationFailed: true,
+        hasDeviceEntitlement,
+      }),
+    );
+  };
+
+  const refreshSubscriptionStatus = async (
+    cachedState?: Awaited<ReturnType<typeof getSubscriptionState>> | null,
+  ) => {
     if (!user) return;
 
     setSubscriptionLoading(true);
+    setSubscriptionVerificationPending(false);
+
+    const fallbackState = cachedState ?? (await getSubscriptionState(user.id));
 
     try {
       const serverSession = await restoreDriverSessionCloud();
@@ -312,19 +359,25 @@ export default function PaywallScreen() {
         });
 
         setSubscriptionState(refreshed);
+        setSubscriptionVerificationPending(false);
         if (refreshed.plan) {
           setSelectedPlan(refreshed.plan);
         }
         return;
       }
 
-      const cached = await getSubscriptionState(user.id);
-      setSubscriptionState(cached);
-      if (cached.plan) {
-        setSelectedPlan(cached.plan);
+      setSubscriptionState(fallbackState);
+      if (fallbackState?.plan) {
+        setSelectedPlan(fallbackState.plan);
       }
+      await resolveVerificationFallback(fallbackState);
     } catch (error) {
       console.warn("[Paywall] Subscription refresh failed:", error);
+      setSubscriptionState(fallbackState);
+      if (fallbackState?.plan) {
+        setSelectedPlan(fallbackState.plan);
+      }
+      await resolveVerificationFallback(fallbackState);
     } finally {
       setSubscriptionLoading(false);
     }
@@ -655,7 +708,7 @@ export default function PaywallScreen() {
 
         {/* Subscription Status */}
         <View style={{ paddingHorizontal: 24, marginBottom: 24 }}>
-          {subscriptionLoading ? (
+          {isCheckingSubscription ? (
             <View
               style={{
                 backgroundColor: "rgba(255,255,255,0.08)",
@@ -664,7 +717,34 @@ export default function PaywallScreen() {
                 alignItems: "center",
               }}
             >
-              <ActivityIndicator color="#FFFFFF" />
+              {subscriptionLoading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <>
+                  <Text
+                    style={{
+                      color: "#FFFFFF",
+                      fontSize: 14,
+                      fontWeight: "700",
+                      textAlign: "center",
+                      marginBottom: 4,
+                    }}
+                  >
+                    Checking your subscription…
+                  </Text>
+                  <Text
+                    style={{
+                      color: "#D1D5DB",
+                      fontSize: 12,
+                      textAlign: "center",
+                      lineHeight: 18,
+                    }}
+                  >
+                    We’re confirming your App Store status. This can take a
+                    moment.
+                  </Text>
+                </>
+              )}
             </View>
           ) : isTrial ? (
             <View
@@ -767,9 +847,35 @@ export default function PaywallScreen() {
               textAlign: "center",
             }}
           >
-            {isActive ? "Manage Subscription" : "Choose Your Plan"}
+            {isCheckingSubscription
+              ? "Checking your subscription..."
+              : isActive
+                ? "Manage Subscription"
+                : "Choose Your Plan"}
           </Text>
-          {isActive ? (
+          {isCheckingSubscription ? (
+            <View
+              style={{
+                backgroundColor: "rgba(255,255,255,0.05)",
+                borderRadius: 16,
+                padding: 16,
+                borderWidth: 1,
+                borderColor: "rgba(255,255,255,0.1)",
+              }}
+            >
+              <Text
+                style={{
+                  color: "#D1D5DB",
+                  fontSize: 13,
+                  textAlign: "center",
+                  lineHeight: 20,
+                }}
+              >
+                Please wait while Drive Legal verifies your existing App Store
+                subscription before showing billing options.
+              </Text>
+            </View>
+          ) : isActive ? (
             <View
               style={{
                 backgroundColor: "rgba(255,255,255,0.05)",
@@ -788,7 +894,8 @@ export default function PaywallScreen() {
                   marginBottom: 8,
                 }}
               >
-               Current Plan: {activeSubscriptionSummary.planLabel ?? "Subscription"}
+               Current Plan:{" "}
+               {activeSubscriptionSummary.planLabel ?? "Subscription"}
               </Text>
               <Text
                 style={{
@@ -808,7 +915,8 @@ export default function PaywallScreen() {
                   marginBottom: 14,
                 }}
               >
-                Renewal Date: {activeSubscriptionSummary.renewalLabel ?? "Unavailable"}
+                Renewal Date:{" "}
+                {activeSubscriptionSummary.renewalLabel ?? "Unavailable"}
               </Text>
               <TouchableOpacity
                 onPress={handleManageSubscription}
@@ -1023,7 +1131,7 @@ export default function PaywallScreen() {
         </View>
 
         {/* Features */}
-        {!isActive && (
+        {!isActive && !isCheckingSubscription && (
           <View style={{ paddingHorizontal: 24, marginBottom: 32 }}>
           <Text
             style={{
@@ -1062,7 +1170,7 @@ export default function PaywallScreen() {
         )}
 
         {/* Subscribe Button */}
-        {!isActive && (
+        {!isActive && !isCheckingSubscription && (
           <View style={{ paddingHorizontal: 24, marginBottom: 16 }}>
             <TouchableOpacity
               onPress={handleSubscribe}
