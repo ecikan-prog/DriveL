@@ -1,5 +1,9 @@
 import crypto from "crypto";
-import type { Express, Request, Response } from "express";
+import type {
+  Express,
+  Request,
+  Response as ExpressResponse,
+} from "express";
 
 import {
   planFromProductId,
@@ -216,7 +220,7 @@ export async function processAppStoreServerNotification(
 export function registerAppleSubscriptionRoutes(app: Express): void {
   app.post(
     "/webhooks/apple/app-store-server-notifications",
-    async (req: Request, res: Response) => {
+    async (req: Request, res: ExpressResponse) => {
       const signedPayload =
         typeof req.body?.signedPayload === "string"
           ? req.body.signedPayload.trim()
@@ -330,7 +334,7 @@ async function requestAppleSubscriptionStatus(params: {
   environment: AppleEnvironment;
   originalTransactionId: string;
   authToken: string;
-}): Promise<Response> {
+}): Promise<globalThis.Response> {
   const baseUrl =
     params.environment === "Sandbox"
       ? "https://api.storekit-sandbox.itunes.apple.com"
