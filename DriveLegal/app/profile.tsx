@@ -354,6 +354,9 @@ export default function ProfileScreen() {
     setSubscriptionState(shiftSubscriptionState);
     if (shiftSubscriptionState) {
       setSubscriptionStatusLoading(false);
+      if (shiftSubscriptionState.status === "active") {
+        setSubscriptionVerificationPending(false);
+      }
     }
   }, [shiftSubscriptionState]);
 
