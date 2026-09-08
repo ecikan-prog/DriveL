@@ -15,17 +15,28 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
-import { syncProfileToCloud } from "@/lib/cloud-sync";
+import { restoreDriverSessionCloud, syncProfileToCloud } from "@/lib/cloud-sync";
 import { useAuthContext } from "@/lib/auth-context";
 import { useShiftContext } from "@/lib/shift-context";
 import { updateUserProfile, type DriverType } from "@/lib/local-auth";
 import {
   getSubscriptionState,
   getTrialDaysLeft,
+  syncSubscriptionFromServer,
   type SubscriptionState,
 } from "@/lib/subscription";
-import { getActiveSubscriptionSummary } from "@/lib/subscription-display";
-import { loadIAPProducts, type IAPProduct, IAP_PRODUCT_IDS } from "@/lib/iap";
+import {
+  getActiveSubscriptionSummary,
+  hasMatchingActiveEntitlement,
+  hasPriorSubscriptionEvidence,
+  shouldShowSubscriptionCheckingState,
+} from "@/lib/subscription-display";
+import {
+  checkCurrentEntitlement,
+  loadIAPProducts,
+  type IAPProduct,
+  IAP_PRODUCT_IDS,
+} from "@/lib/iap";
 import {
   formatHoursMinutes,
   getAllLogs,
@@ -294,6 +305,8 @@ export default function ProfileScreen() {
   const [subscriptionStatusLoading, setSubscriptionStatusLoading] = useState(
     !shiftSubscriptionState,
   );
+  const [subscriptionVerificationPending, setSubscriptionVerificationPending] =
+    useState(false);
   const [subscriptionProducts, setSubscriptionProducts] = useState<IAPProduct[]>(
     [],
   );
@@ -352,6 +365,7 @@ export default function ProfileScreen() {
         if (isMounted) {
           setSubscriptionState(null);
           setSubscriptionStatusLoading(false);
+          setSubscriptionVerificationPending(false);
         }
         return;
       }
@@ -363,6 +377,88 @@ export default function ProfileScreen() {
       const cached = await getSubscriptionState(user.id);
       if (isMounted) {
         setSubscriptionState(cached);
+        if (
+          cached.status !== "active" &&
+          hasPriorSubscriptionEvidence(cached)
+        ) {
+          setSubscriptionVerificationPending(true);
+        }
+      }
+
+      try {
+        const session = await restoreDriverSessionCloud();
+
+        if (session.success && session.driver) {
+          const refreshed = await syncSubscriptionFromServer({
+            userId: session.driver.localUserId,
+            status: session.driver.subscriptionStatus,
+            trialStartDate:
+              session.driver.trialStartDate ?? session.driver.createdAt,
+            trialEndDate: session.driver.trialEndDate,
+            subscriptionId: session.driver.subscriptionId,
+            currentPeriodEnd: session.driver.currentPeriodEnd,
+            plan: session.driver.subscriptionPlan,
+            source: "session",
+          });
+
+          if (isMounted) {
+            setSubscriptionState(refreshed);
+            setSubscriptionVerificationPending(false);
+          }
+        } else {
+          let hasDeviceEntitlement = false;
+
+          if (Platform.OS === "ios") {
+            try {
+              const entitlement = await checkCurrentEntitlement();
+              hasDeviceEntitlement = hasMatchingActiveEntitlement({
+                subscriptionState: cached,
+                entitlement,
+              });
+            } catch (error) {
+              console.warn("[Profile] Device entitlement check failed:", error);
+            }
+          }
+
+          if (isMounted) {
+            setSubscriptionVerificationPending(
+              shouldShowSubscriptionCheckingState({
+                subscriptionState: cached,
+                verificationFailed: true,
+                hasDeviceEntitlement,
+              }),
+            );
+          }
+        }
+      } catch (error) {
+        console.error("[Profile] Failed to refresh subscription state:", error);
+
+        let hasDeviceEntitlement = false;
+
+        if (Platform.OS === "ios") {
+          try {
+            const entitlement = await checkCurrentEntitlement();
+            hasDeviceEntitlement = hasMatchingActiveEntitlement({
+              subscriptionState: cached,
+              entitlement,
+            });
+          } catch (entitlementError) {
+            console.warn(
+              "[Profile] Device entitlement check failed:",
+              entitlementError,
+            );
+          }
+        }
+
+        if (isMounted) {
+          setSubscriptionVerificationPending(
+            shouldShowSubscriptionCheckingState({
+              subscriptionState: cached,
+              verificationFailed: true,
+              hasDeviceEntitlement,
+            }),
+          );
+        }
       }
 
       if (isMounted) {
@@ -423,6 +519,8 @@ export default function ProfileScreen() {
   const isSubscriptionExpired =
     subscriptionState?.status === "expired" ||
     subscriptionState?.status === "cancelled";
+  const isCheckingSubscription =
+    subscriptionStatusLoading || subscriptionVerificationPending;
   const monthlyProduct =
     subscriptionProducts.find(
       (product) => product.productId === IAP_PRODUCT_IDS.monthly,
@@ -659,9 +757,18 @@ export default function ProfileScreen() {
                 : styles.trialCardExpired,
             ]}
           >
-            {subscriptionStatusLoading ? (
+            {isCheckingSubscription ? (
               <View style={styles.subscriptionStatusLoading}>
-                <ActivityIndicator size="small" color={COLORS.white} />
+                {subscriptionStatusLoading ? (
+                  <ActivityIndicator size="small" color={COLORS.white} />
+                ) : (
+                  <>
+                    <Text style={styles.trialLabel}>Checking your subscription…</Text>
+                    <Text style={styles.trialSubtext}>
+                      We’re confirming your App Store status.
+                    </Text>
+                  </>
+                )}
               </View>
             ) : hasActiveSubscription ? (
               <>

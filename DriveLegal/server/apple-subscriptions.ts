@@ -1,5 +1,9 @@
 import crypto from "crypto";
-import type { Express, Request, Response } from "express";
+import type {
+  Express,
+  Request,
+  Response as ExpressResponse,
+} from "express";
 
 import {
   planFromProductId,
@@ -10,6 +14,7 @@ import { query } from "./db";
 type QueryFn = typeof query;
 
 type SubscriptionStatus = "trial" | "active" | "expired" | "cancelled";
+type AppleEnvironment = "Production" | "Sandbox";
 
 type AppleTransactionPayload = {
   originalTransactionId?: string;
@@ -215,7 +220,7 @@ export async function processAppStoreServerNotification(
 export function registerAppleSubscriptionRoutes(app: Express): void {
   app.post(
     "/webhooks/apple/app-store-server-notifications",
-    async (req: Request, res: Response) => {
+    async (req: Request, res: ExpressResponse) => {
       const signedPayload =
         typeof req.body?.signedPayload === "string"
           ? req.body.signedPayload.trim()
@@ -246,10 +251,7 @@ export async function validateSubscriptionWithApple(
   originalTransactionId: string,
 ): Promise<ValidatedSubscriptionState> {
   const bundleId = getAppleBundleId();
-  const environments: Array<"Production" | "Sandbox"> = [
-    "Production",
-    "Sandbox",
-  ];
+  const environments: AppleEnvironment[] = ["Production", "Sandbox"];
 
   for (const environment of environments) {
     const response = await fetchAppleSubscriptionStatus({
@@ -294,22 +296,22 @@ export function decodeJwsPayload<T>(token: string): T {
 }
 
 async function fetchAppleSubscriptionStatus(params: {
-  environment: "Production" | "Sandbox";
+  environment: AppleEnvironment;
   originalTransactionId: string;
 }): Promise<AppleSubscriptionResponse | null> {
   const authToken = createAppStoreConnectToken();
-  const baseUrl =
-    params.environment === "Sandbox"
-      ? "https://api.storekit-sandbox.itunes.apple.com"
-      : "https://api.storekit.itunes.apple.com";
-  const response = await fetch(
-    `${baseUrl}/inApps/v1/subscriptions/${encodeURIComponent(params.originalTransactionId)}`,
-    {
-      headers: {
-        Authorization: "Bearer " + authToken,
-      },
-    },
-  );
+  const response = await requestAppleSubscriptionStatus({
+    environment: params.environment,
+    originalTransactionId: params.originalTransactionId,
+    authToken,
+  });
+
+  if (response.status === 401 && params.environment === "Production") {
+    return await fetchAppleSubscriptionStatus({
+      environment: "Sandbox",
+      originalTransactionId: params.originalTransactionId,
+    });
+  }
 
   if (response.status === 404) {
     return null;
@@ -321,7 +323,31 @@ async function fetchAppleSubscriptionStatus(params: {
     );
   }
 
-  return (await response.json()) as AppleSubscriptionResponse;
+  const payload = (await response.json()) as AppleSubscriptionResponse;
+  return {
+    ...payload,
+    environment: payload.environment ?? params.environment,
+  };
+}
+
+async function requestAppleSubscriptionStatus(params: {
+  environment: AppleEnvironment;
+  originalTransactionId: string;
+  authToken: string;
+}): Promise<globalThis.Response> {
+  const baseUrl =
+    params.environment === "Sandbox"
+      ? "https://api.storekit-sandbox.itunes.apple.com"
+      : "https://api.storekit.itunes.apple.com";
+
+  return fetch(
+    `${baseUrl}/inApps/v1/subscriptions/${encodeURIComponent(params.originalTransactionId)}`,
+    {
+      headers: {
+        Authorization: "Bearer " + params.authToken,
+      },
+    },
+  );
 }
 
 function extractValidatedSubscriptionState(params: {

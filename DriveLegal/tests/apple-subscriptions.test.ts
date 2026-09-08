@@ -1,8 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import crypto from "crypto";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   processAppStoreServerNotification,
   syncDriverSubscriptionRecord,
+  validateSubscriptionWithApple,
 } from "../server/apple-subscriptions";
 
 function makeSignedPayload(payload: unknown): string {
@@ -16,6 +18,36 @@ function makeSignedPayload(payload: unknown): string {
 }
 
 describe("apple subscription server validation", () => {
+  const originalEnv = {
+    issuerId: process.env.APPLE_APP_STORE_ISSUER_ID,
+    keyId: process.env.APPLE_APP_STORE_KEY_ID,
+    privateKey: process.env.APPLE_APP_STORE_PRIVATE_KEY,
+    bundleId: process.env.APPLE_APP_STORE_BUNDLE_ID,
+  };
+
+  beforeEach(() => {
+    const { privateKey } = crypto.generateKeyPairSync("ec", {
+      namedCurve: "prime256v1",
+    });
+
+    process.env.APPLE_APP_STORE_ISSUER_ID =
+      "00000000-0000-0000-0000-000000000001";
+    process.env.APPLE_APP_STORE_KEY_ID = "ABC123DEFG";
+    process.env.APPLE_APP_STORE_PRIVATE_KEY = privateKey.export({
+      type: "pkcs8",
+      format: "pem",
+    }) as string;
+    process.env.APPLE_APP_STORE_BUNDLE_ID = "app.drivelegal.mobile";
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    process.env.APPLE_APP_STORE_ISSUER_ID = originalEnv.issuerId;
+    process.env.APPLE_APP_STORE_KEY_ID = originalEnv.keyId;
+    process.env.APPLE_APP_STORE_PRIVATE_KEY = originalEnv.privateKey;
+    process.env.APPLE_APP_STORE_BUNDLE_ID = originalEnv.bundleId;
+  });
+
   it("downgrades a client-reported active subscription when Apple says expired", async () => {
     const queryFn = vi.fn(async () => []);
     const result = await syncDriverSubscriptionRecord(
@@ -140,5 +172,55 @@ describe("apple subscription server validation", () => {
       "2026-09-01T00:00:00.000Z",
       "driver-1",
     ]);
+  });
+
+  it("falls back to the sandbox App Store endpoint after a production 401", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          environment: "Sandbox",
+          bundleId: "app.drivelegal.mobile",
+          data: [
+            {
+              lastTransactions: [
+                {
+                  originalTransactionId: "orig-sandbox",
+                  status: 1,
+                  signedTransactionInfo: makeSignedPayload({
+                    originalTransactionId: "orig-sandbox",
+                    productId: "com.drivelegal.app.monthly",
+                    expiresDate: Date.now() + 86_400_000,
+                    signedDate: Date.now(),
+                  }),
+                  signedRenewalInfo: makeSignedPayload({
+                    autoRenewProductId: "com.drivelegal.app.monthly",
+                  }),
+                },
+              ],
+            },
+          ],
+        }),
+      } as Response);
+
+    const result = await validateSubscriptionWithApple("orig-sandbox");
+
+    expect(result.subscriptionStatus).toBe("active");
+    expect(result.subscriptionPlan).toBe("monthly");
+    expect(result.subscriptionId).toBe("orig-sandbox");
+    expect(result.environment).toBe("Sandbox");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[0]).toContain(
+      "https://api.storekit.itunes.apple.com",
+    );
+    expect(fetchMock.mock.calls[1]?.[0]).toContain(
+      "https://api.storekit-sandbox.itunes.apple.com",
+    );
   });
 });
