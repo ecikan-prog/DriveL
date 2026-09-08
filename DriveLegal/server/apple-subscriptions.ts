@@ -778,5 +778,8 @@ function logJwtDiagnosticsOnce(params: {
     ttlWithinLimit: ttlSeconds > 0 && ttlSeconds <= APPLE_JWT_MAX_TTL_SECONDS,
   };
 
-  console.info("[AppleSubscription] JWT diagnostics", diagnostics);
+  console.info(
+    "[AppleSubscription] JWT diagnostics",
+    JSON.stringify(diagnostics),
+  );
 }
