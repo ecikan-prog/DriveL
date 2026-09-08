@@ -565,7 +565,12 @@ function createAppStoreConnectToken(): string {
   signer.update(unsignedToken);
   signer.end();
 
-  const signature = signer.sign(privateKey).toString("base64url");
+  const signature = signer
+    .sign({
+      key: privateKey,
+      dsaEncoding: "ieee-p1363",
+    })
+    .toString("base64url");
   return `${unsignedToken}.${signature}`;
 }
 

@@ -305,6 +305,52 @@ describe("apple subscription server validation", () => {
     });
   });
 
+  it("encodes the App Store JWT ES256 signature in IEEE P1363 format", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        environment: "Production",
+        bundleId: "app.drivelegal.mobile",
+        data: [
+          {
+            lastTransactions: [
+              {
+                originalTransactionId: "orig-signature",
+                status: 1,
+                signedTransactionInfo: makeSignedPayload({
+                  originalTransactionId: "orig-signature",
+                  productId: "com.drivelegal.app.monthly",
+                  expiresDate: Date.now() + 86_400_000,
+                  signedDate: Date.now(),
+                }),
+                signedRenewalInfo: makeSignedPayload({
+                  autoRenewProductId: "com.drivelegal.app.monthly",
+                }),
+              },
+            ],
+          },
+        ],
+      }),
+    } as Response);
+
+    await validateSubscriptionWithApple("orig-signature");
+
+    const request = fetchMock.mock.calls[0]?.[1] as
+      | { headers?: Record<string, string> }
+      | undefined;
+    const authHeader = request?.headers?.Authorization;
+    expect(authHeader).toMatch(/^Bearer\s+\S+\.\S+\.\S+$/);
+
+    const token = authHeader?.slice("Bearer ".length) ?? "";
+    const [, , encodedSignature] = token.split(".");
+    const signature = Buffer.from(encodedSignature ?? "", "base64url");
+
+    expect(signature).toHaveLength(64);
+    expect(signature.toString("hex")).toHaveLength(128);
+    expect(signature[0]).not.toBe(0x30);
+  });
+
   it("logs safe JWT header diagnostics without logging the JWT itself", async () => {
     vi.resetModules();
     process.env.NODE_ENV = "development";
