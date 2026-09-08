@@ -762,6 +762,8 @@ function logJwtDiagnosticsOnce(params: {
     keyId: params.keyId,
     keyIdMatchesEnv: params.header.kid === params.keyId,
     keyIdMatchesExpected: params.header.kid === APPLE_EXPECTED_KEY_ID,
+    jwtHeaderTyp: params.header.typ,
+    jwtHeaderKidMatches: params.header.kid === params.keyId,
     issuerIdMasked: maskValue(params.issuerId),
     issuerMatchesEnv: params.payload.iss === params.issuerId,
     bundleId: params.payload.bid,
