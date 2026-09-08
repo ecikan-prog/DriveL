@@ -262,7 +262,25 @@ describe("apple subscription server validation", () => {
       json: async () => ({
         environment: "Production",
         bundleId: "app.drivelegal.mobile",
-        data: [],
+        data: [
+          {
+            lastTransactions: [
+              {
+                originalTransactionId: "orig-header",
+                status: 1,
+                signedTransactionInfo: makeSignedPayload({
+                  originalTransactionId: "orig-header",
+                  productId: "com.drivelegal.app.monthly",
+                  expiresDate: Date.now() + 86_400_000,
+                  signedDate: Date.now(),
+                }),
+                signedRenewalInfo: makeSignedPayload({
+                  autoRenewProductId: "com.drivelegal.app.monthly",
+                }),
+              },
+            ],
+          },
+        ],
       }),
     } as Response);
 
