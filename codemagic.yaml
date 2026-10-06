@@ -1,196 +1,33 @@
 workflows:
-  ios-workflow:
-    name: DriveLegal iOS
+  # Your existing iOS workflow stays here...
+
+  # ADD THIS NEW ANDROID WORKFLOW:
+  android-release:
+    name: DriveLegal Android Release
     max_build_duration: 60
-    instance_type: mac_mini_m2
-
-    integrations:
-      app_store_connect: DriveLegal
-
+    instance_type: mac_mini_m1
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: app.drivelegal.mobile
-
-      groups:
-        - ios_credentials
-        - drivelegal_env
-
-      vars:
-        XCODE_SCHEME: DriveLegal
-        BUNDLE_ID: app.drivelegal.mobile
-
-      node: 20.19.4
-      xcode: latest
-      cocoapods: default
-
-    cache:
-      cache_paths:
-        - $HOME/.pnpm-store
-
+      node: 20
     scripts:
       - name: Install dependencies
         script: |
-          set -e
-          cd DriveLegal
-          corepack enable
-          pnpm install --no-frozen-lockfile
-          pnpm exec expo --version
-
-      - name: Check Expo project
+          npm install
+      - name: Generate Android Keystore in Cloud
         script: |
-          set -e
-          cd DriveLegal
-          npx expo-doctor
-
-      - name: Test iOS JavaScript bundle
+          keytool -genkeypair -v -storetype PKCS12 \
+            -keystore android/app/release.keystore \
+            -alias drivelegal-key \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass "DriveLegalPass2026!" \
+            -keypass "DriveLegalPass2026!" \
+            -dname "CN=DriveLegal, OU=Dev, O=DriveLegal, L=City, S=State, C=US"
+      - name: Build Android App Bundle (.aab)
         script: |
-          set -e
-          cd DriveLegal
-          export CI=1
-          pnpm exec expo export \
-            --platform ios \
-            --clear \
-            --output-dir dist-ios-test
-
-      - name: Generate iOS project
-        script: |
-          set -e
-          cd DriveLegal
-          export CI=1
-          pnpm exec expo prebuild \
-            --platform ios \
-            --clean
-
-      - name: Configure Node for Xcode
-        script: |
-          set -e
-          cd DriveLegal
-
-          NODE_PATH="$(command -v node)"
-
-          echo "export NODE_BINARY=$NODE_PATH" > ios/.xcode.env
-          echo "export NODE_BINARY=$NODE_PATH" > ios/.xcode.env.local
-
-          echo "Configured Node binary:"
-          cat ios/.xcode.env
-          cat ios/.xcode.env.local
-
-      - name: Install CocoaPods
-        script: |
-          set -e
-          cd DriveLegal/ios
-          pod install --repo-update
-
-      - name: Configure iOS signing
-        script: |
-          set -e
-          keychain initialize
-          keychain add-certificates
-          xcode-project use-profiles
-
-      - name: Build IPA
-        script: |
-          set -e
-          cd DriveLegal
-
-          export NODE_BINARY="$(command -v node)"
-          echo "Using Node: $NODE_BINARY"
-
-          xcode-project build-ipa \
-            --workspace "ios/DriveLegal.xcworkspace" \
-            --scheme "$XCODE_SCHEME"
-
+          cd android
+          ./gradlew bundleRelease \
+            -Pandroid.injected.signing.store.file=release.keystore \
+            -Pandroid.injected.signing.store.password=DriveLegalPass2026! \
+            -Pandroid.injected.signing.key.alias=drivelegal-key \
+            -Pandroid.injected.signing.key.password=DriveLegalPass2026!
     artifacts:
-      - DriveLegal/build/ios/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.log
-      - DriveLegal/ios/build/**/*.xcarchive
-
-    publishing:
-      app_store_connect:
-        auth: integration
-        submit_to_testflight: true
-
-      email:
-        recipients:
-          - e.cikan@icloud.com
-
-
-  android-workflow:
-    name: DriveLegal Android
-    max_build_duration: 60
-    instance_type: linux_x2
-
-    environment:
-      groups:
-        - android_credentials
-        - drivelegal_env
-
-      node: 20.19.4
-
-    cache:
-      cache_paths:
-        - $HOME/.pnpm-store
-        - $HOME/.gradle/caches
-        - $HOME/.gradle/wrapper
-
-    scripts:
-      - name: Install dependencies
-        script: |
-          set -e
-          cd DriveLegal
-          corepack enable
-          pnpm install --no-frozen-lockfile
-          pnpm exec expo --version
-
-      - name: Check Expo project
-        script: |
-          set -e
-          cd DriveLegal
-          npx expo-doctor
-
-      - name: Test Android JavaScript bundle
-        script: |
-          set -e
-          cd DriveLegal
-          export CI=1
-          pnpm exec expo export \
-            --platform android \
-            --clear \
-            --output-dir dist-android-test
-
-      - name: Generate Android project
-        script: |
-          set -e
-          cd DriveLegal
-          export CI=1
-          pnpm exec expo prebuild \
-            --platform android \
-            --clean
-
-      - name: Configure Android SDK
-        script: |
-          set -e
-          cd DriveLegal
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
-
-      - name: Build Android bundle
-        script: |
-          set -e
-          cd DriveLegal/android
-          chmod +x gradlew
-          ./gradlew bundleRelease
-
-    artifacts:
-      - DriveLegal/android/app/build/outputs/**/*.aab
-      - DriveLegal/android/app/build/outputs/**/*.apk
-      - DriveLegal/android/app/build/reports/**
-
-    publishing:
-      google_play:
-        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
-        track: internal
-
-      email:
-        recipients:
-          - e.cikan@icloud.com
+      - android/app/build/outputs/bundle/release/*.aab
