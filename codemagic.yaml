@@ -22,6 +22,7 @@ workflows:
       - name: Build Android App Bundle (.aab)
         script: |
           cd android
+          chmod +x gradlew
           ./gradlew bundleRelease \
             -Pandroid.injected.signing.store.file=app/release.keystore \
             -Pandroid.injected.signing.store.password=DriveLegalPass2026! \
