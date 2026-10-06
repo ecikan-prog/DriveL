@@ -1,38 +1,68 @@
 workflows:
   android-release:
     name: DriveLegal Android Release
-    max_build_duration: 60
+    max_build_duration: 120
     instance_type: mac_mini_m1
+
     environment:
       node: 20
+
     scripts:
       - name: Install dependencies
         script: |
-          npm install
-      - name: Generate Android Keystore in Cloud
+          cd DriveLegal
+          corepack pnpm install --frozen-lockfile
+
+      - name: Generate Android native project
         script: |
-          mkdir -p android/app
-          keytool -genkeypair -v -storetype PKCS12 \
-            -keystore android/app/release.keystore \
-            -alias drivelegal-key \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass "DriveLegalPass2026!" \
-            -keypass "DriveLegalPass2026!" \
-            -dname "CN=DriveLegal, OU=Dev, O=DriveLegal, L=City, ST=State, C=US"
-      - name: Build Android App Bundle (.aab)
+          cd DriveLegal
+          npx expo prebuild --platform android --clean --non-interactive
+
+      - name: Verify Android project
         script: |
-          GRADLEW_PATH=$(find . -name "gradlew" | head -n 1)
-          if [ -z "$GRADLEW_PATH" ]; then
-            echo "Error: gradlew file not found in repository!"
+          if [ ! -f "DriveLegal/android/gradlew" ]; then
+            echo "ERROR: DriveLegal/android/gradlew was not generated."
             exit 1
           fi
-          ANDROID_DIR=$(dirname "$GRADLEW_PATH")
-          cd "$ANDROID_DIR"
+          echo "Android Gradle project generated successfully."
+
+      - name: Configure production signing
+        script: |
+          if [ -z "$KEYSTORE_FILE" ]; then
+            echo "ERROR: KEYSTORE_FILE is not configured."
+            exit 1
+          fi
+
+          if [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "ERROR: KEYSTORE_PASSWORD is not configured."
+            exit 1
+          fi
+
+          if [ -z "$KEY_ALIAS" ]; then
+            echo "ERROR: KEY_ALIAS is not configured."
+            exit 1
+          fi
+
+          if [ -z "$KEY_PASSWORD" ]; then
+            echo "ERROR: KEY_PASSWORD is not configured."
+            exit 1
+          fi
+
+          mkdir -p DriveLegal/android/app
+          echo "$KEYSTORE_FILE" | base64 --decode > DriveLegal/android/app/release.keystore
+
+          test -s DriveLegal/android/app/release.keystore
+
+      - name: Build Android App Bundle
+        script: |
+          cd DriveLegal/android
           chmod +x gradlew
+
           ./gradlew bundleRelease \
             -Pandroid.injected.signing.store.file=app/release.keystore \
-            -Pandroid.injected.signing.store.password=DriveLegalPass2026! \
-            -Pandroid.injected.signing.key.alias=drivelegal-key \
-            -Pandroid.injected.signing.key.password=DriveLegalPass2026!
+            -Pandroid.injected.signing.store.****** \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.******
+
     artifacts:
-      - android/app/build/outputs/bundle/release/*.aab
+      - DriveLegal/android/app/build/outputs/bundle/release/*.aab
