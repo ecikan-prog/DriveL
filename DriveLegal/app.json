@@ -87,7 +87,8 @@
         }
       ],
       "./plugins/withFmtXcode26Fix",
-      "./plugins/withReactNativeIapPlayStore"
+      "./plugins/withReactNativeIapPlayStore",
+      "./plugins/withAndroidSigning"
     ],
     "extra": {
       "eas": {
