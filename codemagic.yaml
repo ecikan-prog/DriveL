@@ -6,6 +6,8 @@ workflows:
 
     environment:
       node: 20
+      android_signing:
+        - drivelegal_release
 
     scripts:
       - name: Install dependencies
@@ -28,30 +30,24 @@ workflows:
 
       - name: Configure production signing
         script: |
-          if [ -z "$KEYSTORE_FILE" ]; then
-            echo "ERROR: KEYSTORE_FILE is not configured."
-            exit 1
-          fi
-
-          if [ -z "$KEYSTORE_PASSWORD" ]; then
-            echo "ERROR: KEYSTORE_PASSWORD is not configured."
-            exit 1
-          fi
-
-          if [ -z "$KEY_ALIAS" ]; then
-            echo "ERROR: KEY_ALIAS is not configured."
-            exit 1
-          fi
-
-          if [ -z "$KEY_PASSWORD" ]; then
-            echo "ERROR: KEY_PASSWORD is not configured."
-            exit 1
-          fi
-
-          mkdir -p DriveLegal/android/app
-          echo "$KEYSTORE_FILE" | base64 --decode > DriveLegal/android/app/release.keystore
-
-          test -s DriveLegal/android/app/release.keystore
+         # Codemagic provides the signed keystore automatically via CM_* variables
+         if [ -z "$CM_KEYSTORE_PATH" ]; then
+           echo "ERROR: CM_KEYSTORE_PATH is not configured. Ensure android_signing is properly set up."
+           exit 1
+         fi
+         if [ -z "$CM_KEYSTORE_PASSWORD" ]; then
+           echo "ERROR: CM_KEYSTORE_PASSWORD is not configured."
+           exit 1
+         fi
+         if [ -z "$CM_KEY_ALIAS" ]; then
+           echo "ERROR: CM_KEY_ALIAS is not configured."
+           exit 1
+         fi
+         if [ -z "$CM_KEY_PASSWORD" ]; then
+           echo "ERROR: CM_KEY_PASSWORD is not configured."
+           exit 1
+         fi
+         echo "Android signing configuration verified successfully."
 
       - name: Build Android App Bundle
         script: |
@@ -59,9 +55,9 @@ workflows:
           chmod +x gradlew
 
           ./gradlew bundleRelease \
-            -Pandroid.injected.signing.store.file=app/release.keystore \
+            -Pandroid.injected.signing.store.file="$CM_KEYSTORE_PATH" \
             -Pandroid.injected.signing.store.****** \
-            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.alias="$CM_KEY_ALIAS" \
             -Pandroid.injected.signing.key.******
 
     artifacts:

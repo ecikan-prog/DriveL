@@ -5,4 +5,7 @@ build/
 *.log
 .env
 .env.local
- 
+*.keystore
+DriveLegal/android/app/release.keystore
+drivelegal-release.keystore
+
