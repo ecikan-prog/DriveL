@@ -35,4 +35,4 @@ workflows:
             -Pandroid.injected.signing.key.alias=drivelegal-key \
             -Pandroid.injected.signing.key.password=DriveLegalPass2026!
     artifacts:
-      - **/android/app/build/outputs/bundle/release/*.aab
+      - android/app/build/outputs/bundle/release/*.aab
