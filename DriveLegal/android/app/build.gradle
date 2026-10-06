@@ -82,10 +82,6 @@ def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBu
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
 android {
-
-    // withReactNativeIapPlayStore
-
-    missingDimensionStrategy 'store', 'play'
     ndkVersion rootProject.ext.ndkVersion
 
     buildToolsVersion rootProject.ext.buildToolsVersion
@@ -93,6 +89,8 @@ android {
 
     namespace 'app.drivelegal.mobile'
     defaultConfig {
+        // withReactNativeIapPlayStore
+        missingDimensionStrategy 'store', 'play'
         applicationId 'app.drivelegal.mobile'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
