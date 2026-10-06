@@ -15,7 +15,9 @@
     "db:push": "drizzle-kit push",
     "mobile:doctor": "expo-doctor",
     "mobile:bundle:ios": "expo export --platform ios --clear --output-dir dist-ios-test",
-    "mobile:prebuild:ios": "expo prebuild --platform ios --clean"
+    "mobile:prebuild:ios": "expo prebuild --platform ios --clean",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
