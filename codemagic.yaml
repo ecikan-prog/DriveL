@@ -1,7 +1,4 @@
 workflows:
-  # Your existing iOS workflow stays here...
-
-  # ADD THIS NEW ANDROID WORKFLOW:
   android-release:
     name: DriveLegal Android Release
     max_build_duration: 60
@@ -14,18 +11,19 @@ workflows:
           npm install
       - name: Generate Android Keystore in Cloud
         script: |
+          mkdir -p android/app
           keytool -genkeypair -v -storetype PKCS12 \
             -keystore android/app/release.keystore \
             -alias drivelegal-key \
             -keyalg RSA -keysize 2048 -validity 10000 \
             -storepass "DriveLegalPass2026!" \
             -keypass "DriveLegalPass2026!" \
-            -dname "CN=DriveLegal, OU=Dev, O=DriveLegal, L=City, S=State, C=US"
+            -dname "CN=DriveLegal, OU=Dev, O=DriveLegal, L=City, ST=State, C=US"
       - name: Build Android App Bundle (.aab)
         script: |
           cd android
           ./gradlew bundleRelease \
-            -Pandroid.injected.signing.store.file=release.keystore \
+            -Pandroid.injected.signing.store.file=app/release.keystore \
             -Pandroid.injected.signing.store.password=DriveLegalPass2026! \
             -Pandroid.injected.signing.key.alias=drivelegal-key \
             -Pandroid.injected.signing.key.password=DriveLegalPass2026!
