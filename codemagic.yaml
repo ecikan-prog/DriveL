@@ -21,7 +21,13 @@ workflows:
             -dname "CN=DriveLegal, OU=Dev, O=DriveLegal, L=City, ST=State, C=US"
       - name: Build Android App Bundle (.aab)
         script: |
-          cd android
+          GRADLEW_PATH=$(find . -name "gradlew" | head -n 1)
+          if [ -z "$GRADLEW_PATH" ]; then
+            echo "Error: gradlew file not found in repository!"
+            exit 1
+          fi
+          ANDROID_DIR=$(dirname "$GRADLEW_PATH")
+          cd "$ANDROID_DIR"
           chmod +x gradlew
           ./gradlew bundleRelease \
             -Pandroid.injected.signing.store.file=app/release.keystore \
@@ -29,4 +35,4 @@ workflows:
             -Pandroid.injected.signing.key.alias=drivelegal-key \
             -Pandroid.injected.signing.key.password=DriveLegalPass2026!
     artifacts:
-      - android/app/build/outputs/bundle/release/*.aab
+      - **/android/app/build/outputs/bundle/release/*.aab
