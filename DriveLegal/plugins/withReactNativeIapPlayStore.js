@@ -8,7 +8,7 @@
  * - amazonReleaseRuntimeElements
  * - playReleaseRuntimeElements
  *
- * This plugin injects missingDimensionStrategy configuration into the android
+ * This plugin injects missingDimensionStrategy configuration into the defaultConfig
  * block of the generated app/build.gradle file, ensuring Gradle automatically
  * selects the Google Play variant during the build process.
  *
@@ -72,27 +72,26 @@ function withReactNativeIapPlayStore(config) {
         return config;
       }
 
-      // Find the android { ... } block and inject missingDimensionStrategy
-      // Look for "android {" pattern
-      const ANDROID_BLOCK_START_RE = /^(\s*)android\s*\{/m;
-      const match = ANDROID_BLOCK_START_RE.exec(buildGradle);
+      // Find the defaultConfig { ... } block and inject missingDimensionStrategy inside it
+      // Look for "defaultConfig {" pattern
+      const DEFAULT_CONFIG_START_RE = /^(\s*)defaultConfig\s*\{/m;
+      const match = DEFAULT_CONFIG_START_RE.exec(buildGradle);
 
       if (!match) {
         console.warn(
-          '[withReactNativeIapPlayStore] Could not find android block in app/build.gradle'
+          '[withReactNativeIapPlayStore] Could not find defaultConfig block in app/build.gradle'
         );
         return config;
       }
 
-      // Get the indentation level from the android block
-      const androidIndent = match[1];
-      const blockIndent = androidIndent + '    '; // 4 more spaces for content
+      // Get the indentation level from the defaultConfig block
+      const defaultConfigIndent = match[1];
+      const blockIndent = defaultConfigIndent + '    '; // 4 more spaces for content
 
-      // Find where to insert: after the opening "android {" line
-      // We'll insert after the first line that's part of the android block
+      // Find where to insert: after the opening "defaultConfig {" line
       const startPos = match.index + match[0].length;
 
-      // Look for the next line after "android {" to determine placement
+      // Look for the next line after "defaultConfig {" to determine placement
       const afterBlockStart = buildGradle.substring(startPos);
       const nextNewlineIndex = afterBlockStart.indexOf('\n');
 
