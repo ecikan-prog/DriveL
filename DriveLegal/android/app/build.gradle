@@ -112,15 +112,15 @@ android {
 
         release {
 
-            if (project.hasProperty('android.injected.signing.store.file')) {
+            if (System.getenv("CI")) {
 
-                storeFile = file(project.getProperty('android.injected.signing.store.file'))
+                storeFile file(System.getenv("CM_KEYSTORE_PATH"))
 
-                storePassword = project.getProperty('android.injected.signing.store.password')
+                storePassword System.getenv("CM_KEYSTORE_PASSWORD")
 
-                keyAlias = project.getProperty('android.injected.signing.key.alias')
+                keyAlias System.getenv("CM_KEY_ALIAS")
 
-                keyPassword = project.getProperty('android.injected.signing.key.password')
+                keyPassword System.getenv("CM_KEY_PASSWORD")
 
             }
 

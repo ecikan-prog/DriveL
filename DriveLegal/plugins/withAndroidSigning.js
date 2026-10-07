@@ -5,18 +5,20 @@
  * instead of the default debug keystore.
  *
  * This plugin:
- * 1. Adds a "release" signingConfig that reads from Gradle properties:
- *    - android.injected.signing.store.file
- *    - android.injected.signing.store.password
- *    - android.injected.signing.key.alias
- *    - android.injected.signing.key.password
+ * 1. Adds a "release" signingConfig that reads from Codemagic environment variables:
+ *    - CM_KEYSTORE_PATH
+ *    - CM_KEYSTORE_PASSWORD
+ *    - CM_KEY_ALIAS
+ *    - CM_KEY_PASSWORD
  * 2. Changes the release buildType to use signingConfig signingConfigs.release
  *
- * These properties are passed by Codemagic via CLI flags:
- *   -Pandroid.injected.signing.store.file="$CM_KEYSTORE_PATH"
- *   -Pandroid.injected.signing.store.******
- *   -Pandroid.injected.signing.key.alias="$CM_KEY_ALIAS"
- *   -Pandroid.injected.signing.key.******
+ * The release signingConfig is only configured when the CI environment variable
+ * is set, which indicates we're running on Codemagic. When run locally without
+ * CI set, the release signing remains empty (for debug-only local builds).
+ *
+ * These environment variables are provided by Codemagic via:
+ *   android_signing:
+ *     - drivelegal_release
  *
  * The configuration is idempotent – repeated expo prebuild --clean runs
  * will not duplicate the injected configuration.
@@ -29,11 +31,11 @@ const ANDROID_SIGNING_MARKER = '// withAndroidSigning';
 
 const RELEASE_SIGNING_CONFIG = `    ${ANDROID_SIGNING_MARKER}
     release {
-        if (project.hasProperty('android.injected.signing.store.file')) {
-            storeFile = file(project.getProperty('android.injected.signing.store.file'))
-            storePassword = project.getProperty('android.injected.signing.store.password')
-            keyAlias = project.getProperty('android.injected.signing.key.alias')
-            keyPassword = project.getProperty('android.injected.signing.key.password')
+        if (System.getenv("CI")) {
+            storeFile file(System.getenv("CM_KEYSTORE_PATH"))
+            storePassword System.getenv("CM_KEYSTORE_PASSWORD")
+            keyAlias System.getenv("CM_KEY_ALIAS")
+            keyPassword System.getenv("CM_KEY_PASSWORD")
         }
     }`;
 
