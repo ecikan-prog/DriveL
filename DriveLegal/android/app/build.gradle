@@ -87,11 +87,11 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'app.drivelegal.mobile'
+    namespace 'com.drivelegal.app'
     defaultConfig {
         // withReactNativeIapPlayStore
         missingDimensionStrategy 'store', 'play'
-        applicationId 'app.drivelegal.mobile'
+        applicationId 'com.drivelegal.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 125
@@ -112,17 +112,13 @@ android {
 
         release {
 
-            if (System.getenv("CI")) {
+            storeFile file(System.getenv("CM_KEYSTORE_PATH"))
 
-                storeFile file(System.getenv("CM_KEYSTORE_PATH"))
+            storePassword System.getenv("CM_KEYSTORE_PASSWORD")
 
-                storePassword System.getenv("CM_KEYSTORE_PASSWORD")
+            keyAlias System.getenv("CM_KEY_ALIAS")
 
-                keyAlias System.getenv("CM_KEY_ALIAS")
-
-                keyPassword System.getenv("CM_KEY_PASSWORD")
-
-            }
+            keyPassword System.getenv("CM_KEY_PASSWORD")
 
         }
 

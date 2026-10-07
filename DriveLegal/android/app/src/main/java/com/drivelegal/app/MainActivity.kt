@@ -1,4 +1,4 @@
-package app.drivelegal.mobile
+package com.drivelegal.app
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build
