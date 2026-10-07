@@ -2,7 +2,7 @@
   "expo": {
     "name": "Drive Legal",
     "slug": "drive-legal",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "drivelegal",
@@ -24,7 +24,7 @@
       }
     },
     "android": {
-      "versionCode": 125,
+      "versionCode": 126,
       "adaptiveIcon": {
         "backgroundColor": "#1264F3",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
