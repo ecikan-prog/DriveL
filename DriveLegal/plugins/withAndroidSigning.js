@@ -85,7 +85,7 @@ function withAndroidSigning(config) {
 
       // Step 1: Add release signingConfig if not already present
       if (!buildGradle.includes(ANDROID_SIGNING_MARKER)) {
-        // Find the signingConfigs block and add release config
+        // Find the signingConfigs block and locate where to insert the release config
         const SIGNING_CONFIGS_START_RE = /(\s*)signingConfigs\s*\{/m;
         const match = SIGNING_CONFIGS_START_RE.exec(buildGradle);
 
@@ -93,14 +93,16 @@ function withAndroidSigning(config) {
           // Get indentation from the signingConfigs block
           const signingConfigsIndent = match[1];
           
-          // Find the closing brace of signingConfigs block
-          let braceCount = 0;
+          // Find the closing brace of the signingConfigs block by counting braces
+          // Start AFTER the opening brace of signingConfigs
+          let braceCount = 1; // We've already seen the opening brace
           let startPos = match.index + match[0].length;
           let endPos = -1;
 
           for (let i = startPos; i < buildGradle.length; i++) {
-            if (buildGradle[i] === '{') braceCount++;
-            if (buildGradle[i] === '}') {
+            if (buildGradle[i] === '{') {
+              braceCount++;
+            } else if (buildGradle[i] === '}') {
               braceCount--;
               if (braceCount === 0) {
                 endPos = i;
@@ -110,7 +112,7 @@ function withAndroidSigning(config) {
           }
 
           if (endPos !== -1) {
-            // Insert the release signingConfig just before the closing brace
+            // Insert the release signingConfig just before the closing brace of signingConfigs
             const indentedSnippet = RELEASE_SIGNING_CONFIG.replace(
               /^    /gm,
               signingConfigsIndent + '    '
