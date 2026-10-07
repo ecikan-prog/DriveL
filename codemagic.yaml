@@ -53,12 +53,7 @@ workflows:
         script: |
           cd DriveLegal/android
           chmod +x gradlew
-
-          ./gradlew bundleRelease \
-            -Pandroid.injected.signing.store.file="$CM_KEYSTORE_PATH" \
-            -Pandroid.injected.signing.store.****** \
-            -Pandroid.injected.signing.key.alias="$CM_KEY_ALIAS" \
-            -Pandroid.injected.signing.key.******
+          ./gradlew bundleRelease
 
     artifacts:
       - DriveLegal/android/app/build/outputs/bundle/release/*.aab
