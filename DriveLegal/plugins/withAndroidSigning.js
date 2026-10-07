@@ -12,11 +12,8 @@
  *    - CM_KEY_PASSWORD
  * 2. Changes the release buildType to use signingConfig signingConfigs.release
  *
- * The release signingConfig is only configured when the CI environment variable
- * is set, which indicates we're running on Codemagic. When run locally without
- * CI set, the release signing remains empty (for debug-only local builds).
- *
- * These environment variables are provided by Codemagic via:
+ * The release signingConfig is always configured with the CM_* environment variables.
+ * These variables are provided by Codemagic via:
  *   android_signing:
  *     - drivelegal_release
  *
@@ -31,12 +28,10 @@ const ANDROID_SIGNING_MARKER = '// withAndroidSigning';
 
 const RELEASE_SIGNING_CONFIG = `    ${ANDROID_SIGNING_MARKER}
     release {
-        if (System.getenv("CI")) {
-            storeFile file(System.getenv("CM_KEYSTORE_PATH"))
-            storePassword System.getenv("CM_KEYSTORE_PASSWORD")
-            keyAlias System.getenv("CM_KEY_ALIAS")
-            keyPassword System.getenv("CM_KEY_PASSWORD")
-        }
+        storeFile file(System.getenv("CM_KEYSTORE_PATH"))
+        storePassword System.getenv("CM_KEYSTORE_PASSWORD")
+        keyAlias System.getenv("CM_KEY_ALIAS")
+        keyPassword System.getenv("CM_KEY_PASSWORD")
     }`;
 
 function resolveWithDangerousMod() {
