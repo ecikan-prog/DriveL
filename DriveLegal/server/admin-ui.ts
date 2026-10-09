@@ -6,11 +6,17 @@ import {
   timingSafeEqual,
 } from "crypto";
 import { query } from "./db";
+import {
+  ONE_DAY_MS,
+  TRIAL_DAYS,
+  getAdminSubscriptionStatus,
+  getTrialStatus,
+  summariseAdminSubscriptionStatuses,
+  type AdminSubscriptionStatus,
+} from "./admin-subscription-status";
 
 const COOKIE_NAME = "drivelegal_admin_session";
 const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
-const TRIAL_DAYS = 21;
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 type DriverRecord = {
   id: number;
@@ -22,6 +28,11 @@ type DriverRecord = {
   driverType: string | null;
   emailVerified: number | boolean | null;
   trialStartDate: string | Date | null;
+  subscriptionStatus?: string | null;
+  subscriptionPlan?: string | null;
+  subscriptionId?: string | null;
+  currentPeriodEnd?: string | Date | null;
+  updatedAt?: string | Date | null;
   createdAt: string | Date | null;
   shiftCount?: number | string | null;
 };
@@ -34,16 +45,6 @@ type ShiftRecord = {
   hash: string | null;
   previousHash: string | null;
   createdAt: string | Date | null;
-};
-
-type TrialStatus = {
-  label: string;
-  shortLabel: string;
-  daysLeft: number | null;
-  expired: boolean;
-  started: boolean;
-  expiryDate: Date | null;
-  className: "trial" | "expired" | "neutral";
 };
 
 type FlashTone = "success" | "warning" | "error" | "info";
@@ -292,57 +293,6 @@ function formatHoursFromMinutes(minutes: number): string {
   const remainder = wholeMinutes % 60;
 
   return `${hours}h ${String(remainder).padStart(2, "0")}m`;
-}
-
-function getTrialStatus(trialStartValue: unknown): TrialStatus {
-  if (!trialStartValue) {
-    return {
-      label: "Trial not started",
-      shortLabel: "Not started",
-      daysLeft: null,
-      expired: false,
-      started: false,
-      expiryDate: null,
-      className: "neutral",
-    };
-  }
-
-  const trialStart = new Date(String(trialStartValue));
-
-  if (Number.isNaN(trialStart.getTime())) {
-    return {
-      label: "Trial not started",
-      shortLabel: "Not started",
-      daysLeft: null,
-      expired: false,
-      started: false,
-      expiryDate: null,
-      className: "neutral",
-    };
-  }
-
-  const expiryDate = new Date(
-    trialStart.getTime() + TRIAL_DAYS * ONE_DAY_MS
-  );
-  const millisecondsRemaining = expiryDate.getTime() - Date.now();
-  const expired = millisecondsRemaining <= 0;
-  const daysLeft = expired
-    ? 0
-    : Math.ceil(millisecondsRemaining / ONE_DAY_MS);
-
-  return {
-    label: expired
-      ? "Trial expired"
-      : `Trial · ${daysLeft} day${daysLeft === 1 ? "" : "s"} left`,
-    shortLabel: expired
-      ? "Expired"
-      : `${daysLeft}d left`,
-    daysLeft,
-    expired,
-    started: true,
-    expiryDate,
-    className: expired ? "expired" : "trial",
-  };
 }
 
 function booleanValue(value: unknown): boolean {
@@ -819,9 +769,15 @@ const adminStyles = `
     color: #a22323;
   }
 
-  .trial {
+  .trial,
+  .warning {
     background: var(--warning-soft);
     color: #805514;
+  }
+
+  .status.active {
+    background: var(--success-soft);
+    color: #176b37;
   }
 
   .neutral {
@@ -1659,8 +1615,20 @@ function renderSimplePage(
   `;
 }
 
-function statusBadge(trial: TrialStatus): string {
-  return `<span class="status ${trial.className}">${escapeHtml(trial.label)}</span>`;
+function statusBadge(status: AdminSubscriptionStatus): string {
+  return `<span class="status ${status.className}">${escapeHtml(status.label)}</span>`;
+}
+
+function subscriptionDateCell(status: AdminSubscriptionStatus): string {
+  if (!status.date) {
+    return "—";
+  }
+
+  return `${formatDate(status.date)}${
+    status.dateLabel
+      ? `<span class="muted">${escapeHtml(status.dateLabel)}</span>`
+      : ""
+  }`;
 }
 
 function emailStatusBadge(value: unknown): string {
@@ -1846,6 +1814,10 @@ export function registerAdminUi(app: Express) {
           d.driverType,
           d.emailVerified,
           d.trialStartDate,
+          d.subscriptionStatus,
+          d.subscriptionPlan,
+          d.subscriptionId,
+          d.currentPeriodEnd,
           d.createdAt,
           COUNT(sl.id) AS shiftCount
         FROM drivers d
@@ -1861,6 +1833,10 @@ export function registerAdminUi(app: Express) {
           d.driverType,
           d.emailVerified,
           d.trialStartDate,
+          d.subscriptionStatus,
+          d.subscriptionPlan,
+          d.subscriptionId,
+          d.currentPeriodEnd,
           d.createdAt
         ORDER BY d.createdAt DESC
       `);
@@ -1871,19 +1847,16 @@ export function registerAdminUi(app: Express) {
       `);
 
       const totalDrivers = drivers.length;
-      const activeTrials = drivers.filter((driver) => {
-        const trial = getTrialStatus(driver.trialStartDate);
-        return trial.started && !trial.expired;
-      }).length;
-      const expiredTrials = drivers.filter((driver) =>
-        getTrialStatus(driver.trialStartDate).expired
-      ).length;
+      const summary = summariseAdminSubscriptionStatuses(drivers);
+      const activeSubscriptions = summary.activeSubscriptions;
+      const activeTrials = summary.activeTrials;
+      const expiredTrials = summary.expiredTrials;
       const totalShifts = Number(shiftCountRows[0]?.count ?? 0);
       const csrfToken = createCsrfToken(req);
 
       const driverRows = drivers
         .map((driver) => {
-          const trial = getTrialStatus(driver.trialStartDate);
+          const subscription = getAdminSubscriptionStatus(driver);
           const id = encodeURIComponent(String(driver.id));
 
           return `
@@ -1900,7 +1873,7 @@ export function registerAdminUi(app: Express) {
 
               <td>${escapeHtml(driver.licenceNumber || "—")}</td>
 
-              <td>${statusBadge(trial)}</td>
+              <td>${statusBadge(subscription)}</td>
 
               <td class="hide-mobile">${escapeHtml(driver.driverType || "—")}</td>
 
@@ -1938,6 +1911,11 @@ export function registerAdminUi(app: Express) {
           <div class="card">
             <div class="card-label">Total drivers</div>
             <div class="card-value">${totalDrivers}</div>
+          </div>
+
+          <div class="card">
+            <div class="card-label">Active subscriptions</div>
+            <div class="card-value success">${activeSubscriptions}</div>
           </div>
 
           <div class="card">
@@ -2039,6 +2017,11 @@ export function registerAdminUi(app: Express) {
             driverType,
             emailVerified,
             trialStartDate,
+            subscriptionStatus,
+            subscriptionPlan,
+            subscriptionId,
+            currentPeriodEnd,
+            updatedAt,
             createdAt
           FROM drivers
           WHERE id = ?
@@ -2095,7 +2078,8 @@ export function registerAdminUi(app: Express) {
         return sum + Math.round((end - start) / 60000);
       }, 0);
 
-      const trial = getTrialStatus(driver.trialStartDate);
+      const subscription = getAdminSubscriptionStatus(driver);
+      const trial = subscription.trial;
       const csrfToken = createCsrfToken(req);
       const id = encodeURIComponent(String(driver.id));
 
@@ -2116,7 +2100,7 @@ export function registerAdminUi(app: Express) {
           <div class="panel-header">
             <div>
               Driver Profile
-              <div class="panel-subtitle">Account, licence and trial information</div>
+              <div class="panel-subtitle">Account, licence, subscription and trial information</div>
             </div>
           </div>
 
@@ -2153,7 +2137,39 @@ export function registerAdminUi(app: Express) {
 
             <div class="profile-item">
               <small>Subscription</small>
-              <strong>${statusBadge(trial)}</strong>
+              <strong>${statusBadge(subscription)}</strong>
+            </div>
+
+            <div class="profile-item">
+              <small>Plan</small>
+              <strong>${escapeHtml(
+                subscription.plan === "annual"
+                  ? "Annual"
+                  : subscription.plan === "monthly"
+                    ? "Monthly"
+                    : "—"
+              )}</strong>
+            </div>
+
+            <div class="profile-item">
+              <small>${escapeHtml(
+                subscription.paid && subscription.dateLabel
+                  ? subscription.dateLabel
+                  : "Renewal / expiry"
+              )}</small>
+              <strong>${
+                subscription.paid && subscription.date
+                  ? formatDate(subscription.date)
+                  : "—"
+              }</strong>
+            </div>
+
+            <div class="profile-item">
+              <small>Backend subscription record</small>
+              <strong>${escapeHtml(driver.subscriptionStatus || "—")}</strong>
+              <span class="muted">Original transaction ID: ${escapeHtml(driver.subscriptionId || "—")}</span>
+              <span class="muted">Account ID: ${escapeHtml(driver.localUserId || "—")}</span>
+              <span class="muted">Last updated: ${formatDateTime(driver.updatedAt)}</span>
             </div>
 
             <div class="profile-item">
@@ -2294,34 +2310,34 @@ export function registerAdminUi(app: Express) {
 
     try {
       const drivers = await query<DriverRecord>(`
-        SELECT id, name, email, trialStartDate, createdAt
+        SELECT
+          id,
+          name,
+          email,
+          trialStartDate,
+          subscriptionStatus,
+          subscriptionPlan,
+          subscriptionId,
+          currentPeriodEnd,
+          createdAt
         FROM drivers
         ORDER BY createdAt DESC
       `);
 
-      const active = drivers.filter((driver) => {
-        const trial = getTrialStatus(driver.trialStartDate);
-        return trial.started && !trial.expired;
-      });
-      const expired = drivers.filter((driver) =>
-        getTrialStatus(driver.trialStartDate).expired
-      );
-      const notStarted = drivers.filter(
-        (driver) => !getTrialStatus(driver.trialStartDate).started
-      );
+      const summary = summariseAdminSubscriptionStatuses(drivers);
       const csrfToken = createCsrfToken(req);
 
       const rows = drivers
         .map((driver) => {
-          const trial = getTrialStatus(driver.trialStartDate);
+          const subscription = getAdminSubscriptionStatus(driver);
           return `
             <tr>
               <td class="driver-cell">
                 <strong>${escapeHtml(driver.name || "Unnamed driver")}</strong>
                 <span class="muted">${escapeHtml(driver.email || "No email")}</span>
               </td>
-              <td>${statusBadge(trial)}</td>
-              <td>${trial.expiryDate ? formatDate(trial.expiryDate) : "—"}</td>
+              <td>${statusBadge(subscription)}</td>
+              <td>${subscriptionDateCell(subscription)}</td>
               <td>${formatDate(driver.createdAt)}</td>
               <td class="action-cell"><a class="button button-primary button-compact" href="/admin/driver/${encodeURIComponent(String(driver.id))}">Manage</a></td>
             </tr>
@@ -2332,25 +2348,29 @@ export function registerAdminUi(app: Express) {
       return res.status(200).send(
         renderPage({
           title: "Subscriptions",
-          subtitle: "Trial access and subscription readiness",
+          subtitle: "Paid subscriptions and trial access",
           activePage: "subscriptions",
           csrfToken,
           flash: renderFlash(req),
           body: `
             <section class="cards">
-              <div class="card"><div class="card-label">All accounts</div><div class="card-value">${drivers.length}</div></div>
-              <div class="card"><div class="card-label">Active trials</div><div class="card-value success">${active.length}</div></div>
-              <div class="card"><div class="card-label">Expired trials</div><div class="card-value danger">${expired.length}</div></div>
-              <div class="card"><div class="card-label">Not started</div><div class="card-value">${notStarted.length}</div></div>
+              <div class="card"><div class="card-label">All accounts</div><div class="card-value">${summary.total}</div></div>
+              <div class="card"><div class="card-label">Active subscriptions</div><div class="card-value success">${summary.activeSubscriptions}</div></div>
+              <div class="card"><div class="card-label">Active trials</div><div class="card-value success">${summary.activeTrials}</div></div>
+              <div class="card"><div class="card-label">Not started</div><div class="card-value">${summary.notStarted}</div></div>
+              <div class="card"><div class="card-label">Cancelled</div><div class="card-value">${summary.cancelled}</div></div>
+              <div class="card"><div class="card-label">Billing issues</div><div class="card-value danger">${summary.billingIssues}</div></div>
+              <div class="card"><div class="card-label">Expired subscriptions</div><div class="card-value danger">${summary.expiredSubscriptions}</div></div>
+              <div class="card"><div class="card-label">Expired trials</div><div class="card-value danger">${summary.expiredTrials}</div></div>
             </section>
 
             <section class="panel">
               <div class="panel-header">
-                <div>Trial Accounts<div class="panel-subtitle">Live trial status calculated from each driver's trial start date</div></div>
+                <div>Accounts<div class="panel-subtitle">Paid status from the backend subscription record; trial status from the trial start date only when no paid subscription exists</div></div>
               </div>
               <div class="table-scroll">
                 <table>
-                  <thead><tr><th>Driver</th><th>Status</th><th>Expiry</th><th>Registered</th><th class="action-cell">Action</th></tr></thead>
+                  <thead><tr><th>Driver</th><th>Status</th><th>Renewal / expiry</th><th>Registered</th><th class="action-cell">Action</th></tr></thead>
                   <tbody>${rows || `<tr><td colspan="5"><div class="empty"><strong>No accounts found</strong>Subscription records will appear here.</div></td></tr>`}</tbody>
                 </table>
               </div>
@@ -2885,6 +2905,10 @@ export function registerAdminUi(app: Express) {
         driverType: string;
         emailVerified: number | boolean;
         trialStartDate: string | Date | null;
+        subscriptionStatus: string | null;
+        subscriptionPlan: string | null;
+        subscriptionId: string | null;
+        currentPeriodEnd: string | null;
         shiftCount: number | string;
       }>(
         `
@@ -2900,6 +2924,10 @@ export function registerAdminUi(app: Express) {
             d.driverType,
             d.emailVerified,
             d.trialStartDate,
+            d.subscriptionStatus,
+            d.subscriptionPlan,
+            d.subscriptionId,
+            d.currentPeriodEnd,
             COUNT(sl.id) AS shiftCount
           FROM operator_drivers od
           INNER JOIN drivers d
@@ -2918,7 +2946,11 @@ export function registerAdminUi(app: Express) {
             d.vehicleRegistration,
             d.driverType,
             d.emailVerified,
-            d.trialStartDate
+            d.trialStartDate,
+            d.subscriptionStatus,
+            d.subscriptionPlan,
+            d.subscriptionId,
+            d.currentPeriodEnd
           ORDER BY od.addedAt DESC
         `,
         [operatorId]
@@ -2964,7 +2996,7 @@ export function registerAdminUi(app: Express) {
 
       const driverRows = linkedDrivers
         .map((driver) => {
-          const trial = getTrialStatus(driver.trialStartDate);
+          const subscription = getAdminSubscriptionStatus(driver);
           const driverId = encodeURIComponent(
             String(driver.driverId)
           );
@@ -3002,7 +3034,7 @@ export function registerAdminUi(app: Express) {
               </td>
 
               <td>
-                ${statusBadge(trial)}
+                ${statusBadge(subscription)}
               </td>
 
               <td>
@@ -3201,15 +3233,7 @@ export function registerAdminUi(app: Express) {
           <div class="card">
             <div class="card-label">Active trials</div>
             <div class="card-value success">
-              ${
-                linkedDrivers.filter((driver) => {
-                  const trial = getTrialStatus(
-                    driver.trialStartDate
-                  );
-
-                  return trial.started && !trial.expired;
-                }).length
-              }
+              ${summariseAdminSubscriptionStatuses(linkedDrivers).activeTrials}
             </div>
           </div>
 
@@ -3243,7 +3267,7 @@ export function registerAdminUi(app: Express) {
                   <th>Licence</th>
                   <th>Vehicle</th>
                   <th class="hide-mobile">Type</th>
-                  <th>Trial</th>
+                  <th>Subscription</th>
                   <th>Shifts</th>
                   <th class="action-cell">Action</th>
                 </tr>
