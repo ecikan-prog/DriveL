@@ -40,6 +40,7 @@ vi.mock("../lib/iap", () => ({
 
 import {
   getSubscriptionState,
+  subscribeToSubscriptionState,
   syncSubscriptionFromServer,
 } from "../lib/subscription";
 import { checkCurrentEntitlement } from "../lib/iap";
@@ -165,7 +166,7 @@ describe("subscription sync freshness guard", () => {
     expect(state.subscriptionId).toBe("restored-subscription");
   });
 
-  it("allows a genuinely newer server state to replace the protected local state", async () => {
+  it("keeps a verified active subscription when a stale expired session response arrives for the same subscription", async () => {
     vi.mocked(checkCurrentEntitlement).mockResolvedValue({
       isActive: true,
       plan: "monthly",
@@ -195,11 +196,11 @@ describe("subscription sync freshness guard", () => {
     });
 
     const state = await getSubscriptionState("user-1");
-    expect(state.status).toBe("expired");
+    expect(state.status).toBe("active");
     expect(state.plan).toBe("monthly");
     expect(state.subscriptionId).toBe("subscription-chain-1");
-    expect(state.pendingServerConfirmation).toBe(false);
-    expect(state.entitlementAuthority).toBe("server");
+    expect(state.pendingServerConfirmation).toBe(true);
+    expect(state.entitlementAuthority).toBe("purchase");
   });
 
   it("continues to apply normal session refreshes and clears protection after server confirmation", async () => {
@@ -335,5 +336,57 @@ describe("subscription sync freshness guard", () => {
     expect(state.status).toBe("expired");
     expect(state.subscriptionId).toBe("server-subscription");
     expect(state.iapVerified).toBe(false);
+  });
+
+  it("keeps a server-reported active subscription when StoreKit originalTransactionId matches", async () => {
+    vi.mocked(checkCurrentEntitlement).mockResolvedValue({
+      isActive: true,
+      plan: "monthly",
+      expiryDate: new Date("2026-10-01T00:00:00.000Z"),
+      transactionId: "renewal-transaction-2",
+      originalTransactionId: "server-subscription",
+      appAccountToken: null,
+    });
+
+    await syncSubscriptionFromServer({
+      userId: "user-1",
+      status: "active",
+      plan: "monthly",
+      subscriptionId: "server-subscription",
+      currentPeriodEnd: "2026-10-01T00:00:00.000Z",
+      source: "session",
+    });
+
+    const state = await getSubscriptionState("user-1");
+    expect(state.status).toBe("active");
+    expect(state.subscriptionId).toBe("server-subscription");
+    expect(state.iapVerified).toBe(true);
+  });
+
+  it("notifies subscription listeners immediately after a restore updates the cache", async () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeToSubscriptionState("user-1", listener);
+
+    await syncSubscriptionFromServer({
+      userId: "user-1",
+      status: "active",
+      plan: "annual",
+      subscriptionId: "restored-subscription",
+      currentPeriodEnd: "2027-09-01T00:00:00.000Z",
+      iapVerified: true,
+      source: "restore",
+    });
+
+    unsubscribe();
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user-1",
+        status: "active",
+        plan: "annual",
+        subscriptionId: "restored-subscription",
+      }),
+    );
   });
 });

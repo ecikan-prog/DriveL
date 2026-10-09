@@ -1,196 +1,59 @@
 workflows:
-  ios-workflow:
-    name: DriveLegal iOS
-    max_build_duration: 60
-    instance_type: mac_mini_m2
-
-    integrations:
-      app_store_connect: DriveLegal
+  android-release:
+    name: DriveLegal Android Release
+    max_build_duration: 120
+    instance_type: mac_mini_m1
 
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: app.drivelegal.mobile
-
-      groups:
-        - ios_credentials
-        - drivelegal_env
-
-      vars:
-        XCODE_SCHEME: DriveLegal
-        BUNDLE_ID: app.drivelegal.mobile
-
-      node: 20.19.4
-      xcode: latest
-      cocoapods: default
-
-    cache:
-      cache_paths:
-        - $HOME/.pnpm-store
+      node: 20
+      android_signing:
+        - drivelegal_release
 
     scripts:
       - name: Install dependencies
         script: |
-          set -e
           cd DriveLegal
-          corepack enable
-          pnpm install --no-frozen-lockfile
-          pnpm exec expo --version
+          corepack pnpm install --frozen-lockfile
 
-      - name: Check Expo project
+      - name: Generate Android native project
         script: |
-          set -e
           cd DriveLegal
-          npx expo-doctor
+          npx expo prebuild --platform android --clean --non-interactive
 
-      - name: Test iOS JavaScript bundle
+      - name: Verify Android project
         script: |
-          set -e
-          cd DriveLegal
-          export CI=1
-          pnpm exec expo export \
-            --platform ios \
-            --clear \
-            --output-dir dist-ios-test
+          if [ ! -f "DriveLegal/android/gradlew" ]; then
+            echo "ERROR: DriveLegal/android/gradlew was not generated."
+            exit 1
+          fi
+          echo "Android Gradle project generated successfully."
 
-      - name: Generate iOS project
+      - name: Configure production signing
         script: |
-          set -e
-          cd DriveLegal
-          export CI=1
-          pnpm exec expo prebuild \
-            --platform ios \
-            --clean
+         # Codemagic provides the signed keystore automatically via CM_* variables
+         if [ -z "$CM_KEYSTORE_PATH" ]; then
+           echo "ERROR: CM_KEYSTORE_PATH is not configured. Ensure android_signing is properly set up."
+           exit 1
+         fi
+         if [ -z "$CM_KEYSTORE_PASSWORD" ]; then
+           echo "ERROR: CM_KEYSTORE_PASSWORD is not configured."
+           exit 1
+         fi
+         if [ -z "$CM_KEY_ALIAS" ]; then
+           echo "ERROR: CM_KEY_ALIAS is not configured."
+           exit 1
+         fi
+         if [ -z "$CM_KEY_PASSWORD" ]; then
+           echo "ERROR: CM_KEY_PASSWORD is not configured."
+           exit 1
+         fi
+         echo "Android signing configuration verified successfully."
 
-      - name: Configure Node for Xcode
+      - name: Build Android App Bundle
         script: |
-          set -e
-          cd DriveLegal
-
-          NODE_PATH="$(command -v node)"
-
-          echo "export NODE_BINARY=$NODE_PATH" > ios/.xcode.env
-          echo "export NODE_BINARY=$NODE_PATH" > ios/.xcode.env.local
-
-          echo "Configured Node binary:"
-          cat ios/.xcode.env
-          cat ios/.xcode.env.local
-
-      - name: Install CocoaPods
-        script: |
-          set -e
-          cd DriveLegal/ios
-          pod install --repo-update
-
-      - name: Configure iOS signing
-        script: |
-          set -e
-          keychain initialize
-          keychain add-certificates
-          xcode-project use-profiles
-
-      - name: Build IPA
-        script: |
-          set -e
-          cd DriveLegal
-
-          export NODE_BINARY="$(command -v node)"
-          echo "Using Node: $NODE_BINARY"
-
-          xcode-project build-ipa \
-            --workspace "ios/DriveLegal.xcworkspace" \
-            --scheme "$XCODE_SCHEME"
-
-    artifacts:
-      - DriveLegal/build/ios/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.log
-      - DriveLegal/ios/build/**/*.xcarchive
-
-    publishing:
-      app_store_connect:
-        auth: integration
-        submit_to_testflight: true
-
-      email:
-        recipients:
-          - e.cikan@icloud.com
-
-
-  android-workflow:
-    name: DriveLegal Android
-    max_build_duration: 60
-    instance_type: linux_x2
-
-    environment:
-      groups:
-        - android_credentials
-        - drivelegal_env
-
-      node: 20.19.4
-
-    cache:
-      cache_paths:
-        - $HOME/.pnpm-store
-        - $HOME/.gradle/caches
-        - $HOME/.gradle/wrapper
-
-    scripts:
-      - name: Install dependencies
-        script: |
-          set -e
-          cd DriveLegal
-          corepack enable
-          pnpm install --no-frozen-lockfile
-          pnpm exec expo --version
-
-      - name: Check Expo project
-        script: |
-          set -e
-          cd DriveLegal
-          npx expo-doctor
-
-      - name: Test Android JavaScript bundle
-        script: |
-          set -e
-          cd DriveLegal
-          export CI=1
-          pnpm exec expo export \
-            --platform android \
-            --clear \
-            --output-dir dist-android-test
-
-      - name: Generate Android project
-        script: |
-          set -e
-          cd DriveLegal
-          export CI=1
-          pnpm exec expo prebuild \
-            --platform android \
-            --clean
-
-      - name: Configure Android SDK
-        script: |
-          set -e
-          cd DriveLegal
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
-
-      - name: Build Android bundle
-        script: |
-          set -e
           cd DriveLegal/android
           chmod +x gradlew
           ./gradlew bundleRelease
 
     artifacts:
-      - DriveLegal/android/app/build/outputs/**/*.aab
-      - DriveLegal/android/app/build/outputs/**/*.apk
-      - DriveLegal/android/app/build/reports/**
-
-    publishing:
-      google_play:
-        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
-        track: internal
-
-      email:
-        recipients:
-          - e.cikan@icloud.com
+      - DriveLegal/android/app/build/outputs/bundle/release/*.aab
